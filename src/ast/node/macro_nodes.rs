@@ -255,11 +255,19 @@ impl Node for MacroCallNode {
                 ctx.send_if_go_to_def(self.range, m.range, m.file.clone());
                 ctx.set_glob_refs(&format!("{}..{}", &m.file, &m.id.name), self.range);
                 let src = m.file.clone();
+                // create a string of length at least self.range.end.offset
+                // otherwise Span::new_from_raw_offset may cause error -1073741819
+                // when executing avx2 instruction on windows
+                let mut fake_full_s = String::with_capacity(self.range.end.offset);
+                // fill the string fron start to self.inner_start.offset with spaces
+                fake_full_s.extend(std::iter::repeat(' ').take(self.inner_start.offset));
+                fake_full_s.push_str(&self.args);
+                let args_slice = &fake_full_s[self.inner_start.offset..];
                 let span = unsafe {
                     Span::new_from_raw_offset(
                         self.inner_start.offset,
                         self.inner_start.line as u32,
-                        &self.args,
+                        args_slice,
                         Default::default(),
                     )
                 };

@@ -40,7 +40,7 @@ use crate::ast::{
     ctx::{PLSymbolData, STUCK_FNS},
     diag::PLDiag,
     node::function::generator::CtxFlag,
-    pltype::{get_type_deep, ClosureType, TraitImplAble},
+    pltype::{get_type_deep, TraitImplAble},
     tokens::TokenType,
 };
 
@@ -179,6 +179,9 @@ pub fn get_target_machine(_level: OptimizationLevel) -> TargetMachine {
 }
 
 impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
+    fn gc_ptr_ty(&self) -> PointerType<'ctx> {
+        self.context.ptr_type(AddressSpace::from(1))
+    }
     fn build_load_raw(&self, ptr: ValueHandle, name: &str, tp: BasicTypeEnum<'ctx>) -> ValueHandle {
         let llvm_type = tp;
         let ptr = self.get_llvm_value(ptr).unwrap();
@@ -251,12 +254,11 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
 
             // 我们现在在alloca block上（第一个block），gnerator yield函数每次进入都会执行这个
             // block，所以在这里我们要设置好所有的变量初始值，将他们从generator ctx中取出。
-            let bt = self.get_basic_type_op(pltype, ctx).unwrap();
             let tp = self
                 .get_basic_type_op(&data.borrow().ctx_tp.as_ref().unwrap().borrow(), ctx)
                 .unwrap()
                 .into_struct_type();
-            let count = add_field(tp, bt.ptr_type(AddressSpace::from(1)).into());
+            let count = add_field(tp, self.gc_ptr_ty().into());
             let i = count - 1;
             let data_ptr = self
                 .build_struct_gep(
@@ -282,13 +284,13 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             let load = self.build_load_raw(
                 data_ptr,
                 &format!("data_load_{}", name),
-                self.i8ptr().as_basic_type_enum(),
+                self.gc_ptr_ty().as_basic_type_enum(),
             );
 
             let load_again = self.build_load_raw(
                 load,
                 &format!("data_load_again_{}", name),
-                self.i8ptr().as_basic_type_enum(),
+                self.gc_ptr_ty().as_basic_type_enum(),
             );
             data.borrow_mut().para_tmp = load_again;
             ret_handle = data_ptr;
@@ -396,11 +398,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         let size = td.get_store_size(&llvmtp);
         if size == 0 {
             // return null
-            let null = self
-                .context
-                .i8_type()
-                .ptr_type(AddressSpace::from(1))
-                .const_null();
+            let null = self.gc_ptr_ty().const_null();
             return (null, llvmtp);
         }
         let mut size = self.context.i64_type().const_int(size, false);
@@ -621,7 +619,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
     /// get the stack pointer, return as i64
     fn get_sp(&self) -> inkwell::values::IntValue<'ctx> {
         let fp_asm_ftp = self
-            .i8ptr()
+            .context
             .ptr_type(AddressSpace::from(0))
             .fn_type(&[], false);
         #[cfg(target_arch = "x86_64")]
@@ -734,36 +732,26 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         f
     }
 
-    fn visit_f_tp(&self) -> PointerType<'ctx> {
-        let i8ptrtp = self.context.i8_type().ptr_type(AddressSpace::from(1));
-        self.context
-            .void_type()
-            .fn_type(&[i8ptrtp.into(), i8ptrtp.into()], false)
-            .ptr_type(AddressSpace::from(1))
-    }
-
-    fn mark_fn_tp(&self, ptrtp: PointerType<'ctx>) -> FunctionType<'ctx> {
-        let i8ptrtp = self.context.i8_type().ptr_type(AddressSpace::from(1));
-        let visit_ftp = self.visit_f_tp();
+    fn visit_fn_tp(&self) -> FunctionType<'ctx> {
+        let ptrtp = self.gc_ptr_ty();
         self.context.void_type().fn_type(
             &[
                 ptrtp.into(),
-                i8ptrtp.into(),
-                visit_ftp.into(),
-                visit_ftp.into(),
-                visit_ftp.into(),
+                ptrtp.into(),
+                ptrtp.into(),
+                ptrtp.into(),
+                ptrtp.into(),
             ],
             false,
         )
     }
 
     fn gen_or_get_arr_visit_function(&self, ctx: &mut Ctx<'a>, v: &ARRType) -> FunctionValue<'ctx> {
-        let _i8ptrtp = self.context.i8_type().ptr_type(AddressSpace::from(1));
+        let _i8ptrtp = self.gc_ptr_ty();
         let currentbb = self.builder.get_insert_block();
         self.builder.unset_current_debug_location();
-        let ptrtp = self.arr_type(v, ctx).ptr_type(AddressSpace::from(1));
-        let ty = self.arr_type(v, ctx).into_struct_type();
-        let ftp = self.mark_fn_tp(ptrtp);
+        let ty = self.arr_type().into_struct_type();
+        let ftp = self.visit_fn_tp();
         // windows linker won't recognize flags with special caracters (llvm.used will add linker flags
         // to prevent symbol trim), so we need to do a hash here to remove the special caracters
         let mut hasher = DefaultHasher::new();
@@ -1043,27 +1031,6 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         })
     }
 
-    fn get_closure_fn_type(&self, closure: &ClosureType, ctx: &mut Ctx<'a>) -> FunctionType<'ctx> {
-        let ptr: BasicMetadataTypeEnum = self
-            .context
-            .i8_type()
-            .ptr_type(AddressSpace::from(1))
-            .as_basic_type_enum()
-            .into();
-        let params = [ptr]
-            .iter()
-            .copied()
-            .chain(closure.arg_types.iter().map(|pltype| {
-                let tp = self.get_basic_type_op(&pltype.borrow(), ctx).unwrap();
-                let tp: BasicMetadataTypeEnum = tp.into();
-                tp
-            }))
-            .collect::<Vec<_>>();
-        let fn_type = self
-            .get_ret_type(&closure.ret_type.borrow(), ctx, true)
-            .fn_type(&params, false);
-        fn_type
-    }
     /// # get_basic_type_op
     /// get the basic type of the type
     /// used in code generation
@@ -1085,22 +1052,12 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                         .into()
                 }),
             },
-            PLType::Fn(f) => Some(
-                self.get_fn_type(f, ctx)
-                    .ptr_type(AddressSpace::from(1))
-                    .as_basic_type_enum(),
-            ),
             PLType::Struct(s) => Some(self.struct_type(s, ctx).as_basic_type_enum()),
             PLType::Trait(s) => Some(self.struct_type(s, ctx).as_basic_type_enum()),
-            PLType::Arr(a) => Some(self.arr_type(a, ctx)),
+            PLType::Arr(_) => Some(self.arr_type()),
             PLType::Primitive(t) => Some(self.get_pri_basic_type(t)),
             PLType::Void => None,
-            PLType::Pointer(p) => Some(
-                self.get_basic_type_op(&p.borrow(), ctx)
-                    .unwrap()
-                    .ptr_type(AddressSpace::from(1))
-                    .as_basic_type_enum(),
-            ),
+            PLType::Pointer(_) | PLType::Fn(_) => Some(self.gc_ptr_ty().as_basic_type_enum()),
             PLType::PlaceHolder(p) => Some({
                 let name = &format!("__placeholder__{}", p.name);
                 self.module
@@ -1116,26 +1073,12 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             }),
             PLType::Union(_) => {
                 // all unions are represented as a struct with a tag(i64) and an i8ptr
-                let fields = vec![
-                    self.context.i64_type().into(),
-                    self.context
-                        .i8_type()
-                        .ptr_type(AddressSpace::from(1))
-                        .into(),
-                ];
+                let fields = vec![self.context.i64_type().into(), self.gc_ptr_ty().into()];
                 Some(self.context.struct_type(&fields, false).into())
             }
-            PLType::Closure(c) => {
+            PLType::Closure(_) => {
                 // all closures are represented as a struct with a function pointer and an i8ptr(point to closure data)
-                let fields = vec![
-                    self.get_closure_fn_type(c, ctx)
-                        .ptr_type(AddressSpace::from(1))
-                        .into(),
-                    self.context
-                        .i8_type()
-                        .ptr_type(AddressSpace::from(1))
-                        .into(),
-                ];
+                let fields = vec![self.gc_ptr_ty().into(), self.gc_ptr_ty().into()];
                 Some(self.context.struct_type(&fields, false).into())
             }
             PLType::Unknown => None,
@@ -1176,7 +1119,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                         PLType::Pointer(_) | PLType::Primitive(_)
                     )
                 {
-                    tp.ptr_type(AddressSpace::from(1)).as_basic_type_enum()
+                    self.gc_ptr_ty().as_basic_type_enum()
                 } else {
                     tp
                 }
@@ -1197,27 +1140,21 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 PLType::Pointer(_) | PLType::Primitive(_)
             )
         {
-            tp.ptr_type(AddressSpace::from(1)).as_basic_type_enum()
+            self.gc_ptr_ty().as_basic_type_enum()
         } else {
             tp
         }
-    }
-    fn i8ptr(&self) -> PointerType<'ctx> {
-        self.context.i8_type().ptr_type(AddressSpace::from(1))
     }
     /// array type in fact is a struct with three fields,
     /// the first is a function pointer to the visit function(used in gc)
     /// the second is the array itself
     /// the third is the length of the array
-    fn arr_type(&self, arrtp: &ARRType, ctx: &mut Ctx<'a>) -> BasicTypeEnum<'ctx> {
+    fn arr_type(&self) -> BasicTypeEnum<'ctx> {
         self.context
             .struct_type(
                 &[
                     self.context.i64_type().as_basic_type_enum(),
-                    self.get_basic_type_op(&arrtp.element_type.borrow(), ctx)
-                        .unwrap()
-                        .ptr_type(AddressSpace::from(1))
-                        .as_basic_type_enum(),
+                    self.gc_ptr_ty().as_basic_type_enum(),
                     self.context.i64_type().as_basic_type_enum(),
                 ],
                 false,
@@ -1240,7 +1177,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         let td = self.targetmachine.get_target_data();
         let (size, align, offset_1) =
             if matches!(*RefCell::borrow(&field_pltype), PLType::Pointer(_)) {
-                let ptr = self.context.i8_type().ptr_type(AddressSpace::from(1));
+                let ptr = self.gc_ptr_ty();
                 (td.get_bit_size(&ptr), td.get_abi_alignment(&ptr), 0)
             } else {
                 (
@@ -1287,7 +1224,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 let etp = &self
                     .get_basic_type_op(&arr.element_type.borrow(), ctx)
                     .unwrap();
-                let arr_st_tp = self.arr_type(arr, ctx).into_struct_type();
+                let arr_st_tp = self.arr_type().into_struct_type();
                 let align = td.get_preferred_alignment(etp);
                 let st_size = td.get_bit_size(&arr_st_tp);
                 let vtabledi = self.get_ditype(&PLType::Primitive(PriType::U64), ctx)?;
@@ -1447,11 +1384,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     return Some(placeholder.as_type());
                 }
                 let elemdi = self.get_ditype(&p.borrow(), ctx)?;
-                let etp = &self
-                    .get_basic_type_op(&p.borrow(), ctx)
-                    .unwrap()
-                    .ptr_type(AddressSpace::from(1))
-                    .as_basic_type_enum();
+                let etp = &self.gc_ptr_ty().as_basic_type_enum();
                 let align = td.get_preferred_alignment(etp);
                 let di = self
                     .dibuilder
@@ -1498,7 +1431,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                             .as_type()
                     })
                     .collect::<Vec<_>>();
-                let ptr = self.context.i8_type().ptr_type(AddressSpace::from(1));
+                let ptr = self.gc_ptr_ty();
                 let tp = self.dibuilder.create_union_type(
                     self.get_cur_di_file().as_debug_info_scope(),
                     "data",
@@ -1939,7 +1872,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
                 ) {
                     r.fn_type(&tys, false)
                 } else {
-                    r.ptr_type(AddressSpace::from(1)).fn_type(&tys, false)
+                    self.gc_ptr_ty().fn_type(&tys, false)
                 }
             }
             None => self.context.void_type().fn_type(&tys, false),
@@ -2345,7 +2278,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             )
         });
         let used = self.used.borrow();
-        let used_arr = self.i8ptr().ptr_type(AddressSpace::from(0)).const_array(
+        let used_arr = self.context.ptr_type(AddressSpace::from(0)).const_array(
             &used
                 .iter()
                 .map(|v| v.as_global_value().as_pointer_value())
@@ -2985,10 +2918,8 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
     ) {
         let currentbb = self.builder.get_insert_block();
         self.builder.unset_current_debug_location();
-        let _i8ptrtp = self.context.i8_type().ptr_type(AddressSpace::from(1));
         let ty = self.struct_type(v, ctx);
-        let ptrtp = ty.ptr_type(AddressSpace::from(1));
-        let ftp = self.mark_fn_tp(ptrtp);
+        let ftp = self.visit_fn_tp();
         let name = v.get_full_name() + "_visitorf@";
 
         let linkage = Linkage::Internal;
@@ -3141,14 +3072,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         val.get_type().is_pointer_type()
     }
     fn i8ptr_null(&self) -> ValueHandle {
-        self.get_llvm_value_handle(
-            &self
-                .context
-                .i8_type()
-                .ptr_type(AddressSpace::from(1))
-                .const_null()
-                .into(),
-        )
+        self.get_llvm_value_handle(&self.gc_ptr_ty().const_null().into())
     }
 
     fn create_closure_parameter_variable(
@@ -3197,7 +3121,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         params: &[Arc<RefCell<PLType>>],
         ret: &PLType,
     ) -> ValueHandle {
-        let i8ptr = self.context.i8_type().ptr_type(AddressSpace::from(1));
+        let i8ptr = self.gc_ptr_ty();
         let mut closure_param_tps: Vec<BasicMetadataTypeEnum> =
             vec![i8ptr.as_basic_type_enum().into()];
         closure_param_tps.extend(
@@ -3236,7 +3160,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             return self.get_llvm_value_handle(&closure_f.into());
         }
         let f_tp = ori_f.get_type();
-        let i8ptr = self.context.i8_type().ptr_type(AddressSpace::from(1));
+        let i8ptr = self.gc_ptr_ty();
         let param_tps = f_tp.get_param_types();
         let mut closure_param_tps = vec![i8ptr.as_basic_type_enum()];
         closure_param_tps.extend(param_tps);
@@ -3303,12 +3227,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         ctx_name: &str,
         ret_tp: &PLType,
     ) -> ValueHandle {
-        let tp = self
-            .context
-            .get_struct_type(ctx_name)
-            .unwrap()
-            .ptr_type(AddressSpace::from(1))
-            .into();
+        let tp = self.context.ptr_type(AddressSpace::from(1)).into();
         let ftp = self.get_ret_type(ret_tp, ctx, true).fn_type(&[tp], false);
         let f = self
             .module
