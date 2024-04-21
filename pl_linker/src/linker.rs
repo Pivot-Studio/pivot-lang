@@ -248,8 +248,8 @@ impl Linker for Ld64Linker {
         self.args.push("-lSystem".to_owned());
         self.args.insert(0, "ld64.lld".to_owned());
         lld_rs::link(lld_rs::LldFlavor::MachO, &self.args)
-        .ok()
-        .map_err(LinkerError::LinkError)
+            .ok()
+            .map_err(LinkerError::LinkError)
     }
 
     fn push_args(&mut self, arg: &str) {
@@ -293,7 +293,7 @@ impl Linker for MsvcLinker {
                 self.push_args(&format!("-libpath:{}", lib.to_str().unwrap()));
             }
         }
-        let (_, libs) = get_win_sdk_lib_paths();
+        let libs = get_win_sdk_lib_paths();
         libs.iter().for_each(|p| {
             self.push_args(&format!(
                 "-libpath:{}",
@@ -330,46 +330,8 @@ impl Linker for MsvcLinker {
     }
 }
 
-fn get_win_sdk_lib_paths() -> (Option<PathBuf>, Vec<PathBuf>) {
+fn get_win_sdk_lib_paths() -> Vec<PathBuf> {
     let mut paths = vec![];
-    let re = Command::new(r"C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe")
-        .args("-latest -property installationPath".split(' '))
-        .output()
-        .expect("failed to find visual studio");
-    let mut path = PathBuf::from(
-        std::str::from_utf8(&re.stdout)
-            .expect("failed to parse visual studio path")
-            .trim(),
-    );
-    path.push("VC\\Tools\\MSVC");
-    let mut linker_path = None;
-
-    path.read_dir().unwrap().for_each(|dir| {
-        if paths.len() == 2 {
-            return;
-        }
-        if let Ok(dir) = dir {
-            if dir.path().is_symlink() || !dir.path().is_dir() {
-                return;
-            }
-            let mut lp = dir.path();
-            lp.push("bin\\Hostx64\\x64\\link.exe");
-            if lp.exists() {
-                linker_path = Some(lp);
-            }
-
-            let mut p = dir.path();
-            p.push("lib\\x64");
-            if p.exists() {
-                paths.push(p);
-            }
-            let mut p = dir.path();
-            p.push("atlmfc\\lib\\x64");
-            if p.exists() {
-                paths.push(p);
-            }
-        }
-    });
     let sdkroot = PathBuf::from(r"C:\Program Files (x86)\Windows Kits\");
     assert!(sdkroot.is_dir(), "Windows SDK not found");
     for dir in sdkroot.read_dir().unwrap().flatten() {
@@ -392,7 +354,7 @@ fn get_win_sdk_lib_paths() -> (Option<PathBuf>, Vec<PathBuf>) {
                         paths.push(p);
                     }
                     if paths.len() == 4 {
-                        return (linker_path, paths);
+                        return paths;
                     } else {
                         paths = paths[0..2].to_vec();
                     }
@@ -400,5 +362,5 @@ fn get_win_sdk_lib_paths() -> (Option<PathBuf>, Vec<PathBuf>) {
             }
         }
     }
-    (linker_path, paths)
+    paths
 }

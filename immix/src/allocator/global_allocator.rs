@@ -1,7 +1,4 @@
-use std::{
-    cell::{Cell, RefCell},
-    collections::VecDeque,
-};
+use std::{cell::Cell, collections::VecDeque};
 
 use parking_lot::ReentrantMutex;
 use threadpool::ThreadPool;
@@ -46,8 +43,8 @@ pub struct GlobalAllocator {
 
     pub pool: ThreadPool,
 
-    /// a bitmap indicates whether a block is in use
-    block_bitmap: RefCell<Vec<u64>>,
+    /// a bytemap indicates whether a block is in use
+    block_bytemap: *mut u8,
 }
 
 unsafe impl Sync for GlobalAllocator {}
@@ -55,6 +52,12 @@ unsafe impl Sync for GlobalAllocator {}
 const ROUND_THRESHOLD: i64 = 10;
 
 const ROUND_MIN_TIME_MILLIS: u128 = 1000;
+
+impl Drop for GlobalAllocator {
+    fn drop(&mut self) {
+        unsafe { libc::free(self.block_bytemap as _) }
+    }
+}
 
 impl GlobalAllocator {
     /// Create a new global allocator.
@@ -68,12 +71,11 @@ impl GlobalAllocator {
         let start = mmap.aligned(BLOCK_SIZE);
         let end = mmap.end();
 
-        // bitmap is only for immix space
+        // bytemap is only for immix space
         let immix_size = end as usize - start as usize;
-        // i64 is 64 bits
-        let bitmap_size = immix_size / BLOCK_SIZE / 64;
-        let block_bitmap: Vec<u64> = vec![0; bitmap_size];
-
+        // we use one byte per block to avoid using lock
+        let bytemap_size = immix_size / BLOCK_SIZE + 1;
+        let block_bytemap: *mut u8 = unsafe { libc::malloc(bytemap_size) } as *mut u8;
         Self {
             current: Cell::new(mmap.aligned(BLOCK_SIZE)),
             heap_start: start,
@@ -88,7 +90,7 @@ impl GlobalAllocator {
             pool: ThreadPool::default(),
             unavailable_blocks: vec![],
             recycle_blocks: vec![],
-            block_bitmap: RefCell::new(block_bitmap),
+            block_bytemap,
         }
     }
     /// 从big object mmap中分配一个大对象，大小为size
@@ -124,27 +126,17 @@ impl GlobalAllocator {
     fn set_block_bitmap(&self, block: *mut Block, value: bool) {
         let block_start = block as usize;
         let block_index = (block_start - self.heap_start as usize) / BLOCK_SIZE;
-        let mut block_bitmap = self.block_bitmap.borrow_mut();
-        let word_index = block_index / 64;
-        let bit_index = block_index % 64;
-        let word = block_bitmap[word_index];
-        let mask = 1 << bit_index;
-        if value {
-            block_bitmap[word_index] = word | mask;
-        } else {
-            block_bitmap[word_index] = word & !mask;
+        unsafe {
+            self.block_bytemap
+                .add(block_index)
+                .write(if value { 1 } else { 0 })
         }
     }
 
     fn get_ptr_bitmap(&self, ptr: *mut u8) -> bool {
         let ptr_start = ptr as usize;
         let block_index = (ptr_start - self.heap_start as usize) / BLOCK_SIZE;
-        let block_bitmap = self.block_bitmap.borrow();
-        let word_index = block_index / 64;
-        let bit_index = block_index % 64;
-        let word = block_bitmap[word_index];
-        let mask = 1 << bit_index;
-        word & mask != 0
+        unsafe { self.block_bytemap.add(block_index).read() == 1 }
     }
 
     /// 从mmap的heap空间之中获取一个Option<* mut Block>，如果heap空间不够了，就返回None
