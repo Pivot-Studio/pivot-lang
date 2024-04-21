@@ -353,11 +353,6 @@ fn get_win_sdk_lib_paths() -> Vec<PathBuf> {
                     if p.exists() {
                         paths.push(p);
                     }
-                    if paths.len() == 4 {
-                        return paths;
-                    } else {
-                        paths = paths[0..2].to_vec();
-                    }
                 }
             }
         }
