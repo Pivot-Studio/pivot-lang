@@ -338,6 +338,7 @@ pub enum PriType {
     F32,
     F64,
     BOOL,
+    CHAR,
 }
 impl PriType {
     pub fn get_name(&self) -> String {
@@ -355,6 +356,7 @@ impl PriType {
             PriType::F32 => String::from("f32"),
             PriType::F64 => String::from("f64"),
             PriType::BOOL => String::from("bool"),
+            PriType::CHAR => String::from("char"),
         }
     }
     pub fn signed(&self) -> bool {
@@ -377,6 +379,7 @@ impl PriType {
                 | PriType::U64
                 | PriType::U128
                 | PriType::BOOL
+                | PriType::CHAR
         )
     }
 
@@ -398,6 +401,7 @@ impl PriType {
             "f32" => Some(PriType::F32),
             "f64" => Some(PriType::F64),
             "bool" => Some(PriType::BOOL),
+            "char" => Some(PriType::CHAR),
             _ => None,
         }
     }

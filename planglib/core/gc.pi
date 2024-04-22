@@ -109,8 +109,39 @@ impl string {
     pub fn bytes() [u8] {
         return arr_from_raw(self.data, self._byte_len);
     }
-    
 
+    pub fn chars() [char] {
+        let bytes = arr_from_raw(self.data, self._byte_len);
+        let chars = [char*self._len;];
+        let i = 0;
+        let j = 0;
+        while j < self._len {
+            let c: u8 = bytes[i];
+            let  len = 1;
+            let  code = 0 as u32;
+            if c & 0b10000000 == 0 {
+                len = 1;
+                code = (c & 0b01111111) as u32;
+            } else if c & 0b11100000 == 0b11000000 {
+                len = 2;
+                code = (c & 0b00011111) as u32;
+            } else if c & 0b11110000 == 0b11100000 {
+                len = 3;
+                code = (c & 0b00001111) as u32;
+            } else if c & 0b11111000 == 0b11110000 {
+                len = 4;
+                code = (c & 0b00000111) as u32;
+            }
+            for let k = 1; k < len; k = k + 1 {
+                code = code << 6;
+                code = code | (bytes[i + k] & 0b00111111) as u32;
+            }
+            chars[j] = code as char;
+            j = j + 1;
+            i = i + len;
+        }
+        return chars;
+    }
 }
 
 pub fn string_from_bytes(bytes:[u8]) string {

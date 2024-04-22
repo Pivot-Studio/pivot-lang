@@ -224,7 +224,7 @@ fn digit_gen(low: F64, w: F64, high: F64, buf: [u8]) (bool, i64, i64) {
     while kappa > 0 {
         let digit = integrals / divisor;
         panic::assert(digit <= 9);
-        buf[len] = digit as u8 + 0x30 as u8;
+        buf[len] = digit as u8;
         len = len + 1;
         integrals = integrals % divisor;
         kappa = kappa - 1;
@@ -245,7 +245,7 @@ fn digit_gen(low: F64, w: F64, high: F64, buf: [u8]) (bool, i64, i64) {
         unsafe_interval.f = unsafe_interval.f * 10;
         let digit = (fractionals >> (-one.e) as u64);
         panic::assert(digit <= 9);
-        buf[len] = digit as u8 + 0x30 as u8;
+        buf[len] = digit as u8;
         len = len + 1;
         fractionals = fractionals & (one.f - 1);
         kappa = kappa - 1;

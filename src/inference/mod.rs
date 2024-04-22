@@ -646,6 +646,11 @@ impl<'ctx> InferenceCtx<'ctx> {
                         crate::ast::pltype::PriType::F64,
                     )))
                 }
+                crate::ast::node::Num::Char(_) => {
+                    return SymbolType::PLType(new_arc_refcell(PLType::Primitive(
+                        crate::ast::pltype::PriType::CHAR,
+                    )))
+                }
             },
             NodeEnum::Primary(p) => {
                 return self.inference(&mut p.value, ctx, builder);

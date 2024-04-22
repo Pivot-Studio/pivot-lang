@@ -16,7 +16,7 @@ pub fn stringbuilder(len: i64) StringBuilder {
 }
 
 impl StringBuilder {
-    pub fn add_char(ch: u8) void {
+    pub fn add_byte(ch: u8) void {
         self.data[self.len] = ch;
         self.len = self.len + 1;
         return;
@@ -35,7 +35,27 @@ impl StringBuilder {
             if bs[i] == 0 as u8 {
                 break;
             }
-            self.add_char(bs[i]);
+            self.add_byte(bs[i]);
+        }
+        return;
+    }
+    pub fn add_char(ch: char) void {
+        // turn char(unicode) to utf-8
+        let ch_u32 = ch as u32;
+        if ch_u32 < 0x80 {
+            self.add_byte(ch as u8);
+        } else if ch_u32 < 0x800 {
+            self.add_byte((ch_u32 >> 6) as u8 | 0xc0);
+            self.add_byte((ch_u32 & 0x3f) as u8 | 0x80);
+        } else if ch_u32 < 0x10000 {
+            self.add_byte((ch_u32 >> 12) as u8 | 0xe0);
+            self.add_byte(((ch_u32 >> 6) & 0x3f) as u8 | 0x80);
+            self.add_byte((ch_u32 & 0x3f) as u8 | 0x80);
+        } else {
+            self.add_byte((ch_u32 >> 18) as u8 | 0xf0);
+            self.add_byte(((ch_u32 >> 12) & 0x3f) as u8 | 0x80);
+            self.add_byte(((ch_u32 >> 6) & 0x3f) as u8 | 0x80);
+            self.add_byte((ch_u32 & 0x3f) as u8 | 0x80);
         }
         return;
     }
@@ -55,40 +75,44 @@ fn reverse<T>(s: [T], len: i64) [T] {
 }
 
 pub fn dtoa(f: f64) gc::string {
-    if f == 0.0 {
-        return "0.0";
-    }
     let buf = [u8*64;];
     let sb = stringbuilder(64);
     let neg = *unsafe_cast<u64>(&f) & 0x8000000000000000 != 0;
     if neg {
-        sb.add_char(0x2d as u8);
+        sb.add_char('-');
         f = -f;
+    }
+    if f == 0.0 {
+        sb.add_str("0.0");
+        return sb.str();
     }
     let (_r, len, de) = dtoa::grisu3(f, 0, buf);
     let nde = len + de;
     if nde <= 0 {
-        sb.add_char(0x30 as u8);
-        sb.add_char(0x2e as u8);
+        sb.add_char('0');
+        sb.add_char('.');
         for let i = 0; i < -nde; i = i + 1{
-            sb.add_char(0x30 as u8);
+            sb.add_char('0');
         }
         for let i = 0; i < len; i = i + 1 {
-            sb.add_char(buf[i]);
+            sb.add_char(buf[i] as char + '0');
         }
     } else {
         for let i = 0; i < nde; i = i + 1{
-            sb.add_char(buf[i]);
+            sb.add_char(buf[i] as char + '0');
         }
-        sb.add_char(0x2e as u8);
+        sb.add_char('.');
         if nde == len {
-            sb.add_char(0x30 as u8);
+            sb.add_char('0');
+        } else {
+            for let i = nde; i < len; i = i + 1 {
+                sb.add_char(buf[i] as char + '0');
+            }
+            sb.add_char('0');
         }
-        for let i = nde; i < len; i = i + 1 {
-            sb.add_char(buf[i]);
-        }
+
     }
-    sb.add_char(0 as u8);
+    sb.add_byte(0 as u8);
     return sb.str();
 }
 
@@ -104,10 +128,10 @@ impl ToString for i64 {
             v = -v;
         }
         for ; v > 0; v = v / 10 {
-            sb.add_char((v % 10) as u8 + 0x30);
+            sb.add_byte((v % 10) as u8 + 0x30);
         }
         if neg {
-            sb.add_char(0x2d as u8); // '-'
+            sb.add_byte(0x2d as u8); // '-'
         }
         sb.reverse();
         return sb.str();
@@ -143,7 +167,7 @@ impl ToString for u64 {
         let sb = stringbuilder(32);
         let v = *self;
         for ; v > 0; v = v / 10 {
-            sb.add_char((v % 10) as u8 + 0x30);
+            sb.add_byte((v % 10) as u8 + 0x30);
         }
         sb.reverse();
         return sb.str();
@@ -213,6 +237,14 @@ impl ToString for bool {
         } else {
             return "false";
         }
+    }
+}
+
+impl ToString for char {
+    fn to_string() gc::string {
+        let sb = stringbuilder(4);
+        sb.add_char(*self);
+        return sb.str();
     }
 }
 
