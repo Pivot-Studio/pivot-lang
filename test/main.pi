@@ -7,7 +7,10 @@ use project1::test::_match;
 pub fn main() i64 {
     let a = 0.0;
     println!(a);
-    println!("Hello, World!");
+    let m = "🌏Hello, 世界!";
+    println!(m);
+    let cs = m.chars();
+    println!(cs);
     let h = new_hash_table<i64|i64>(10 as u64, 1 as u64);
     h.insert(1, 2);
     h.insert(2, 3);
@@ -23,12 +26,14 @@ pub fn main() i64 {
     println!(-789.012);
     println!(1.0/3.0);
     println!(-0.123 as f32); // TODO: impl a better way to cast f32 (like f64)
-    println!(-10.0 as f32);
+    println!(-10.0);
     println!([1, 2, 3, 4]);
     println!(from_slice([1, 2, 3, 4]));
     println!(h);
     println!(1,2,3);
     println!(123);
+    let b = '😀';
+    println!(b);
     _match::test_match();
     return 0;
 }

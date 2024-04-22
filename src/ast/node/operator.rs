@@ -224,7 +224,12 @@ impl Node for BinOpNode {
                     .build_bit_right_shift_arithmetic(left, right)
                     .new_output(lpltype.clone()),
                 PLType::Primitive(
-                    PriType::U128 | PriType::U64 | PriType::U32 | PriType::U16 | PriType::U8,
+                    PriType::U128
+                    | PriType::U64
+                    | PriType::U32
+                    | PriType::U16
+                    | PriType::U8
+                    | PriType::CHAR,
                 ) => builder
                     .build_bit_right_shift(left, right)
                     .new_output(lpltype.clone()),
@@ -251,7 +256,12 @@ impl Node for BinOpNode {
                     )));
                 }
                 PLType::Primitive(
-                    PriType::U128 | PriType::U64 | PriType::U32 | PriType::U16 | PriType::U8,
+                    PriType::U128
+                    | PriType::U64
+                    | PriType::U32
+                    | PriType::U16
+                    | PriType::U8
+                    | PriType::CHAR,
                 ) => {
                     return Ok(NodeOutput::new_value(NodeValue::new(
                         builder.build_int_unsigned_div(left, right, "addtmp"),
@@ -281,7 +291,12 @@ impl Node for BinOpNode {
                     )));
                 }
                 PLType::Primitive(
-                    PriType::U128 | PriType::U64 | PriType::U32 | PriType::U16 | PriType::U8,
+                    PriType::U128
+                    | PriType::U64
+                    | PriType::U32
+                    | PriType::U16
+                    | PriType::U8
+                    | PriType::CHAR,
                 ) => {
                     return Ok(NodeOutput::new_value(NodeValue::new(
                         builder.build_int_unsigned_srem(left, right, "addtmp"),
@@ -312,7 +327,8 @@ impl Node for BinOpNode {
                     | PriType::U32
                     | PriType::U16
                     | PriType::U8
-                    | PriType::BOOL),
+                    | PriType::BOOL
+                    | PriType::CHAR),
                 ) => { builder.build_int_compare(self.op.0.get_op(pri), left, right, "cmptmp") }
                     .new_output(Arc::new(RefCell::new(PLType::Primitive(PriType::BOOL)))),
                 PLType::Primitive(PriType::F64 | PriType::F32) => {

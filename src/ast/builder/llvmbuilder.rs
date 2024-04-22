@@ -72,7 +72,12 @@ const CALL_CONV: u32 = 0;
 fn get_dw_ate_encoding(pritp: &PriType) -> u32 {
     match pritp {
         PriType::I8 | PriType::I16 | PriType::I32 | PriType::I64 | PriType::I128 => DW_ATE_SIGNED,
-        PriType::U8 | PriType::U16 | PriType::U32 | PriType::U64 | PriType::U128 => DW_ATE_UNSIGNED,
+        PriType::U8
+        | PriType::U16
+        | PriType::U32
+        | PriType::U64
+        | PriType::U128
+        | PriType::CHAR => DW_ATE_UNSIGNED,
         PriType::F32 | PriType::F64 => DW_ATE_FLOAT,
         PriType::BOOL => DW_ATE_BOOLEAN,
     }
@@ -970,6 +975,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             PriType::F32 => self.context.f32_type().as_basic_type_enum(),
             PriType::F64 => self.context.f64_type().as_basic_type_enum(),
             PriType::BOOL => self.context.bool_type().as_basic_type_enum(),
+            PriType::CHAR => self.context.i32_type().as_basic_type_enum(),
         }
     }
     fn get_or_insert_st_visit_fn_handle(

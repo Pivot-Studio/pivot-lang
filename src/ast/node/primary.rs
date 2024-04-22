@@ -102,6 +102,13 @@ impl Node for NumNode {
                     .set_const()
                     .to_result();
             }
+            Num::Char(x) => {
+                let b = builder.int_value(&PriType::CHAR, x as u64, false);
+                return b
+                    .new_output(Arc::new(RefCell::new(PLType::Primitive(PriType::CHAR))))
+                    .set_const()
+                    .to_result();
+            }
         }
     }
 }

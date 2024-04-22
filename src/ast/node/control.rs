@@ -494,6 +494,26 @@ impl MatchArmCondition {
                             .add_to_ctx(ctx);
                             }
                         },
+                        Num::Char(c) => match &*ty.borrow() {
+                            PLType::Primitive(PriType::CHAR) => {
+                                let c_v = builder.int_value(&PriType::CHAR, c as u64, false);
+                                let v = ctx
+                                    .try_load2var(Default::default(), v, builder, &ty.borrow())
+                                    .unwrap();
+                                let i = builder.build_int_compare(
+                                    crate::ast::builder::IntPredicate::EQ,
+                                    c_v,
+                                    v,
+                                    "eq",
+                                );
+                                Self::add_matched_bb(i, not_matched, ctx, builder);
+                            }
+                            _ => {
+                                n.range().new_err(ErrorCode::ILLEGAL_MATCH_ARM_CONDITION)
+                                .add_label(n.range, ctx.get_file(), format_label!("match condition is of type `{}`, imcompatible with type `{}`", "char", ty.borrow().get_name()))
+                                .add_to_ctx(ctx);
+                            }
+                        },
                     }
                 }
                 Literal::String(s) => {

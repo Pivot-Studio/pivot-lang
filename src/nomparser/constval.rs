@@ -1,10 +1,10 @@
 use nom::{
     branch::alt,
     bytes::complete::tag,
-    character::complete::{one_of, space0},
+    character::complete::{anychar, one_of, space0},
     combinator::{map, opt, recognize},
     multi::{many0, many1},
-    sequence::{preceded, terminated, tuple},
+    sequence::{delimited, preceded, terminated, tuple},
     IResult,
 };
 
@@ -12,6 +12,8 @@ use crate::nomparser::Span;
 use crate::{ast::range::Range, ast::tokens::TokenType};
 use internal_macro::{test_parser, test_parser_error};
 use nom::character::complete::char;
+
+use self::string_literal::parse_escaped_char;
 
 use super::*;
 #[test_parser(".10")]
@@ -51,6 +53,7 @@ pub fn number(input: Span) -> IResult<Span, NumNode> {
             // TODO:err tolerate
             Num::Int(out.fragment().replace('_', "").parse::<u64>().unwrap())
         }),
+        map(character, Num::Char),
     ))(input.clone())?;
     let range = Range::new(&input, &re);
     let node = NumNode { value, range };
@@ -165,4 +168,16 @@ fn float(input: Span) -> IResult<Span, Span> {
         ))), // Case three: 42.42
         recognize(tuple((decimal, char('.'), decimal))),
     ))(input)
+}
+
+#[test_parser("'a'")]
+#[test_parser("'中'")]
+#[test_parser("'😀'")]
+#[test_parser("'\\n'")]
+#[test_parser("'\\\\'")]
+#[test_parser("'\\u{1234}'")]
+#[test_parser_error("'\\u{1234} '")]
+#[test_parser_error("'\\u{123456}'")] // bigger than 0x10FFFF
+fn character(input: Span) -> IResult<Span, char> {
+    delimited(char('\''), alt((parse_escaped_char, anychar)), char('\''))(input)
 }
