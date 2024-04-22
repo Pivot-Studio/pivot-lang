@@ -974,8 +974,10 @@ impl<'a, 'ctx> Ctx<'a> {
         if self.disable_diag {
             return dia;
         }
-        if let Some(src) = &self.temp_source {
-            dia.set_source(src);
+        if dia.raw.source.is_none() {
+            if let Some(src) = &self.temp_source {
+                dia.set_source(src);
+            }
         }
         let dia2 = dia.clone();
         self.diagnose.borrow_mut().insert(dia);

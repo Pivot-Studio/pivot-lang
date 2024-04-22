@@ -225,12 +225,15 @@ impl Node for DefNode {
                         ctx.up_cast(
                             c,
                             oritp,
-                            Default::default(),
-                            Default::default(),
+                            self.var.range(),
+                            self.value_expression
+                                .as_ref()
+                                .map(|v| v.range())
+                                .unwrap_or(self.range()),
                             node_val.get_value(),
                             builder,
                         )
-                        .unwrap()
+                        .unwrap_or_default()
                     } else {
                         node_val.get_value()
                     };

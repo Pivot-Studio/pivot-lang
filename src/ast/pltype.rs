@@ -937,16 +937,20 @@ impl FNValue {
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, '_>,
     ) -> ClosureType {
-        return ClosureType {
+        ctx.run_in_type_mod(self, |ctx, f| ClosureType {
             range: Default::default(),
-            ret_type: self.fntype.ret_pltype.get_type(ctx, builder, true).unwrap(),
-            arg_types: self
+            ret_type: f
+                .fntype
+                .ret_pltype
+                .get_type(ctx, builder, true)
+                .unwrap_or(unknown_arc()),
+            arg_types: f
                 .fntype
                 .param_pltypes
                 .iter()
-                .map(|x| x.get_type(ctx, builder, true).unwrap())
+                .map(|x| x.get_type(ctx, builder, true).unwrap_or(unknown_arc()))
                 .collect(),
-        };
+        })
     }
     pub fn is_modified_by(&self, modifier: TokenType) -> bool {
         if let Some((t, _)) = self.fntype.modifier {

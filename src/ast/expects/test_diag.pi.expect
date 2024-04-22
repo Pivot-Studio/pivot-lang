@@ -618,6 +618,30 @@
     PLDiag {
         raw: PLDiagRaw {
             code: Err(
+                CANNOT_ASSIGN_INCOMPLETE_GENERICS,
+            ),
+            help: Some(
+                "try add generic type explicitly to fix this error.",
+            ),
+            labels: [],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 126,
+                    column: 13,
+                    offset: 1384,
+                },
+                end: Pos {
+                    line: 126,
+                    column: 18,
+                    offset: 1389,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
                 CYCLE_DEPENDENCY,
             ),
             help: None,
@@ -864,6 +888,76 @@
     },
     PLDiag {
         raw: PLDiagRaw {
+            code: Err(
+                SYNTAX_ERROR_IF_CONDITION,
+            ),
+            help: Some(
+                "if condition here cannot be parsed",
+            ),
+            labels: [],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 127,
+                    column: 7,
+                    offset: 1397,
+                },
+                end: Pos {
+                    line: 127,
+                    column: 8,
+                    offset: 1398,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
+                SYNTAX_ERROR_WHILE_CONDITION,
+            ),
+            help: None,
+            labels: [],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 130,
+                    column: 10,
+                    offset: 1416,
+                },
+                end: Pos {
+                    line: 130,
+                    column: 11,
+                    offset: 1417,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
+                SYNTAX_ERROR_FOR_CONDITION,
+            ),
+            help: Some(
+                "`for` condition here cannot be parsed",
+            ),
+            labels: [],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 133,
+                    column: 8,
+                    offset: 1433,
+                },
+                end: Pos {
+                    line: 133,
+                    column: 9,
+                    offset: 1434,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
             code: Warn(
                 UNUSED_VARIABLE,
             ),
@@ -1013,6 +1107,52 @@
                         (
                             "Unused variable `{}`",
                             [
+                                "a",
+                            ],
+                        ),
+                    ),
+                    range: Range {
+                        start: Pos {
+                            line: 126,
+                            column: 9,
+                            offset: 1380,
+                        },
+                        end: Pos {
+                            line: 126,
+                            column: 10,
+                            offset: 1381,
+                        },
+                    },
+                },
+            ],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 126,
+                    column: 9,
+                    offset: 1380,
+                },
+                end: Pos {
+                    line: 126,
+                    column: 10,
+                    offset: 1381,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Warn(
+                UNUSED_VARIABLE,
+            ),
+            help: None,
+            labels: [
+                PLLabel {
+                    file: "",
+                    txt: Some(
+                        (
+                            "Unused variable `{}`",
+                            [
                                 "b",
                             ],
                         ),
@@ -1042,6 +1182,52 @@
                     line: 24,
                     column: 10,
                     offset: 256,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Warn(
+                UNUSED_VARIABLE,
+            ),
+            help: None,
+            labels: [
+                PLLabel {
+                    file: "",
+                    txt: Some(
+                        (
+                            "Unused variable `{}`",
+                            [
+                                "b",
+                            ],
+                        ),
+                    ),
+                    range: Range {
+                        start: Pos {
+                            line: 136,
+                            column: 9,
+                            offset: 1451,
+                        },
+                        end: Pos {
+                            line: 136,
+                            column: 10,
+                            offset: 1452,
+                        },
+                    },
+                },
+            ],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 136,
+                    column: 9,
+                    offset: 1451,
+                },
+                end: Pos {
+                    line: 136,
+                    column: 10,
+                    offset: 1452,
                 },
             },
         },
