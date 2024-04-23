@@ -397,15 +397,14 @@ impl Collector {
     unsafe extern "C" fn mark_ptr(&self, ptr: *mut u8) {
         let father = ptr;
         // check pointer is valid (divided by 8)
+        // immix suppose all stack pointers are aligned by 8
+        // and immix base pointer itself is always aligned by 8
+        // (infact aligned by 128(LINE_SIZE))
         if (ptr as usize) % 8 != 0 {
-            // eprintln!("invalid pointer: {:p}", ptr);
             return;
         }
 
         let ptr = *(ptr as *mut *mut u8);
-        if ptr.is_null() || (ptr as usize) % 8 != 0 {
-            return;
-        }
         // eprintln!("mark ptr {:p} -> {:p}", father, ptr);
         // mark it if it is in heap
         if self.thread_local_allocator.as_mut().unwrap().in_heap(ptr) {
