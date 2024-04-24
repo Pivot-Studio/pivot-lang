@@ -177,10 +177,18 @@ pub fn position_to_offset(doc: &str, pos: lsp_types::Position) -> usize {
     let mut offset = 0;
     for (i, l) in le.enumerate() {
         if i == line {
-            if let Some(a) = l.char_indices().nth(col) {
-                offset += a.0;
-            } else {
-                offset += l.chars().count();
+            if i == line {
+                let mut utf8_offset = 0;
+                let mut utf16_offset = 0;
+                for c in l.chars() {
+                    if utf16_offset >= col {
+                        break;
+                    }
+                    utf8_offset += c.len_utf8();
+                    utf16_offset += c.len_utf16();
+                }
+                offset += utf8_offset;
+                break;
             }
             break;
         }
