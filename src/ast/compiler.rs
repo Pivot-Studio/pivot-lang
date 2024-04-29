@@ -253,7 +253,7 @@ pub fn process_llvm_ir<'a>(
 #[cfg(feature = "llvm")]
 pub fn pl_link(llvmmod: Module, oxbjs: Vec<PathBuf>, out: String, op: Options) {
     llvmmod.verify().unwrap();
-    llvmmod.strip_debug_info();
+    // llvmmod.strip_debug_info();
     if op.genir {
         let mut s = out.to_string();
         s.push_str(".ll");

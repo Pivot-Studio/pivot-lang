@@ -79,15 +79,15 @@ pub fn program(input: Span) -> IResult<Span, Box<NodeEnum>> {
                             Box::new(TypedIdentifierNode {
                                 id: VarNode {
                                     name: "self".to_string(),
-                                    range: Default::default(),
+                                    range: mth.range,
                                     id: None,
                                 },
                                 typenode: Box::new(TypeNodeEnum::Pointer(PointerTypeNode {
                                     elm: Box::new(target.clone()),
-                                    range: Default::default(),
+                                    range: mth.range,
                                 })),
                                 doc: None,
-                                range: Default::default(),
+                                range: mth.range,
                             }),
                         );
                         mth.target_range = im.target.range();

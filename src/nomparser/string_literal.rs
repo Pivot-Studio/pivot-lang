@@ -28,6 +28,7 @@ where
     // `take_while_m_n` parses between `m` and `n` bytes (inclusive) that match
     // a predicate. `parse_hex` here parses between 1 and 6 hexadecimal numerals.
     let parse_hex = take_while_m_n::<_, Span, _>(1, 6, |c: char| c.is_ascii_hexdigit());
+    let parse_hex2 = take_while_m_n::<_, Span, _>(1, 6, |c: char| c.is_ascii_hexdigit());
 
     // `preceded` takes a prefix parser, and if it succeeds, returns the result
     // of the body parser. In this case, it parses u{XXXX}.
@@ -36,7 +37,7 @@ where
         // `delimited` is like `preceded`, but it parses both a prefix and a suffix.
         // It returns the result of the middle parser. In this case, it parses
         // {XXXX}, where XXXX is 1 to 6 hex numerals, and returns XXXX
-        delimited(char('{'), parse_hex, char('}')),
+        alt((delimited(char('{'), parse_hex, char('}')), parse_hex2)),
     );
 
     // `map_res` takes the result of a parser and applies a function that returns

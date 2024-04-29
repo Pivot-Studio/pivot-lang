@@ -44,5 +44,6 @@ pub fn main() i64 {
     }
     let ep = t.elapsed();
     println!(ep);
+    println!(0.000093999999999999994);
     return 0;
 }
