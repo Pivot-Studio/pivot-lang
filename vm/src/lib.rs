@@ -73,6 +73,30 @@ fn print_i64(i: i64) {
 }
 
 #[is_runtime]
+fn vm_dtoa(f: f64, rec: *mut u8) {
+    let s = unsafe { std::slice::from_raw_parts_mut(rec, 64) };
+    f.to_string()
+        .as_bytes()
+        .iter()
+        .enumerate()
+        .for_each(|(i, b)| {
+            s[i] = *b;
+        });
+}
+
+#[is_runtime]
+fn vm_ftoa(f: f32, rec: *mut u8) {
+    let s = unsafe { std::slice::from_raw_parts_mut(rec, 64) };
+    f.to_string()
+        .as_bytes()
+        .iter()
+        .enumerate()
+        .for_each(|(i, b)| {
+            s[i] = *b;
+        });
+}
+
+#[is_runtime]
 fn new_thread(f: *mut i128) {
     // f's first 8 byte is fn pointer, next 8 byte is data pointer
     let ptr = f as *const i64;

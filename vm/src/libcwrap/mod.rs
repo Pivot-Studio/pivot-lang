@@ -48,7 +48,7 @@ pub static O_CREAT: libc::c_int = libc::O_CREAT;
 pub static RAND_MAX: libc::c_int = libc::RAND_MAX;
 
 #[no_mangle]
-pub static CLOCK_REALTIME: libc::c_uint = libc::CLOCK_REALTIME;
+pub static CLOCK_REALTIME: libc::c_uint = libc::CLOCK_REALTIME as libc::c_uint;
 
 internal_macro::add_symbol_consts!(
     CLOCK_REALTIME,

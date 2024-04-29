@@ -74,47 +74,6 @@ fn reverse<T>(s: [T], len: i64) [T] {
     return ret;
 }
 
-pub fn dtoa(f: f64) gc::string {
-    let buf = [u8*64;];
-    let sb = stringbuilder(64);
-    let neg = *unsafe_cast<u64>(&f) & 0x8000000000000000 != 0;
-    if neg {
-        sb.add_char('-');
-        f = -f;
-    }
-    if f == 0.0 {
-        sb.add_str("0.0");
-        return sb.str();
-    }
-    let (_r, len, de) = dtoa::grisu3(f, 0, buf);
-    let nde = len + de;
-    if nde <= 0 {
-        sb.add_char('0');
-        sb.add_char('.');
-        for let i = 0; i < -nde; i = i + 1{
-            sb.add_char('0');
-        }
-        for let i = 0; i < len; i = i + 1 {
-            sb.add_char(buf[i] as char + '0');
-        }
-    } else {
-        for let i = 0; i < nde; i = i + 1{
-            sb.add_char(buf[i] as char + '0');
-        }
-        sb.add_char('.');
-        if nde == len {
-            sb.add_char('0');
-        } else {
-            for let i = nde; i < len; i = i + 1 {
-                sb.add_char(buf[i] as char + '0');
-            }
-            sb.add_char('0');
-        }
-
-    }
-    sb.add_byte(0 as u8);
-    return sb.str();
-}
 
 impl ToString for i64 {
     fn to_string() gc::string {
@@ -197,36 +156,13 @@ impl ToString for u8 {
 
 impl ToString for f64 {
     fn to_string() gc::string {
-        return dtoa(*self);
+        return dtoa::dtoa(*self);
     }
 }
 
-// TODO: implement a better ftoa
 impl ToString for f32 {
     fn to_string() gc::string {
-        let bs = [u8* 20;];
-        let i = 0;
-        let v = *self;
-        let neg = v < 0.0;
-        if neg {
-            v = -v;
-        }
-        let iv = v as i64;
-        let fv = (v - (iv as f32));
-        for ; i < 7; i = i + 1 {
-            fv = fv * 10.0;
-            bs[i] = (fv as i64) as u8 + 0x30 as u8;
-            fv = fv - (fv as i64) as f32;
-        }
-
-        let ret = "";
-        if neg {
-            ret.append("-");
-        }
-        ret.append(iv.to_string());
-        ret.append(".");
-        ret.append(gc::string_from_bytes(arr_slice(bs, 0, 7) ));
-        return ret;
+        return dtoa::ftoa(*self);
     }
 }
 
