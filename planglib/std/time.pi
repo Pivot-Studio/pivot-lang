@@ -1,0 +1,114 @@
+use std::libc;
+use core::string::*;
+
+
+struct Instant {
+    d:Duration;
+}
+
+struct Duration {
+    t:libc::Timespec;
+}
+
+/// # now
+/// 
+/// get current time
+pub fn now() Instant {
+    return Instant{
+        d:Duration{
+            t:libc::LibC__clock_gettime(libc::CLOCK_REALTIME)
+        }
+    };
+}
+
+
+impl Instant {
+    /// # secs
+    /// 
+    /// get the number of seconds that have elapsed since 00:00:00 UTC on 1 January 1970
+    pub fn unixepoch() i64 {
+        return self.d.secs();
+    }
+    /// # unixnanos
+    /// 
+    /// get the number of nanoseconds that have elapsed since 00:00:00 UTC on 1 January 1970
+    pub fn unixnanos() i128 {
+        // convert seconds to nanoseconds
+        return self.d.nanos();
+    }
+
+    /// # elapsed
+    ///
+    /// get the duration that has elapsed since the instant was created
+    pub fn elapsed() Duration {
+        let now = now();
+        return now.d.sub(self.d);
+    }
+}
+
+
+impl Duration {
+    /// # secs
+    /// 
+    /// get the number of seconds
+    pub fn secs() i64 {
+        return self.t.sec;
+    }
+    /// # unixnanos
+    /// 
+    /// get the number of nanoseconds
+    pub fn nanos() i128 {
+        // convert seconds to nanoseconds
+        return self.t.sec as i128 * 1_000_000_000 + self.t.nano as i128;
+    }
+
+    /// # sub
+    ///
+    /// subtract a duration from another duration
+    pub fn sub(d:Duration) Duration {
+        let sec = self.t.sec - d.t.sec;
+        let nano = self.t.nano - d.t.nano;
+        return Duration{
+            t:libc::Timespec{
+                sec: sec,
+                nano: nano
+            }
+        };
+    }
+
+    /// # add
+    ///
+    /// add a duration to another duration
+    pub fn add(d:Duration) Duration {
+        let sec = self.t.sec + d.t.sec;
+        let nano = self.t.nano + d.t.nano;
+        return Duration{
+            t:libc::Timespec{
+                sec: sec,
+                nano: nano
+            }
+        };
+    }
+}
+
+
+impl ToString for Duration {
+    fn to_string() gc::string {
+        let sb = string::stringbuilder(68);
+        let time_f = self.secs() as f64;
+        let nano_f = self.nanos() as f64;
+        let nano = (nano_f / 1000000000.0);
+        let time = time_f + nano;
+        let time_str = time.to_string();
+        sb.add_str(time_str);
+        sb.add_char('s');
+        return sb.str();
+    }
+}
+
+
+impl ToString for Instant {
+    fn to_string() gc::string {
+        return self.d.to_string();
+    }
+}

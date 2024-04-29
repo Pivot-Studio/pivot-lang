@@ -31,11 +31,14 @@
 
 ## 特点
 
-- 静态编译 与 JIT
-- 极其方便的rust互操作
+- 支持静态编译与JIT
+- REPL
+- 热重载
+- 极其方便的Rust互操作
 - 支持debug
-- 支持lsp，自带vsc插件，能提供优秀的代码支持
+- 支持lsp，自带[vsc插件](https://github.com/Pivot-Studio/pivot-lang-support)，能提供优秀的代码支持
 - 有GC，自动管理内存
+- 强大的类型推断，支持省略大部分类型标注
 
 ## 一些ShowCase
 
