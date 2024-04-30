@@ -349,3 +349,6 @@ fn millitime() -> i64 {
         .unwrap()
         .as_millis() as _
 }
+
+#[cfg(all(windows, feature = "jitdylib"))]
+mod compiler_rt;

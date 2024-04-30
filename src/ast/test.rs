@@ -414,7 +414,6 @@ fn test_doc_symbol() {
 
 #[test]
 #[cfg(feature = "jit")]
-#[cfg(not(windows))] // FIXME: windows i128 issue https://discourse.llvm.org/c/beginners/17
 fn test_orc_jit() {
     use crate::ast::compiler::{compile, Options};
     use std::path::PathBuf;

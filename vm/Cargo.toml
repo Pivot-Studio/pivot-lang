@@ -26,8 +26,8 @@ path = "src/lib.rs"
 crate-type = ["staticlib", "lib", "cdylib"]
 
 [features]
-default = ["static", "immix", "nolog"]
-jit = ["internal_macro/jit"]
+default = ["static", "immix", "nolog", "jitdylib"]
+jitdylib = []
 static = ["internal_macro/static"]
 immix = []
 nolog = ["log/release_max_level_off"]
