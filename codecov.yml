@@ -16,3 +16,5 @@ ignore:
   - "src/main.rs"
   - "src/lsp/lspserver.rs"
   - "src/lsp/wasm.rs"
+  - "src/lsp/wasm.rs"
+  - "src/repl/*.rs"
