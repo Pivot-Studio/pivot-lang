@@ -8,24 +8,14 @@ fn unixtime() -> u64 {
         .as_secs()
 }
 
-struct Timespec {
-    tv_sec: i64,
-    tv_nsec: u32,
-}
-
-#[repr(C)]
-struct TimespecC {
-    tv_sec: i64,
-    tv_nsec: u32,
-}
-
 #[is_runtime]
-fn pl_clock_gettime() -> TimespecC {
-    let t = std::time::Instant::now();
-    let t: Timespec = std::mem::transmute(t);
-    TimespecC {
-        tv_sec: t.tv_sec,
-        tv_nsec: t.tv_nsec as _,
+fn pl_clock_gettime(sec: *mut i64, nano: *mut u32) {
+    let t = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap();
+    unsafe {
+        *sec = t.as_secs() as i64;
+        *nano = t.subsec_nanos();
     }
 }
 

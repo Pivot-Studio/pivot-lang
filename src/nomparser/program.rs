@@ -74,20 +74,21 @@ pub fn program(input: Span) -> IResult<Span, Box<NodeEnum>> {
                         }
                         mth.id.name = format!("|{}::{}", imname, mth.id.name);
                         mth.is_method = true;
+                        let r = mth.range.start_point();
                         mth.paralist.insert(
                             0,
                             Box::new(TypedIdentifierNode {
                                 id: VarNode {
                                     name: "self".to_string(),
-                                    range: mth.range,
+                                    range: r,
                                     id: None,
                                 },
                                 typenode: Box::new(TypeNodeEnum::Pointer(PointerTypeNode {
                                     elm: Box::new(target.clone()),
-                                    range: mth.range,
+                                    range: r,
                                 })),
                                 doc: None,
-                                range: mth.range,
+                                range: r,
                             }),
                         );
                         mth.target_range = im.target.range();

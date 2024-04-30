@@ -15,12 +15,7 @@ const O_CREAT:i32;
 
 
 
-pub struct Timespec {
-    pub sec:i64;
-    pub nano:u32;
-}
-
-pub fn pl_clock_gettime() Timespec;
+pub fn pl_clock_gettime(sec:*i64, nsec:*u32) void;
 
 
 pub fn LibC__memcpy(dest:*u8, src:*u8, n:u64) *u8;
