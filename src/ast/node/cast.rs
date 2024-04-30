@@ -309,7 +309,7 @@ impl<'a, 'ctx> Ctx<'a> {
         let data = builder
             .build_struct_gep(val, 1, "data", ori_ty, self)
             .unwrap();
-        let data = builder.build_load(data, "data", &target_ty.borrow(), self);
+        let data = builder.build_load(data, "data", &PLType::new_u8_ptr(), self);
         builder.build_store(result_data_field, data);
         builder.build_store(result_tag_field, builder.int_value(&PriType::U64, 0, false));
         builder.build_unconditional_branch(after_block);

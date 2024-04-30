@@ -1,49 +1,73 @@
-use std::cols::hashtable::*;
-use std::cols::arr::*;
-
 use project1::test::_match;
-
-use std::time;
-
+use project1::test::time;
+use project1::test::print;
+use project1::test::ifel;
+use project1::test::generic;
+use project1::test::st;
+use project1::test::method;
+use project1::test::global;
+use project1::test::traits;
+use project1::test::simple;
+use project1::test::flow;
+use project1::test::compiletime_reflection::test_compile_time_reflection;
+use project1::test::list;
+use project1::test::module;
+use project1::test::str;
+use project1::test::macros;
+use project1::test::union;
+use project1::test::multi_trait;
+use project1::test::tuple;
+use project1::test::fntype;
+use project1::test::closure;
+use project1::test::map;
+use project1::test::tree;
+use project1::test::fixed_point;
+use project1::test::sort_test;
+use project1::tmod2;
+// use pl_test::main;
+use project1::test::deconstruct;
+use project1::test::st::*;
+use project1::test::arr;
+use project1::test::iter;
+use project1::test::inference;
+use project1::test::rand;
+use project1::test::_hashtable;
+use project1::test::_io;
+// use std::cols::hashtable::new_hash_table;
 
 pub fn main() i64 {
-    let t = time::now();
-    let a = 0.0;
-    println!(a);
-    let m = "🌏Hello, 世界!";
-    println!(m);
-    let cs = m.chars();
-    println!(cs);
-    let h = new_hash_table<i64|i64>(10 as u64, 1 as u64);
-    h.insert(1, 2);
-    h.insert(2, 3);
-    println!(-0);
-    println!(456 as i32);
-    println!(-789 as i16);
-    println!(12 as i8);
-    println!(123);
-    println!(456 as u32);
-    println!(789 as u16);
-    println!(12 as u8);
-    println!(123.456);
-    println!(-789.012);
-    println!(1.0/3.0);
-    println!(-0.123 as f32); // TODO: impl a better way to cast f32 (like f64)
-    println!(-10.0);
-    println!([1, 2, 3, 4]);
-    println!(from_slice([1, 2, 3, 4]));
-    println!(h);
-    println!(1,2,3);
-    println!(123);
-    let b = '😀';
-    println!(b);
-    _match::test_match();
-    let aa = 0;
-    for let i = 0; i < 100; i = i + 1 {
-        aa = aa + i;
-    }
-    let ep = t.elapsed();
-    println!(ep);
-    println!(0.000093999999999999994);
+
+    macros::test_macros();
+    ifel::test_if_else();
+    generic::test_generic();
+    method::test_impl();
+    test_struct();
+    global::test_global();
+    traits::test_trait();
+    simple::test_simple();
+    flow::test_flow();
+    list::test_list();
+    // main::simple_test();
+    module::test_module();
+    str::test_string();
+    union::test_union();
+    multi_trait::test_multi_trait();
+    deconstruct::test_deconstruct();
+    tuple::test_tuple();
+    fntype::test_fntype()();
+    closure::test_closure();
+    tree::test_eva();
+    map::test_map();
+    fixed_point::test_fixed_point();
+    generic::ret_generic1<i64>();
+    test_compile_time_reflection();
+    iter::test_generator();
+    inference::test_inference();
+    rand::test_rand();
+    sort_test::test_sort();
+    arr::test_arr();
+    _hashtable::test_hashtable();
+    _io::test_io();
+    
     return 0;
 }

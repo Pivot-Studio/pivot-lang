@@ -58,6 +58,35 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
     immix::register_llvm_gc_plugins();
     ensure_target_folder();
 
+    let p = PathBuf::from(docs.file(db).to_string());
+    if p.extension().unwrap_or_default() == "bc" || p.extension().unwrap_or_default() == "ll" {
+        if !p.exists() {
+            eprintln!("{} file not found", p.to_str().unwrap().red());
+            exit(1)
+        }
+        let ctx = Context::create();
+        let tm = crate::ast::builder::llvmbuilder::get_target_machine(op.optimization.to_llvm());
+        let obj_f = &format!("{}/{}", &ASSET_PATH.lock().unwrap(), "out.o");
+        let module = if p.extension().unwrap_or_default() == "bc" {
+            Module::parse_bitcode_from_path(p, &ctx).unwrap()
+        } else {
+            let c_str = std::ffi::CString::new(p.to_str().unwrap()).unwrap();
+            let mem = unsafe { immix::parse_ir(c_str.as_ptr()) };
+            Module::parse_bitcode_from_buffer(
+                unsafe { &inkwell::memory_buffer::MemoryBuffer::new(mem as _) },
+                &ctx,
+            )
+            .unwrap()
+        };
+        tm.write_to_file(
+            &module,
+            inkwell::targets::FileType::Object,
+            Path::new(obj_f),
+        )
+        .unwrap();
+        pl_link(module, vec![obj_f.into()], out.clone(), op);
+        return;
+    }
     let total_steps = 3;
     let pb = &COMPILE_PROGRESS;
     prepare_prgressbar(
@@ -247,6 +276,16 @@ pub fn process_llvm_ir<'a>(
         output_files.push(obj_f.into());
     }
     pb.finish_with_message("中间代码优化完成");
+    let asm_path = format!("{}/{}", &ASSET_PATH.lock().unwrap(), "out.asm");
+    if op.asm {
+        tm.write_to_file(
+            &llvmmod,
+            inkwell::targets::FileType::Assembly,
+            Path::new(&asm_path),
+        )
+        .unwrap();
+        eprintln!("asm file written to: {}", &asm_path);
+    }
     (llvmmod, output_files)
 }
 

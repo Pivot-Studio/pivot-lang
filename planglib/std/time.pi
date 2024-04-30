@@ -116,12 +116,26 @@ impl Duration {
         return self.t.sec as i128 * 1_000_000_000 + self.t.nano as i128;
     }
 
+    /// # sub_sec_nanos
+    ///
+    /// get the number of nanoseconds that have elapsed since the last second
+    pub fn sub_sec_nanos() u32 {
+        return self.t.nano;
+    }
+
     /// # sub
     ///
     /// subtract a duration from another duration
     pub fn sub(d:Duration) Duration {
         let sec = self.t.sec - d.t.sec;
-        let nano = self.t.nano - d.t.nano;
+        // check if we need to borrow from the seconds
+        let nano;
+        if self.t.nano < d.t.nano {
+            sec = sec - 1;
+            nano = self.t.nano + NANO_PER_SEC as u32 - d.t.nano;
+        } else {
+            nano = self.t.nano - d.t.nano;
+        };
         return Duration{
             t:Timespec{
                 sec: sec,

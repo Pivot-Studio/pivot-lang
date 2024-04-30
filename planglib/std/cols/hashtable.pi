@@ -31,7 +31,7 @@ impl <K:Hash+Eq<K>|V> HashTable<K|V>  {
         if self.entries as f64 / arr_len(self.buckets) as f64 > 0.5 {
             let new_size = arr_len(self.buckets) * 2;
             let new_table = new_hash_table<K|V>(new_size as u64, self.salt +1);
-            let iterator = self.into_inter();
+            let iterator = self.into_iter();
             for let i = iterator.next(); !i is None; i = iterator.next() {
                 let (key, value) = i as (K,V)!;
                 new_table.insert(key, value);
@@ -42,7 +42,7 @@ impl <K:Hash+Eq<K>|V> HashTable<K|V>  {
         }
         return;
     }
-    gen pub fn into_inter() Iterator<(K,V)> {
+    gen pub fn into_iter() Iterator<(K,V)> {
         for let i = 0; i < arr_len(self.buckets); i = i + 1 {
             let node = self.buckets[i];
             while node is *TableNode<K|V> {
@@ -143,7 +143,7 @@ pub use core::string::ToString;
 impl <K:ToString+Hash+Eq<K>|V:ToString> ToString for HashTable<K|V> {
     fn to_string() string {
         let ret = "HashTable{";
-        let iterator = self.into_inter();
+        let iterator = self.into_iter();
         for let i = iterator.next(); !i is None; {
             let (key, value) = i as (K,V)!;
             ret.append(key.to_string());

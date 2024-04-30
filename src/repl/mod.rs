@@ -54,6 +54,7 @@ pub fn start_repl() {
     let mut db2 = Database::default();
 
     let op = compiler::Options {
+        asm: false,
         genir: false,
         printast: false,
         flow: false,

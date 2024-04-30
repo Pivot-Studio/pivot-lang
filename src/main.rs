@@ -156,6 +156,10 @@ struct Cli {
     #[arg(long)]
     genir: bool,
 
+    /// generate
+    #[arg(long, short = 'S')]
+    asm: bool,
+
     /// jit compile
     #[arg(long)]
     jit: bool,
@@ -188,6 +192,7 @@ impl Cli {
             .unwrap();
 
         let op = compiler::Options {
+            asm: self.asm,
             genir: self.genir,
             printast: self.printast,
             flow: self.flow,
@@ -221,13 +226,16 @@ impl Cli {
     // todo(griffin): make the input name more generic
     // currently it support file path input only,
     pub fn build(&mut self, name: String) {
-        self.check(name.clone());
+        if !(name.ends_with(".bc") || name.ends_with(".ll")) {
+            self.check(name.clone());
+        }
 
         let db = Database::default();
         let filepath = Path::new(&name);
         let abs = crate::utils::canonicalize(filepath).unwrap();
 
         let op = compiler::Options {
+            asm: self.asm,
             genir: self.genir,
             printast: self.printast,
             flow: self.flow,
@@ -299,6 +307,7 @@ impl Cli {
         let abs = crate::utils::canonicalize(filepath).unwrap();
 
         let op = compiler::Options {
+            asm: self.asm,
             genir: self.genir,
             printast: self.printast,
             flow: self.flow,
