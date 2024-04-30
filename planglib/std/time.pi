@@ -142,7 +142,7 @@ impl ToString for Duration {
     fn to_string() gc::string {
         let sb = string::stringbuilder(68);
         let time_f = self.secs() as f64;
-        let nano_f = self.nanos() as f64;
+        let nano_f = self.t.nano as f64;
         let nano = (nano_f / 1000000000.0);
         let time = time_f + nano;
         let time_str = time.to_string();
