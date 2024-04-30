@@ -1,0 +1,182 @@
+use std::libc;
+use core::string::*;
+
+
+var MILLI_PER_SEC = 1_000;
+var MICRO_PER_SEC = 1_000_000;
+var NANO_PER_SEC = 1_000_000_000;
+
+struct Instant {
+    d:Duration;
+}
+
+struct Duration {
+    t:Timespec;
+}
+
+struct Timespec {
+    sec:i64;
+    nano:u32;
+}
+
+/// # now
+/// 
+/// get current time
+pub fn now() Instant {
+
+    let spec = Timespec{};
+    libc::pl_clock_gettime(&spec.sec, &spec.nano);
+    return Instant{
+        d:Duration{
+            t:spec
+        }
+    };
+}
+
+
+impl Instant {
+    /// # secs
+    /// 
+    /// get the number of seconds that have elapsed since 00:00:00 UTC on 1 January 1970
+    pub fn unixepoch() i64 {
+        return self.d.secs();
+    }
+    /// # unixnanos
+    /// 
+    /// get the number of nanoseconds that have elapsed since 00:00:00 UTC on 1 January 1970
+    pub fn unixnanos() i128 {
+        // convert seconds to nanoseconds
+        return self.d.nanos();
+    }
+
+    /// # elapsed
+    ///
+    /// get the duration that has elapsed since the instant was created
+    pub fn elapsed() Duration {
+        let now = now();
+        return now.d.sub(self.d);
+    }
+}
+
+pub fn new_duration_from_secs(secs:i64) Duration {
+    return Duration{
+        t:Timespec{
+            sec: secs,
+            nano: 0 as u32
+        }
+    };
+}
+
+pub fn new_duration_from_micros(micros:i128) Duration {
+    let secs = micros / 1_000_000;
+    let nano = (micros % 1_000_000) * 1000;
+    return Duration{
+        t:Timespec{
+            sec: secs as i64,
+            nano: nano as u32
+        }
+    };
+}
+
+pub fn new_duration_from_millis(millis:i128) Duration {
+    let secs = millis / 1_000;
+    let nano = (millis % 1_000) * 1_000_000;
+    return Duration{
+        t:Timespec{
+            sec: secs as i64,
+            nano: nano as u32
+        }
+    };
+}
+
+pub fn new_duration_from_nanos(nanos:i128) Duration {
+    let secs = nanos / 1_000_000_000;
+    let nano = nanos % 1_000_000_000;
+    return Duration{
+        t:Timespec{
+            sec: secs as i64,
+            nano: nano as u32
+        }
+    };
+}
+
+
+impl Duration {
+    /// # secs
+    /// 
+    /// get the number of seconds
+    pub fn secs() i64 {
+        return self.t.sec;
+    }
+    /// # unixnanos
+    /// 
+    /// get the number of nanoseconds
+    pub fn nanos() i128 {
+        // convert seconds to nanoseconds
+        return self.t.sec as i128 * 1_000_000_000 + self.t.nano as i128;
+    }
+
+    /// # sub_sec_nanos
+    ///
+    /// get the number of nanoseconds that have elapsed since the last second
+    pub fn sub_sec_nanos() u32 {
+        return self.t.nano;
+    }
+
+    /// # sub
+    ///
+    /// subtract a duration from another duration
+    pub fn sub(d:Duration) Duration {
+        let sec = self.t.sec - d.t.sec;
+        // check if we need to borrow from the seconds
+        let nano;
+        if self.t.nano < d.t.nano {
+            sec = sec - 1;
+            nano = self.t.nano + NANO_PER_SEC as u32 - d.t.nano;
+        } else {
+            nano = self.t.nano - d.t.nano;
+        };
+        return Duration{
+            t:Timespec{
+                sec: sec,
+                nano: nano
+            }
+        };
+    }
+
+    /// # add
+    ///
+    /// add a duration to another duration
+    pub fn add(d:Duration) Duration {
+        let sec = self.t.sec + d.t.sec;
+        let nano = self.t.nano + d.t.nano;
+        return Duration{
+            t:Timespec{
+                sec: sec,
+                nano: nano
+            }
+        };
+    }
+}
+
+
+impl ToString for Duration {
+    fn to_string() gc::string {
+        let sb = string::stringbuilder(68);
+        let time_f = self.secs() as f64;
+        let nano_f = self.t.nano as f64;
+        let nano = (nano_f / 1000000000.0);
+        let time = time_f + nano;
+        let time_str = time.to_string();
+        sb.add_str(time_str);
+        sb.add_char('s');
+        return sb.str();
+    }
+}
+
+
+impl ToString for Instant {
+    fn to_string() gc::string {
+        return self.d.to_string();
+    }
+}

@@ -11,6 +11,7 @@ use crate::{
 };
 use std::{cell::RefCell, collections::HashMap, sync::Arc};
 
+use indexmap::IndexMap;
 use lazy_static::lazy_static;
 use rustc_hash::FxHashSet;
 
@@ -364,6 +365,7 @@ fn emit_arr_from_raw<'a, 'b>(
     let arr_tp = Arc::new(RefCell::new(PLType::Arr(ARRType {
         element_type: elm.clone(),
         size_handle: lenloaded,
+        generic_map: IndexMap::from([(String::from("T"), elm.clone())]),
     })));
     let arr = builder.alloc("array_alloca", &arr_tp.borrow(), ctx, None);
     let arr_raw = builder
@@ -602,6 +604,7 @@ fn emit_arr_slice<'a, 'b>(
         let arr_tp = Arc::new(RefCell::new(PLType::Arr(ARRType {
             element_type: arr.element_type.clone(),
             size_handle: len,
+            generic_map: IndexMap::from([(String::from("T"), arr.element_type.clone())]),
         })));
         let arr = builder.alloc("array_alloca", &arr_tp.borrow(), ctx, None);
         let arr_raw = builder
@@ -856,14 +859,16 @@ fn emit_if_arr<'a, 'b>(
             // 这种情况不会生成对应代码，但是需要进行相应的语法分析
             builder = &noop;
             ctx.run_in_origin_mod(|ctx| {
+                let t = Arc::new(RefCell::new(PLType::PlaceHolder(PlaceHolderType {
+                    name: "@elm_T".to_owned(),
+                    range: Default::default(),
+                    path: "".to_owned(),
+                    methods: Default::default(),
+                })));
                 let elm_tp = Arc::new(RefCell::new(PLType::Arr(ARRType {
-                    element_type: Arc::new(RefCell::new(PLType::PlaceHolder(PlaceHolderType {
-                        name: "@elm_T".to_owned(),
-                        range: Default::default(),
-                        path: "".to_owned(),
-                        methods: Default::default(),
-                    }))),
+                    element_type: t.clone(),
                     size_handle: 0,
+                    generic_map: IndexMap::from([(String::from("T"), t.clone())]),
                 })));
                 let gep = builder.alloc("placeholder", &elm_tp.borrow(), ctx, None);
                 ctx.add_symbol_raw("_arr".to_string(), gep, elm_tp, f.range);

@@ -102,6 +102,13 @@ impl Node for NumNode {
                     .set_const()
                     .to_result();
             }
+            Num::Char(x) => {
+                let b = builder.int_value(&PriType::CHAR, x as u64, false);
+                return b
+                    .new_output(Arc::new(RefCell::new(PLType::Primitive(PriType::CHAR))))
+                    .set_const()
+                    .to_result();
+            }
         }
     }
 }
@@ -289,7 +296,11 @@ impl VarNode {
                 _ => return Err(ctx.add_diag(self.range.new_err(ErrorCode::UNDEFINED_TYPE))),
             }
         }
-        Err(ctx.add_diag(self.range.new_err(ErrorCode::UNDEFINED_TYPE)))
+        Err(self
+            .range
+            .new_err(ErrorCode::UNDEFINED_TYPE)
+            .set_source(&ctx.get_file())
+            .add_to_ctx(ctx))
     }
 }
 

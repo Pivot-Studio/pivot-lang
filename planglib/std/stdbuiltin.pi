@@ -1,6 +1,4 @@
-use core::gc::string;
-pub use std::io::print_s;
-
+pub use std::io::*;
 
 fn print_i64(i:i64) void;
 fn print_i128(i:i128) void;
@@ -8,7 +6,6 @@ fn print_u64(i:u64) void;
 fn print_u128(i:u128) void;
 fn print_f64(f:f64) void;
 fn print_hex(i:i64) void;
-
 
 pub fn print_any<T>(t:T) void {
     let s = nameof<T>();
@@ -128,16 +125,26 @@ pub fn print_any<T>(t:T) void {
 
 macro println {
     ($start:@expr) => {
-        stdbuiltin::print_any($start);
-        print_s("\n");
+        print!($start, "\n");
     };
     ($start:@expr$(,$expr:@expr)*) => {
-        stdbuiltin::print_any($start);
-        print_s(" ");
+        let s = sprint($start);
         $(
-            stdbuiltin::print_any($expr);
-            print_s(" ");
+            s.append(sprint($expr));
         )*
-        print_s("\n");
+        print!(s, "\n");
+    };
+}
+
+macro print {
+    ($start:@expr) => {
+        print($start);
+    };
+    ($start:@expr$(,$expr:@expr)*) => {
+        let s = sprint($start);
+        $(
+            s.append(sprint($expr));
+        )*
+        print_s(s);
     };
 }

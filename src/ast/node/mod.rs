@@ -145,6 +145,7 @@ pub enum NodeEnum {
     TupleInitNode(TupleInitNode),
     ClosureNode(ClosureNode),
     GlobalConstNode(GlobalConstNode),
+    MatchNode(MatchNode),
 }
 // ANCHOR: range
 #[enum_dispatch]
@@ -182,6 +183,7 @@ pub trait PrintTrait {
 pub enum Num {
     Int(u64),
     Float(f64),
+    Char(char),
 }
 
 impl Eq for Num {
@@ -297,6 +299,7 @@ impl<'a, 'ctx> Ctx<'a> {
                             ))
                         }
                     },
+                    Num::Char(c) => builder.int_value(&PriType::CHAR, c as u64, false),
                 };
                 self.push_semantic_token(numnode.range(), SemanticTokenType::NUMBER, 0);
                 self.emit_comment_highlight(&pri.comments[1]);
@@ -382,7 +385,7 @@ macro_rules! handle_calc {
         paste::item! {
             match *$lpltype.clone().borrow() {
                 PLType::Primitive(PriType::I128|PriType::I64|PriType::I32|PriType::I16|PriType::I8|
-                    PriType::U128|PriType::U64|PriType::U32|PriType::U16|PriType::U8) => {
+                    PriType::U128|PriType::U64|PriType::U32|PriType::U16|PriType::U8|PriType::CHAR) => {
                     return Ok(NodeOutput::new_value(NodeValue::new($builder.[<build_int_$op>](
                         $left, $right, "addtmp"), $lpltype)));
                 },

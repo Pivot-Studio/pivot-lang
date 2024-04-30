@@ -55,7 +55,7 @@ impl ImplNode {
                     .unwrap()
                     .set_traits(ctx, &gm)
                     .unwrap();
-                let sttp = self.target.get_type(ctx, builder, true)?;
+                let sttp = self.target.get_type(ctx, builder, false)?;
                 let trait_tp = self
                     .impl_trait
                     .as_ref()
@@ -72,7 +72,7 @@ impl ImplNode {
                 Ok::<_, PLDiag>(())
             });
         } else {
-            let sttp = self.target.get_type(ctx, builder, true)?;
+            let sttp = self.target.get_type(ctx, builder, false)?;
             let trait_tp = self
                 .impl_trait
                 .as_ref()

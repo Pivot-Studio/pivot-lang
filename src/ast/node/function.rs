@@ -795,10 +795,12 @@ impl FuncDefNode {
                     place_holder_fn.name = name.clone();
                     place_holder_fn.fntype.generic_map.clear();
                     place_holder_fn.generic_infer = Arc::new(RefCell::new(IndexMap::default()));
-                    fnvalue.generic_infer.borrow_mut().insert(
-                        name,
-                        Arc::new(RefCell::new(PLType::Fn(place_holder_fn.clone()))),
-                    );
+                    if !matches!(builder, BuilderEnum::NoOp(_)) {
+                        fnvalue.generic_infer.borrow_mut().insert(
+                            name,
+                            Arc::new(RefCell::new(PLType::Fn(place_holder_fn.clone()))),
+                        );
+                    }
                 }
                 let (mut funcvalue, exists) = builder.get_or_insert_fn_handle(&fnvalue, child);
                 if exists {
@@ -1143,6 +1145,7 @@ impl Node for ClosureNode {
             // generic_infer: Default::default(),
             methods: Default::default(),
             trait_methods_impl: Default::default(),
+            atomic: false,
         };
 
         builder.opaque_struct_type(&struct_captured_typs.get_full_name());

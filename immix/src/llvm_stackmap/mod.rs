@@ -138,7 +138,7 @@ struct LiveOuts {
 pub fn build_root_maps(
     mapptr: *const u8,
     roots: &mut FxHashMap<*const u8, Function>,
-    _global_roots: &mut Vec<*mut u8>,
+    _global_roots: &mut Vec<(*mut u8, u8)>,
 ) {
     let header_ptr = mapptr as *const Header;
     let header = unsafe { *header_ptr };
@@ -269,6 +269,17 @@ extern "C" {
         opt: u32,
         cb: unsafe extern "C" fn(map: *mut u8),
     ) -> i32;
+
+    pub fn CreateAndRunPLOrcJITEngine(
+        module: *const std::ffi::c_char,
+        opt: u32,
+        cb: unsafe extern "C" fn(map: *mut u8),
+    ) -> i32;
+    pub fn CreateGlobalOrcJITEngine() -> std::ffi::c_void;
+    pub fn AddModuleToOrcJIT(module: *mut u8) -> std::ffi::c_void;
+    pub fn RunExpr(module: *mut u8) -> std::ffi::c_void;
+
+    pub fn parse_ir(ir: *const std::ffi::c_char) -> *mut u8;
     /// # run_module_pass
     ///
     /// run the module pass
@@ -283,7 +294,7 @@ extern "C" {
     /// the pass selection is mostly determined by the optlevel,
     /// while some special passes are always enabled (Immix GC pass
     /// and Rewrite Statepoint pass)
-    pub fn run_module_pass(m: *mut u8, opt: i32, debug: i32);
+    pub fn run_module_pass(m: *mut u8, opt: i32, debug: i32, print_escaped: i32);
 }
 
 /// Register the LLVM GC plugins.

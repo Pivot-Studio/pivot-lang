@@ -15,6 +15,8 @@ mod flow;
 mod inference;
 mod lsp;
 mod nomparser;
+#[cfg(feature = "repl")]
+mod repl;
 mod utils;
 mod version;
 use colored::Colorize;
@@ -27,9 +29,10 @@ use std::{
 use version::VergenInfo;
 
 use ast::{
-    compiler::{self, compile_dry, convert, ActionType, CHECK, CHECK_PROGRESS},
+    compiler::{self, compile_dry, convert, ActionType, EngineType, CHECK, CHECK_PROGRESS},
     diag::ensure_no_error,
 };
+use clap::CommandFactory;
 use clap::{Parser, Subcommand};
 use db::Database;
 use lsp::mem_docs::{self, MemDocsInput};
@@ -54,22 +57,38 @@ fn main() {
         .unwrap();
     match cli.command {
         Some(ref cmd) => match cmd {
-            RunCommand::Check { name } => cli.check(name.clone()),
-            RunCommand::Run { name } => cli.run(name.clone()),
+            RunCommand::Check { path: name } => cli.check(name.clone()),
+            RunCommand::Run {
+                path: name,
+                optimization,
+                engine,
+            } => {
+                if engine != "orc" {
+                    eprintln!("engine {} is not supported, only support `orc`", engine);
+                    exit(1);
+                }
+                cli.optimization = *optimization;
+                cli.run(name.clone(), engine[..].into())
+            }
             RunCommand::Lsp {} => cli.lsp(),
             RunCommand::Fmt { name } => cli.fmt(name.clone()),
             RunCommand::New { name } => cli.new_project(name.clone()),
             RunCommand::Version => cli.version(),
-            RunCommand::Build { name } => cli.build(name.clone()),
+            RunCommand::Repl => {
+                #[cfg(feature = "repl")]
+                repl::start_repl();
+                #[cfg(not(feature = "repl"))]
+                eprintln!("feature repl is not enabled, cannot use repl command");
+            }
         },
         // todo(griffin): refine it in the future, technically it should compile one file only instead of a whole project.
         None => {
-            if cli.name.as_deref().is_none() {
-                cli.version();
+            if cli.path.as_deref().is_none() {
+                Cli::command().print_help().unwrap();
                 return;
             }
 
-            let name = cli.name.as_deref().unwrap();
+            let name = cli.path.as_deref().unwrap();
             cli.build(name.to_string())
         }
     }
@@ -92,9 +111,9 @@ _______   __                        __            __
                                                                                  \$$$$$$ 
 "#, long_about = None, styles = get_styles())]
 struct Cli {
-    /// Name of the source file, we will use it as an entry path to find and build a pl project with a kagari.toml
+    /// Path of any source file under the project
     #[arg(value_parser)]
-    name: Option<String>,
+    path: Option<String>,
 
     /// output file
     #[arg(short, long, value_parser, default_value = "out")]
@@ -137,6 +156,10 @@ struct Cli {
     #[arg(long)]
     genir: bool,
 
+    /// generate
+    #[arg(long, short = 'S')]
+    asm: bool,
+
     /// jit compile
     #[arg(long)]
     jit: bool,
@@ -144,6 +167,10 @@ struct Cli {
     /// print source fmt
     #[command(subcommand)]
     command: Option<RunCommand>,
+
+    /// print variables moved to stack during escape analysis
+    #[arg(long = "pstack")]
+    print_stack_var: bool,
 
     /// optimization level, 0-3
     #[arg(short = 'O', value_parser, default_value = "0")]
@@ -165,6 +192,7 @@ impl Cli {
             .unwrap();
 
         let op = compiler::Options {
+            asm: self.asm,
             genir: self.genir,
             printast: self.printast,
             flow: self.flow,
@@ -172,6 +200,7 @@ impl Cli {
             optimization: convert(self.optimization),
             jit: self.jit,
             debug: self.debug,
+            print_escape: self.print_stack_var,
         };
 
         let mem = MemDocsInput::new(
@@ -197,13 +226,16 @@ impl Cli {
     // todo(griffin): make the input name more generic
     // currently it support file path input only,
     pub fn build(&mut self, name: String) {
-        self.check(name.clone());
+        if !(name.ends_with(".bc") || name.ends_with(".ll")) {
+            self.check(name.clone());
+        }
 
         let db = Database::default();
         let filepath = Path::new(&name);
         let abs = crate::utils::canonicalize(filepath).unwrap();
 
         let op = compiler::Options {
+            asm: self.asm,
             genir: self.genir,
             printast: self.printast,
             flow: self.flow,
@@ -211,6 +243,7 @@ impl Cli {
             optimization: convert(self.optimization),
             jit: self.jit,
             debug: self.debug,
+            print_escape: self.print_stack_var,
         };
 
         let action = if self.flow {
@@ -237,12 +270,13 @@ impl Cli {
         v.build_semver = "alpha".to_string();
         println!("{}", v)
     }
-    pub fn run(&self, name: String) {
+    pub fn run(&self, name: String, engine: EngineType) {
         #[cfg(feature = "jit")]
         {
             let re = compiler::run(
                 Path::new(name.as_str()),
                 convert(self.optimization).to_llvm(),
+                engine,
             );
             exit(re);
         }
@@ -273,6 +307,7 @@ impl Cli {
         let abs = crate::utils::canonicalize(filepath).unwrap();
 
         let op = compiler::Options {
+            asm: self.asm,
             genir: self.genir,
             printast: self.printast,
             flow: self.flow,
@@ -280,6 +315,7 @@ impl Cli {
             optimization: convert(self.optimization),
             jit: self.jit,
             debug: self.debug,
+            print_escape: self.print_stack_var,
         };
 
         let action = if self.flow {
@@ -307,14 +343,21 @@ impl Cli {
 enum RunCommand {
     /// JIT run the compiled program
     Run {
-        /// Name of the compiled file
+        /// Path of the bitcode file
         #[arg(value_parser)]
-        name: String,
+        path: String,
+        /// optimization level, 0-3
+        #[arg(short = 'O', value_parser, default_value = "0")]
+        optimization: u64,
+        /// engine used to run the bitcode, currently support orc
+        #[arg(short = 'e', long, value_parser, default_value = "orc")]
+        engine: String,
     },
+    /// Check if the project has any error
     Check {
-        /// Name of the compiled file
+        /// Path of any source file under the project
         #[arg(value_parser)]
-        name: String,
+        path: String,
     },
     /// Start the language server
     Lsp,
@@ -331,15 +374,8 @@ enum RunCommand {
     },
     /// Get the whole version infomation
     Version,
-
-    /// Build the source code written in pivot language
-    /// todo(griffin): inside this command, we should enquery the kagari.toml in all children files,
-    /// instead of find it among files under its ancestor
-    Build {
-        #[arg(value_parser)]
-        // Name of a file for a project entry
-        name: String,
-    },
+    /// Start the REPL
+    Repl,
 }
 
 pub fn get_styles() -> clap::builder::Styles {

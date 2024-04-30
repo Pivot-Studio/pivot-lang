@@ -63,10 +63,10 @@ impl MacroMatchExp {
         match self {
             MacroMatchExp::Parameter(p) => p.parse(ctx, args),
             MacroMatchExp::RawTokens((t, r)) => {
-                let re: (Span, Span) =
-                    del_newline_or_space!(tag(t.as_str()))(args).map_err(|_: nom::Err<()>| {
+                let re: (Span, Span) = del_newline_or_space!(tag(t.as_str()))(args.clone())
+                    .map_err(|_: nom::Err<()>| {
                         nom::Err::Error(
-                            r.new_err(ErrorCode::UNEXPECTED_TOKEN)
+                            r.new_err(ErrorCode::SYNTAX_ERROR_UNEXPECTED_TOKEN)
                                 .add_label(
                                     *r,
                                     ctx.get_file(),
@@ -78,22 +78,26 @@ impl MacroMatchExp {
                 Ok((re.0, ()))
             }
             MacroMatchExp::Parantheses((ts, r)) => {
-                let (mut new, _) = tag_token_symbol_ex(TokenType::LPAREN)(args)
-                    .map_err(|_| nom::Err::Error(r.new_err(ErrorCode::UNEXPECTED_TOKEN)))?;
+                let (mut new, _) = tag_token_symbol_ex::<()>(TokenType::LPAREN)(args.clone())
+                    .map_err(|_| {
+                        nom::Err::Error(r.new_err(ErrorCode::SYNTAX_ERROR_UNEXPECTED_TOKEN))
+                    })?;
                 for t in ts {
                     (new, _) = t.parse(ctx, new)?;
                 }
-                let (new, _) = tag_token_symbol_ex(TokenType::RPAREN)(args)
-                    .map_err(|_| nom::Err::Error(r.new_err(ErrorCode::UNEXPECTED_TOKEN)))?;
+                let (new, _) =
+                    tag_token_symbol_ex::<()>(TokenType::RPAREN)(args).map_err(|_| {
+                        nom::Err::Error(r.new_err(ErrorCode::SYNTAX_ERROR_UNEXPECTED_TOKEN))
+                    })?;
                 Ok((new, ()))
             }
             MacroMatchExp::Looper((ts, _r, _m)) => {
                 let mut new = args;
                 loop {
                     for t in ts {
-                        let re = ctx.with_macro_loop_parse(|ctx| t.parse(ctx, new));
+                        let re = ctx.with_macro_loop_parse(|ctx| t.parse(ctx, new.clone()));
                         if re.is_err() {
-                            return Ok((new, ()));
+                            return Ok((new.clone(), ()));
                         }
                         (new, _) = re?;
                     }
@@ -131,7 +135,7 @@ impl MacroMatchParameter {
             TokenType::MACRO_TYPE_STR => {
                 let (new, node) = del_newline_or_space!(string_literal::string_literal)(args)
                     .map_err(|_| nom::Err::Error(self.range.new_err(ErrorCode::EXPECT_STRING)))?;
-                self.add_to_macro_var(ctx, *node);
+                self.add_to_macro_var(ctx, node.into());
                 Ok((new, ()))
             }
             TokenType::MACRO_TYPE_EXPR => {
@@ -251,20 +255,28 @@ impl Node for MacroCallNode {
                 ctx.send_if_go_to_def(self.range, m.range, m.file.clone());
                 ctx.set_glob_refs(&format!("{}..{}", &m.file, &m.id.name), self.range);
                 let src = m.file.clone();
+                // create a string of length at least self.range.end.offset
+                // otherwise Span::new_from_raw_offset may cause error -1073741819
+                // when executing avx2 instruction on windows
+                let mut fake_full_s = String::with_capacity(self.range.end.offset);
+                // fill the string fron start to self.inner_start.offset with spaces
+                fake_full_s.extend(std::iter::repeat(' ').take(self.inner_start.offset));
+                fake_full_s.push_str(&self.args);
+                let args_slice = &fake_full_s[self.inner_start.offset..];
                 let span = unsafe {
                     Span::new_from_raw_offset(
                         self.inner_start.offset,
                         self.inner_start.line as u32,
-                        &self.args,
-                        false,
+                        args_slice,
+                        Default::default(),
                     )
                 };
                 let mut last_err: Option<PLDiag> = None;
                 for rule in &m.rules {
-                    let mut span = span;
+                    let mut span = span.clone();
                     let mut next = false;
                     for e in rule.match_exp.iter() {
-                        let re = e.parse(ctx, span).map_err(|e| {
+                        let re = e.parse(ctx, span.clone()).map_err(|e| {
                             if let nom::Err::Error(mut e) = e {
                                 e.add_label(
                                     self.range,
@@ -290,7 +302,7 @@ impl Node for MacroCallNode {
                     if span.len() != 0 {
                         last_err = Some(
                             self.range
-                                .new_err(ErrorCode::UNEXPECTED_TOKEN)
+                                .new_err(ErrorCode::SYNTAX_ERROR_UNEXPECTED_TOKEN)
                                 .set_source(&ctx.get_file())
                                 .clone(),
                         );

@@ -8,10 +8,12 @@
 #include "llvm/Transforms/Utils/ModuleUtils.h"
 #include "llvm/Pass.h"
 #include "llvm/IR/Function.h"
+#include "llvm/IR/IntrinsicInst.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/IR/LegacyPassManager.h"
-#include "llvm/Transforms/IPO/PassManagerBuilder.h"
 #include "llvm/Analysis/CaptureTracking.h"
+
+
 using namespace llvm;
 namespace
 {
@@ -45,9 +47,16 @@ namespace
   class EscapePass : public PassInfoMixin<EscapePass>
   {
     static char ID;
+    bool escaped;
 
   public:
     PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
+    /*
+      Regenerate the gep instructions with new address space
+    */
+    void replace_geps(llvm::iterator_range<llvm::Value::user_iterator> &users, llvm::IRBuilder<> &builder, llvm::Value * alloca, std::vector<llvm::GetElementPtrInst *> &geps);
+    EscapePass() : escaped(false) {}
+    EscapePass(bool escaped) : escaped(escaped) {}
   };
 
 
@@ -58,6 +67,8 @@ namespace
     std::vector<CallInst *> mallocs;
     std::vector<PHINode *> phis;
     std::vector<AllocaInst *> allocas;
+    std::vector<GetElementPtrInst *> geps;
+    std::vector<MemSetInst *> memsets;
 
 
     // find all gc atomic type allocations, analysis to get non-escaped set.
@@ -71,23 +82,43 @@ namespace
         {
           for (auto &I : BB)
           {
-            // if it's a call instruction and has pl_atomic attribute
+            // if it's a call instruction and has pl_ordinary attribute
             if (auto *call = dyn_cast<CallInst>(&I))
             {
               if (auto *F = call->getCalledFunction())
               {
                 auto attrs = call->getAttributes();
-                if (!attrs.hasRetAttr("pl_atomic"))
+                if (!attrs.hasRetAttr("pl_ordinary"))
                 {
                   continue;
                 }
+                if (!F->getName().equals("DioGC__malloc"))
+                {
+                  continue;
+                }
+                
                 if (!PointerMayBeCaptured(call, true, true))
                 {
+
+                  auto info = attrs.getRetAttrs().getAttribute("pl_ordinary").getValueAsString();
+                  if (info.size() > 0 && this->escaped)
+                  {
+                    printf("variable moved to stack: %s\n", info.str().c_str());
+                  }
+
+                  
                   // if the pointer may be captured, then we change this gc malloc
                   // to stack alloca
                   
                   // the first argument of gc malloc is the size
                   auto *size = call->getArgOperand(0);
+                  
+                  if (!isa<ConstantInt>(size) || !detail::isPresent(size))
+                  {
+                    // if the size is not a constant, we can't replace it with alloca
+                    continue;
+                  }
+                  
                   // size is a number, get it's value
                   auto *sizeValue = dyn_cast<ConstantInt>(size);
                   auto sizeInt = sizeValue->getZExtValue();
@@ -96,6 +127,30 @@ namespace
                   // replace it with alloca
                   builder.SetInsertPoint(&FV->front().front());
                   auto &alloca = *builder.CreateAlloca(ArrayType::get(IntegerType::get(M.getContext(), 8), sizeInt));
+                  alloca.setAlignment(llvm::Align(8));
+                  // find all gep, replace address space with 0
+                  auto users = call->users();
+                  replace_geps(users, builder, &alloca, geps);
+
+
+                  // find all memset, regenrate memset
+                  auto users1 = call->users();
+                  for (auto *U : users1)
+                  { 
+                    if (auto *memset = dyn_cast<MemSetInst>(U))
+                    {
+                      auto *dest = memset->getDest();
+                      auto *len = memset->getLength();
+                      auto *value = memset->getValue();
+                      builder.SetInsertPoint(memset);
+                      auto *newmemset = builder.CreateMemSet(&alloca, value, len, memset->getDestAlign(), memset->isVolatile());
+                      memset->replaceAllUsesWith(newmemset);
+                      memsets.push_back(memset);
+                    }
+                  }
+                  
+
+
                   call->replaceAllUsesWith(&alloca);
                   allocas.push_back(&alloca);
                   
@@ -169,18 +224,57 @@ namespace
         phi->eraseFromParent();
       }
     }
+    for (auto *gep : geps)
+    {
+      if (gep->getParent())
+      {
+        gep->eraseFromParent();
+      }
+    }
+    for (auto *memset : memsets)
+    {
+      if (memset->getParent())
+      {
+        memset->eraseFromParent();
+      }
+    }
     return PreservedAnalyses::none();
   }
 
+  void EscapePass::replace_geps(llvm::iterator_range<llvm::Value::user_iterator> &users, llvm::IRBuilder<> &builder, llvm::Value * ptr, std::vector<llvm::GetElementPtrInst *> &geps)
+  {
+    for (auto *U : users)
+    {
+      if (auto *gep = dyn_cast<GetElementPtrInst>(U))
+      {
+        std::vector<Value *> arr;
+        // Value *v = nullptr;
+        for (unsigned i = 0; i < gep->getNumOperands(); ++i)
+        {
+          if (i == 0)
+          {
+            // first operand is the pointer, skip it. we only need index
+            continue;
+          }
 
+          arr.push_back(gep->getOperand(i));
+        }
+        builder.SetInsertPoint(gep);
+        auto *newgep = builder.CreateGEP(gep->getSourceElementType(), ptr, arr, gep->getName(), gep->isInBounds());
+        auto newusers = gep->users();
+        gep->replaceAllUsesWith(newgep);
+        replace_geps(newusers, builder, newgep, geps);
+        // gep->eraseFromParent();
+        geps.push_back(gep);
+      }
+    }
+  }
 
   /*
     This pass helps integrate immix with LLVM.
 
     It does the following:
-    - Sets the GC name to "statepoint-example" for all functions. 
-      TODO: current llvm-16 does not support custom gc strategy using
-      RewriteStatepointsForGC pass. So we need to use the default gc strategy.
+    - Sets the GC name to "plimmix" for all functions. 
     - Adds a call to immix_gc_init in the global constructor
     - Adds a global variable declaration for the module stack map if the main function is present.
 
@@ -205,8 +299,7 @@ namespace
       }
       if (!FV->getName().ends_with("visitorf@") && !FV->getName().starts_with("llvm"))
       {
-        FV->setGC("statepoint-example");
-
+        FV->setGC("plimmix");
       }
       
     }

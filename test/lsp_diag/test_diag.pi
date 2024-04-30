@@ -118,3 +118,21 @@ fn arg_ptr(a:i64) void {
     arg_ptr(&*AAAA);
     return;
 }
+
+use test::match_diag;
+
+
+fn testf<T>() void {
+    let a = testf;
+    if {
+
+    }
+    while {
+
+    }
+    for {
+
+    }
+    let b = arg_ptr;
+    return;
+}

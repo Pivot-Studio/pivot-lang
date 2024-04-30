@@ -23,6 +23,12 @@ use crate::ast::tokens::TokenType;
 use crate::flow::display::Dot;
 use crate::lsp::semantic_tokens::SemanticTokensBuilder;
 use crate::lsp::text;
+#[cfg(feature = "repl")]
+use crate::repl::LOADED_SET;
+#[cfg(feature = "repl")]
+use crate::repl::REPL_VARIABLES;
+#[cfg(feature = "repl")]
+use crate::repl::REPL_VIRTUAL_ENTRY;
 use crate::utils::read_config::ConfigWrapper;
 use crate::Db;
 use colored::Colorize;
@@ -110,6 +116,30 @@ impl Node for ProgramNode {
         self.fntypes.iter_mut().for_each(|x| {
             _ = x.emit_func_def(ctx, builder);
         });
+
+        // eprintln!("f: {}", ctx.get_file());
+        #[cfg(feature = "repl")]
+        if ctx.get_file() == REPL_VIRTUAL_ENTRY {
+            // eprintln!("eq");
+            for (k, v) in REPL_VARIABLES.lock().unwrap().iter() {
+                let handle = builder.get_or_add_global(
+                    &ctx.plmod.get_full_name(k),
+                    v.tp.clone(),
+                    ctx,
+                    false,
+                );
+                ctx.add_symbol(
+                    k.to_owned(),
+                    handle,
+                    v.tp.clone(),
+                    Default::default(),
+                    true,
+                    false,
+                )
+                .unwrap();
+                // eprintln!("add symbol: {}", k);
+            }
+        }
 
         // init global
         ctx.set_init_fn(builder);
@@ -405,6 +435,7 @@ impl Program {
             self.is_active_file(db),
             self.opt(db),
             self.docs(db).op(db).debug,
+            self.docs(db).op(db).print_escape,
         )
     }
 
@@ -445,7 +476,11 @@ impl Program {
         let plmod = m.plmod(db);
 
         let pos = emit_params.lsp_params(db).editing_postion(db);
-        if self.is_active_file(db) {
+        #[cfg(feature = "repl")]
+        let or_cond = plmod.path == REPL_VIRTUAL_ENTRY;
+        #[cfg(not(feature = "repl"))]
+        let or_cond = false;
+        if self.is_active_file(db) || or_cond {
             if pos.is_some() {
                 Completions::push(
                     db,
@@ -633,7 +668,7 @@ pub fn prepare_module_ctx<'a>(
 /// or it does some LSP operations.
 #[salsa::tracked]
 pub fn emit_file(db: &dyn Db, program_emit_params: ProgramEmitParam) -> ModWrapper {
-    log::trace!("emit_file: {}", program_emit_params.fullpath(db),);
+    log::info!("Compiling: {}", program_emit_params.fullpath(db),);
 
     let v = RefCell::new(FxHashSet::default());
     let mut ctx = prepare_module_ctx(db, &program_emit_params, &v);
@@ -668,6 +703,7 @@ pub fn emit_file(db: &dyn Db, program_emit_params: ProgramEmitParam) -> ModWrapp
                     &e,
                     program_emit_params.opt(db).to_llvm(),
                     program_emit_params.debug(db),
+                    program_emit_params.print_escaped(db),
                 );
                 builder.into()
             }
@@ -699,15 +735,24 @@ pub fn emit_file(db: &dyn Db, program_emit_params: ProgramEmitParam) -> ModWrapp
             hasher.finish()
         );
         let pp = Path::new(&hashed).with_extension("bc");
-        let ll = Path::new(&hashed).with_extension("ll");
+        // let ll = Path::new(&hashed).with_extension("ll");
         let p = pp.as_path();
-        builder.print_to_file(&ll).unwrap();
-        builder.write_bitcode_to_path(p);
+        builder.optimize();
+        // builder.print_to_file(&ll).unwrap();
+        // builder.write_bitcode_to_path(p);
+        #[cfg(feature = "llvm")]
+        let buf = a.write_bitcode_to_memory().as_slice().to_vec();
+        #[cfg(not(feature = "llvm"))]
+        let buf = vec![];
+        #[cfg(feature = "repl")]
+        LOADED_SET.lock().unwrap().remove(&p.to_path_buf());
         ModBuffer::push(
             db,
             PLModBuffer {
                 path: p.to_path_buf(),
+                buf,
                 is_main: builder.get_function("main").is_some(),
+                name: program_emit_params.file(db).to_string(),
             },
         );
     }
@@ -730,10 +775,10 @@ pub struct UnsafeWrapper<T>(T);
 unsafe impl<T> Send for UnsafeWrapper<T> {}
 unsafe impl<T> Sync for UnsafeWrapper<T> {}
 impl<T> UnsafeWrapper<T> {
-    fn new(t: T) -> Self {
+    pub fn new(t: T) -> Self {
         Self(t)
     }
-    fn get(&self) -> &T {
+    pub fn get(&self) -> &T {
         &self.0
     }
 }

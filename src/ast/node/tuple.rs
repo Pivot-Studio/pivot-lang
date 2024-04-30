@@ -8,7 +8,7 @@ use crate::ast::range::Range;
 use internal_macro::node;
 use linked_hash_map::LinkedHashMap;
 
-use crate::ast::pltype::Field;
+use crate::ast::pltype::{get_type_deep, Field};
 use crate::ast::{
     node::{deal_line, tab},
     pltype::{PLType, STType},
@@ -34,6 +34,7 @@ impl Node for TupleInitNode {
         let mut field_tps = vec![];
         let mut err = None;
         let mut name = String::new();
+        let mut is_atomic = true;
         for (i, expr) in self.exprs.iter_mut().enumerate() {
             let expr = expr.emit(ctx, builder);
             match expr {
@@ -47,6 +48,9 @@ impl Node for TupleInitNode {
                     name.push_str(&tp.get_name());
                     expr_values.push(value);
                     let f = new_tuple_field(i, &tp, &ctx.get_file());
+                    if !tp.is_atomic() {
+                        is_atomic = false;
+                    }
                     fields.insert(i.to_string(), f);
                 }
                 Err(diag) => {
@@ -58,7 +62,17 @@ impl Node for TupleInitNode {
         if let Some(err) = err {
             return Err(err);
         }
-        let sttype = new_tuple_type(name, fields, self.range);
+        let mut sttype = new_tuple_type(name, fields, self.range);
+        sttype.atomic = is_atomic;
+        let mut offset = 1;
+        // atomic struct has no gc pointer in it, so it doesn't need
+        // gcrtti field.
+        if is_atomic {
+            sttype.fields.iter_mut().for_each(|(_, f)| {
+                f.index -= 1;
+            });
+            offset = 0;
+        }
         builder.gen_st_visit_function(ctx, &sttype, &field_tps);
         let stu = Arc::new(RefCell::new(PLType::Struct(sttype)));
         ctx.add_type_without_check(stu.clone());
@@ -66,10 +80,11 @@ impl Node for TupleInitNode {
         if ctx.generator_data.is_some() {
             v = builder.build_load(v, "load_ctx_var", &PLType::new_i8_ptr(), ctx);
         }
+
         // 初始化赋值
         for (i, value) in expr_values.into_iter().enumerate() {
             let field_ptr = builder
-                .build_struct_gep(v, i as u32 + 1, &i.to_string(), &stu.borrow(), ctx)
+                .build_struct_gep(v, i as u32 + offset, &i.to_string(), &stu.borrow(), ctx)
                 .unwrap();
             let vv = value.get_value().unwrap();
             let v = builder.try_load2var(self.range, vv.get_value(), &vv.get_ty().borrow(), ctx)?;
@@ -106,6 +121,7 @@ pub fn new_tuple_type(name: String, fields: LinkedHashMap<String, Field>, range:
         // generic_infer: Default::default(),
         methods: Default::default(),
         trait_methods_impl: Default::default(),
+        atomic: false,
     }
 }
 impl PrintTrait for TupleInitNode {
@@ -136,6 +152,7 @@ impl TypeNode for TupleTypeNode {
         let mut field_tps = vec![];
         let mut err = None;
         let mut name = String::new();
+        let mut is_atomic = true;
         for (i, tp) in self.types.iter().enumerate() {
             let tp = tp.get_type(ctx, builder, gen_code);
             match tp {
@@ -144,6 +161,9 @@ impl TypeNode for TupleTypeNode {
                     let tp = tp.borrow();
                     if !name.is_empty() {
                         name.push_str(", ");
+                    }
+                    if !get_type_deep(arctp.clone()).borrow().is_atomic() {
+                        is_atomic = false;
                     }
                     name.push_str(&tp.get_name());
                     field_tps.push(arctp.clone());
@@ -165,7 +185,13 @@ impl TypeNode for TupleTypeNode {
         if let Some(err) = err {
             return Err(err);
         }
-        let sttype = new_tuple_type(name, fields, self.range);
+        let mut sttype = new_tuple_type(name, fields, self.range);
+        sttype.atomic = is_atomic;
+        if is_atomic {
+            sttype.fields.iter_mut().for_each(|(_, f)| {
+                f.index -= 1;
+            });
+        }
         builder.gen_st_visit_function(ctx, &sttype, &field_tps);
         let stu = Arc::new(RefCell::new(PLType::Struct(sttype)));
         ctx.add_type_without_check(stu.clone());

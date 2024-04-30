@@ -217,22 +217,26 @@ impl Node for BinOpNode {
                     .build_bit_left_shift(left, right)
                     .new_output(lpltype.clone())
             }
-            TokenType::BIT_RIGHT_SHIFT => {
-                if !lpltype.borrow().is_int() || !lpltype.borrow().is_int() {
-                    return Err(ctx.add_diag(self.range.new_err(ErrorCode::EXPECT_INT_VALUE)));
-                }
-                builder
+            TokenType::BIT_RIGHT_SHIFT => match *lpltype.borrow() {
+                PLType::Primitive(
+                    PriType::I128 | PriType::I64 | PriType::I32 | PriType::I16 | PriType::I8,
+                ) => builder
                     .build_bit_right_shift_arithmetic(left, right)
-                    .new_output(lpltype.clone())
-            }
-            TokenType::BIT_RIGHT_SHIFT_NO_SIGN => {
-                if !lpltype.borrow().is_int() || !lpltype.borrow().is_int() {
+                    .new_output(lpltype.clone()),
+                PLType::Primitive(
+                    PriType::U128
+                    | PriType::U64
+                    | PriType::U32
+                    | PriType::U16
+                    | PriType::U8
+                    | PriType::CHAR,
+                ) => builder
+                    .build_bit_right_shift(left, right)
+                    .new_output(lpltype.clone()),
+                _ => {
                     return Err(ctx.add_diag(self.range.new_err(ErrorCode::EXPECT_INT_VALUE)));
                 }
-                builder
-                    .build_bit_right_shift(left, right)
-                    .new_output(lpltype.clone())
-            }
+            },
             TokenType::PLUS => {
                 handle_calc!(ctx, add, float_add, lpltype, left, right, self.range, builder)
             }
@@ -252,7 +256,12 @@ impl Node for BinOpNode {
                     )));
                 }
                 PLType::Primitive(
-                    PriType::U128 | PriType::U64 | PriType::U32 | PriType::U16 | PriType::U8,
+                    PriType::U128
+                    | PriType::U64
+                    | PriType::U32
+                    | PriType::U16
+                    | PriType::U8
+                    | PriType::CHAR,
                 ) => {
                     return Ok(NodeOutput::new_value(NodeValue::new(
                         builder.build_int_unsigned_div(left, right, "addtmp"),
@@ -282,7 +291,12 @@ impl Node for BinOpNode {
                     )));
                 }
                 PLType::Primitive(
-                    PriType::U128 | PriType::U64 | PriType::U32 | PriType::U16 | PriType::U8,
+                    PriType::U128
+                    | PriType::U64
+                    | PriType::U32
+                    | PriType::U16
+                    | PriType::U8
+                    | PriType::CHAR,
                 ) => {
                     return Ok(NodeOutput::new_value(NodeValue::new(
                         builder.build_int_unsigned_srem(left, right, "addtmp"),
@@ -301,9 +315,9 @@ impl Node for BinOpNode {
             | TokenType::LEQ
             | TokenType::GEQ
             | TokenType::GREATER
-            | TokenType::LESS => match *lpltype.borrow() {
+            | TokenType::LESS => match &*lpltype.borrow() {
                 PLType::Primitive(
-                    PriType::I128
+                    pri @ (PriType::I128
                     | PriType::I64
                     | PriType::I32
                     | PriType::I16
@@ -313,8 +327,9 @@ impl Node for BinOpNode {
                     | PriType::U32
                     | PriType::U16
                     | PriType::U8
-                    | PriType::BOOL,
-                ) => { builder.build_int_compare(self.op.0.get_op(), left, right, "cmptmp") }
+                    | PriType::BOOL
+                    | PriType::CHAR),
+                ) => { builder.build_int_compare(self.op.0.get_op(pri), left, right, "cmptmp") }
                     .new_output(Arc::new(RefCell::new(PLType::Primitive(PriType::BOOL)))),
                 PLType::Primitive(PriType::F64 | PriType::F32) => {
                     { builder.build_float_compare(self.op.0.get_fop(), left, right, "cmptmp") }
@@ -431,7 +446,9 @@ impl Node for TakeOpNode {
         let id_range = id.range();
         let (head_pltype, mut headptr) = ctx.deref_greedily(head_pltype, nv.get_value(), builder);
         if !builder.is_ptr(headptr) {
+            let old = headptr;
             headptr = builder.alloc("temp", &head_pltype.borrow(), ctx, None);
+            builder.build_store(headptr, old);
         }
         match &*head_pltype.clone().borrow() {
             PLType::Trait(s) => ctx.run_in_type_mod(s, |ctx, s| {
@@ -470,7 +487,7 @@ impl Node for TakeOpNode {
                             fnv, re, headptr, None,
                         )))
                     } else {
-                        handle_glob_mthd(s, ctx, id, headptr, head_pltype, id_range)
+                        handle_mthd(s, ctx, id, headptr, head_pltype, id_range)
                     }
                 })
             }),

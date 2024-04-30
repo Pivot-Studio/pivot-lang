@@ -1,6 +1,6 @@
 use nom::{
     branch::alt,
-    combinator::{map_res, not, opt, peek},
+    combinator::{map, map_res, not, opt, peek},
     multi::{many0, separated_list0},
     sequence::{delimited, pair, preceded, terminated, tuple},
     IResult,
@@ -79,16 +79,10 @@ fn bit_and(input: Span) -> IResult<Span, Box<NodeEnum>> {
     ))(input)
 }
 
-#[test_parser("a>>>b")]
 #[test_parser("a<<b")]
 #[test_parser("a>>b")]
 fn bit_move(input: Span) -> IResult<Span, Box<NodeEnum>> {
-    parse_bin_ops!(
-        add_exp,
-        BIT_LEFT_SHIFT,
-        BIT_RIGHT_SHIFT_NO_SIGN,
-        BIT_RIGHT_SHIFT
-    )(input)
+    parse_bin_ops!(add_exp, BIT_LEFT_SHIFT, BIT_RIGHT_SHIFT)(input)
 }
 
 #[test_parser("a + 1")]
@@ -264,15 +258,15 @@ fn primary_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
             many0(comment),
             alt((
                 closure,
-                number,
-                bool_const,
+                map(number, |n| Box::new(n.into())),
+                map(bool_const, |n| Box::new(n.into())),
                 parantheses_exp,
                 struct_init,
                 array_init,
                 tuple_init,
                 macro_call_exp,
                 extern_identifier,
-                string_literal,
+                map(string_literal, |n| Box::new(n.into())),
             )),
             many0(comment),
         )),

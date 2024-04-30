@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-lld_rs = { version = "160.0.0", default-features = false, git="https://github.com/Pivot-Studio/lld-rs.git", branch="main" }
+lld_rs = { version = "180.0.0", default-features = false, git="https://github.com/Pivot-Studio/lld-rs.git", branch="main" }
 thiserror = "1.0.38"
 mun_target = { git="https://github.com/mun-lang/mun.git" }
 once_cell = { version = "1.4.0" }

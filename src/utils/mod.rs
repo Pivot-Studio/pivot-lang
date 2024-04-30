@@ -22,6 +22,9 @@ where
 
 pub fn url_from_path(file: &str) -> Url {
     {
+        if file.starts_with("@__repl") {
+            return Url::parse("httss://example.com").unwrap();
+        }
         #[cfg(any(unix, windows, target_os = "redox", target_os = "wasi"))]
         return Url::from_file_path(file).unwrap();
         #[cfg(not(any(unix, windows, target_os = "redox", target_os = "wasi")))]
@@ -38,5 +41,10 @@ pub fn canonicalize<P: AsRef<Path>>(path: P) -> io::Result<PathBuf> {
     #[cfg(target_arch = "wasm32")]
     return Ok(path.as_ref().to_path_buf());
     #[cfg(not(target_arch = "wasm32"))]
-    return dunce::canonicalize(path);
+    {
+        if path.as_ref().starts_with("@__repl__") {
+            return Ok(path.as_ref().to_path_buf());
+        }
+        dunce::canonicalize(path)
+    }
 }

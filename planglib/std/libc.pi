@@ -14,6 +14,10 @@ const O_RDWR:i32;
 const O_CREAT:i32;
 
 
+
+pub fn pl_clock_gettime(sec:*i64, nsec:*u32) void;
+
+
 pub fn LibC__memcpy(dest:*u8, src:*u8, n:u64) *u8;
 
 /// `buf`: `*u8` - buffer to fill with random data  

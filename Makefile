@@ -18,6 +18,8 @@ vmdebug:
 	@mkdir -p target/release
 	@cd vm && cargo build
 	@cp target/debug/libvm.a target/release/libvm.a
+	@touch target/debug/libvm.so && cp target/debug/libvm.so target/release/libvm.so
+	@touch target/debug/libvm.dylib && cp target/debug/libvm.dylib target/release/libvm.dylib
 
 install:
 	@cargo install --path=.
@@ -26,11 +28,11 @@ fmt:
 	@cargo +stable fmt
 
 test: vmdebug
-	@cargo test --all
+	@cargo nextest run --workspace --all-features
 
 clean:
 	@rm -rf out*
-	@cd target && rm -f *.ll && rm -f *.bc && rm -rf *.dSYM && rm -f testout* && rm -f out*  && rm -f *.o
+	@cd target && rm -f *.ll && rm -f *.bc && rm -rf *.dSYM && rm -f testout* && rm -f out*  && rm -f *.o && rm -rf test*
 
 bench:
 	@cd immix && cargo bench 

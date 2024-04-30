@@ -1,0 +1,380 @@
+[
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
+                SYNTAX_ERROR_UNEXPECTED_TOKEN,
+            ),
+            help: Some(
+                "",
+            ),
+            labels: [],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 34,
+                    column: 12,
+                    offset: 488,
+                },
+                end: Pos {
+                    line: 34,
+                    column: 12,
+                    offset: 488,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
+                SYNTAX_ERROR_UNEXPECTED_TOKEN,
+            ),
+            help: Some(
+                "",
+            ),
+            labels: [],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 41,
+                    column: 9,
+                    offset: 604,
+                },
+                end: Pos {
+                    line: 41,
+                    column: 25,
+                    offset: 620,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
+                TUPLE_ELM_SIZE_MISS_MATCH,
+            ),
+            help: None,
+            labels: [],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 37,
+                    column: 14,
+                    offset: 541,
+                },
+                end: Pos {
+                    line: 37,
+                    column: 15,
+                    offset: 542,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
+                TUPLE_ELM_SIZE_MISS_MATCH,
+            ),
+            help: None,
+            labels: [
+                PLLabel {
+                    file: "",
+                    txt: Some(
+                        (
+                            "found {} elements here, expect {} elements",
+                            [
+                                "0",
+                                "2",
+                            ],
+                        ),
+                    ),
+                    range: Range {
+                        start: Pos {
+                            line: 40,
+                            column: 9,
+                            offset: 587,
+                        },
+                        end: Pos {
+                            line: 40,
+                            column: 11,
+                            offset: 589,
+                        },
+                    },
+                },
+            ],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 40,
+                    column: 9,
+                    offset: 587,
+                },
+                end: Pos {
+                    line: 40,
+                    column: 11,
+                    offset: 589,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
+                TUPLE_ELM_SIZE_MISS_MATCH,
+            ),
+            help: None,
+            labels: [
+                PLLabel {
+                    file: "",
+                    txt: Some(
+                        (
+                            "found {} elements here, expect {} elements",
+                            [
+                                "3",
+                                "2",
+                            ],
+                        ),
+                    ),
+                    range: Range {
+                        start: Pos {
+                            line: 37,
+                            column: 9,
+                            offset: 536,
+                        },
+                        end: Pos {
+                            line: 37,
+                            column: 16,
+                            offset: 543,
+                        },
+                    },
+                },
+            ],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 37,
+                    column: 9,
+                    offset: 536,
+                },
+                end: Pos {
+                    line: 37,
+                    column: 16,
+                    offset: 543,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
+                ILLEGAL_MATCH_ARM_CONDITION,
+            ),
+            help: None,
+            labels: [
+                PLLabel {
+                    file: "",
+                    txt: Some(
+                        (
+                            "match condition is of type `{}`, expected to be one of: `{}`",
+                            [
+                                "f64",
+                                "i64, None",
+                            ],
+                        ),
+                    ),
+                    range: Range {
+                        start: Pos {
+                            line: 25,
+                            column: 9,
+                            offset: 359,
+                        },
+                        end: Pos {
+                            line: 25,
+                            column: 12,
+                            offset: 362,
+                        },
+                    },
+                },
+            ],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 25,
+                    column: 9,
+                    offset: 359,
+                },
+                end: Pos {
+                    line: 25,
+                    column: 12,
+                    offset: 362,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
+                ILLEGAL_MATCH_ARM_CONDITION,
+            ),
+            help: None,
+            labels: [
+                PLLabel {
+                    file: "",
+                    txt: Some(
+                        (
+                            "match condition is of type `{}`, imcompatible with type `{}`",
+                            [
+                                "string",
+                                "i64",
+                            ],
+                        ),
+                    ),
+                    range: Range {
+                        start: Pos {
+                            line: 8,
+                            column: 9,
+                            offset: 92,
+                        },
+                        end: Pos {
+                            line: 8,
+                            column: 16,
+                            offset: 99,
+                        },
+                    },
+                },
+            ],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 8,
+                    column: 9,
+                    offset: 92,
+                },
+                end: Pos {
+                    line: 8,
+                    column: 16,
+                    offset: 99,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
+                ILLEGAL_MATCH_ARM_CONDITION,
+            ),
+            help: None,
+            labels: [
+                PLLabel {
+                    file: "",
+                    txt: Some(
+                        (
+                            "match condition like `{}` can only be used while maching through struct types. Here `{}` is of type `{}`",
+                            [
+                                "{field:cond ...}",
+                                "i64",
+                                "primitive",
+                            ],
+                        ),
+                    ),
+                    range: Range {
+                        start: Pos {
+                            line: 14,
+                            column: 10,
+                            offset: 194,
+                        },
+                        end: Pos {
+                            line: 14,
+                            column: 13,
+                            offset: 197,
+                        },
+                    },
+                },
+            ],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 14,
+                    column: 10,
+                    offset: 194,
+                },
+                end: Pos {
+                    line: 14,
+                    column: 13,
+                    offset: 197,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
+                ILLEGAL_MATCH_ARM_CONDITION,
+            ),
+            help: None,
+            labels: [
+                PLLabel {
+                    file: "",
+                    txt: Some(
+                        (
+                            "match condition like `{}` can only be used while maching through union types. Here `{}` is of type `{}`",
+                            [
+                                "type(cond)",
+                                "i64",
+                                "primitive",
+                            ],
+                        ),
+                    ),
+                    range: Range {
+                        start: Pos {
+                            line: 11,
+                            column: 9,
+                            offset: 143,
+                        },
+                        end: Pos {
+                            line: 11,
+                            column: 12,
+                            offset: 146,
+                        },
+                    },
+                },
+            ],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 11,
+                    column: 9,
+                    offset: 143,
+                },
+                end: Pos {
+                    line: 11,
+                    column: 12,
+                    offset: 146,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
+                SYNTAX_ERROR_REDUNDENT_SYMBOL,
+            ),
+            help: Some(
+                "remove this redundant symbol",
+            ),
+            labels: [],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 34,
+                    column: 14,
+                    offset: 490,
+                },
+                end: Pos {
+                    line: 34,
+                    column: 15,
+                    offset: 491,
+                },
+            },
+        },
+    },
+]

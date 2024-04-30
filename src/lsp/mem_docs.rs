@@ -225,10 +225,8 @@ impl MemDocs {
     ) -> (SourceProgram, String) {
         let doc = self.docs.get(uri).unwrap();
         let mut txt = doc.text(db).clone();
-        txt.replace_range(
-            position_to_offset(&txt, range.start)..position_to_offset(&txt, range.end),
-            &text,
-        );
+        let offrange = position_to_offset(&txt, range.start)..position_to_offset(&txt, range.end);
+        txt.replace_range(offrange, &text);
         (*doc, txt)
     }
     pub fn insert(&mut self, db: &dyn Db, key: String, value: String, path: String) {
@@ -248,7 +246,7 @@ impl MemDocs {
         }
         let re = read_to_string(key);
         if let Ok(re) = re {
-            log::info!("read file from path{}", key);
+            log::info!("read file from path {}", key);
             self.insert(db, key.to_string(), re, key.to_string());
             return self.get_file_content(db, key);
         }
@@ -258,6 +256,8 @@ impl MemDocs {
         self.docs.get_mut(key)
     }
     pub fn remove(&mut self, key: &str) -> Option<SourceProgram> {
+        // let key =  crate::utils::canonicalize(key).unwrap();
+        // let key = key.to_str().unwrap();
         self.docs.remove(key)
     }
     pub fn iter(&self) -> impl Iterator<Item = &SourceProgram> {
@@ -309,24 +309,73 @@ mod tests {
                 },
             },
             "test".to_string(),
-            "哒哒哒".to_string(),
+            "🌏哒哒\n".to_string(),
         );
-        assert_eq!(mem_docs.get("test").unwrap().text(db), "哒哒哒t");
+        assert_eq!(mem_docs.get("test").unwrap().text(db), "🌏哒哒\nt");
         mem_docs.change(
             db,
             lsp_types::Range {
                 start: Position {
                     line: 0,
-                    character: 1,
+                    character: 2,
                 },
                 end: Position {
                     line: 0,
-                    character: 2,
+                    character: 3,
                 },
             },
             "test".to_string(),
             "123".to_string(),
         );
-        assert_eq!(mem_docs.get("test").unwrap().text(db), "哒123哒t");
+        assert_eq!(mem_docs.get("test").unwrap().text(db), "🌏123哒\nt");
+        mem_docs.change(
+            db,
+            lsp_types::Range {
+                start: Position {
+                    line: 1,
+                    character: 0,
+                },
+                end: Position {
+                    line: 1,
+                    character: 1,
+                },
+            },
+            "test".to_string(),
+            "".to_string(),
+        );
+        assert_eq!(mem_docs.get("test").unwrap().text(db), "🌏123哒\n");
+
+        mem_docs.change(
+            db,
+            lsp_types::Range {
+                start: Position {
+                    line: 1,
+                    character: 0,
+                },
+                end: Position {
+                    line: 1,
+                    character: 0,
+                },
+            },
+            "test".to_string(),
+            "啊est".to_string(),
+        );
+        assert_eq!(mem_docs.get("test").unwrap().text(db), "🌏123哒\n啊est");
+        mem_docs.change(
+            db,
+            lsp_types::Range {
+                start: Position {
+                    line: 1,
+                    character: 3,
+                },
+                end: Position {
+                    line: 1,
+                    character: 4,
+                },
+            },
+            "test".to_string(),
+            "".to_string(),
+        );
+        assert_eq!(mem_docs.get("test").unwrap().text(db), "🌏123哒\n啊es");
     }
 }

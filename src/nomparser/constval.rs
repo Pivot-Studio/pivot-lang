@@ -1,10 +1,10 @@
 use nom::{
     branch::alt,
     bytes::complete::tag,
-    character::complete::{one_of, space0},
-    combinator::{map_res, opt, recognize},
+    character::complete::{anychar, one_of, space0},
+    combinator::{map, opt, recognize},
     multi::{many0, many1},
-    sequence::{preceded, terminated, tuple},
+    sequence::{delimited, preceded, terminated, tuple},
     IResult,
 };
 
@@ -12,6 +12,8 @@ use crate::nomparser::Span;
 use crate::{ast::range::Range, ast::tokens::TokenType};
 use internal_macro::{test_parser, test_parser_error};
 use nom::character::complete::char;
+
+use self::string_literal::parse_escaped_char;
 
 use super::*;
 #[test_parser(".10")]
@@ -26,37 +28,36 @@ use super::*;
 #[test_parser_error("0x12g3")]
 #[test_parser_error("0o12.3")]
 #[test_parser_error("0b123")]
-pub fn number(input: Span) -> IResult<Span, Box<NodeEnum>> {
+pub fn number(input: Span) -> IResult<Span, NumNode> {
     let (input, _) = space0(input)?;
     let (re, value) = alt((
-        map_res(float, |out| {
-            Ok::<Num, ()>(Num::Float(out.fragment().parse::<f64>().unwrap()))
+        map(float, |out| {
+            Num::Float(out.fragment().parse::<f64>().unwrap())
         }),
-        map_res(hexadecimal, |out| {
+        map(hexadecimal, |out| {
             let res =
                 u64::from_str_radix(out.fragment().replace('_', "").get(2..).unwrap(), 16).unwrap();
-            Ok::<Num, ()>(Num::Int(res))
+            Num::Int(res)
         }),
-        map_res(octal, |out| {
+        map(octal, |out| {
             let res =
                 u64::from_str_radix(out.fragment().replace('_', "").get(2..).unwrap(), 8).unwrap();
-            Ok::<Num, ()>(Num::Int(res))
+            Num::Int(res)
         }),
-        map_res(binary, |out| {
+        map(binary, |out| {
             let res =
                 u64::from_str_radix(out.fragment().replace('_', "").get(2..).unwrap(), 2).unwrap();
-            Ok::<Num, ()>(Num::Int(res))
+            Num::Int(res)
         }),
-        map_res(decimal, |out| {
+        map(decimal, |out| {
             // TODO:err tolerate
-            Ok::<Num, ()>(Num::Int(
-                out.fragment().replace('_', "").parse::<u64>().unwrap(),
-            ))
+            Num::Int(out.fragment().replace('_', "").parse::<u64>().unwrap())
         }),
-    ))(input)?;
-    let range = Range::new(input, re);
+        map(character, Num::Char),
+    ))(input.clone())?;
+    let range = Range::new(&input, &re);
     let node = NumNode { value, range };
-    Ok((re, Box::new(node.into())))
+    Ok((re, node))
 }
 
 #[test_parser(" true")]
@@ -65,19 +66,16 @@ pub fn number(input: Span) -> IResult<Span, Box<NodeEnum>> {
 #[test_parser_error("fales")]
 #[test_parser_error("TRUE")]
 #[test_parser_error("FALSE")]
-pub fn bool_const(input: Span) -> IResult<Span, Box<NodeEnum>> {
+pub fn bool_const(input: Span) -> IResult<Span, BoolConstNode> {
     alt((
-        map_res(tag_token_word(TokenType::TRUE), |(_, range)| {
-            res_enum(BoolConstNode { value: true, range }.into())
+        map(tag_token_word(TokenType::TRUE), |(_, range)| {
+            BoolConstNode { value: true, range }
         }),
-        map_res(tag_token_word(TokenType::FALSE), |(_, range)| {
-            res_enum(
-                BoolConstNode {
-                    value: false,
-                    range,
-                }
-                .into(),
-            )
+        map(tag_token_word(TokenType::FALSE), |(_, range)| {
+            BoolConstNode {
+                value: false,
+                range,
+            }
         }),
     ))(input)
 }
@@ -170,4 +168,16 @@ fn float(input: Span) -> IResult<Span, Span> {
         ))), // Case three: 42.42
         recognize(tuple((decimal, char('.'), decimal))),
     ))(input)
+}
+
+#[test_parser("'a'")]
+#[test_parser("'中'")]
+#[test_parser("'😀'")]
+#[test_parser("'\\n'")]
+#[test_parser("'\\\\'")]
+#[test_parser("'\\u{1234}'")]
+#[test_parser_error("'\\u{1234} '")]
+#[test_parser_error("'\\u{123456}'")] // bigger than 0x10FFFF
+fn character(input: Span) -> IResult<Span, char> {
+    delimited(char('\''), alt((parse_escaped_char, anychar)), char('\''))(input)
 }

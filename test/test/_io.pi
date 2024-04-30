@@ -1,0 +1,13 @@
+use std::io;
+// use std::cols::hashtable::new_hash_table;
+
+pub fn test_io() i64 {
+    let fd = io::open_read("./Cargo.toml");
+    let _s = fd.read_all_as_string() as string!;
+    
+    
+    fd.close();
+    
+    
+    return 0;
+}

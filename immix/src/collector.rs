@@ -42,18 +42,30 @@ fn walk_gc_frames(sp: *mut u8, mut walker: impl FnMut(*mut u8, i32, ObjectType))
         let ip = get_ip_from_sp(sp);
         let frame = unsafe { STACK_MAP.map.as_ref().unwrap().get(&ip.cast_const()) };
         if let Some(frame) = frame {
+            #[cfg(not(feature = "conservative_stack_scan"))]
             for o in frame.iter_roots() {
                 walker(sp, o, ObjectType::Pointer);
+            }
+            #[cfg(target_arch = "aarch64")]
+            let frame_size = frame.frame_size;
+            #[cfg(target_arch = "x86_64")]
+            let frame_size = frame.frame_size + 8;
+
+            // conservative stack scanning
+            // treat all 8 bytes aligned data as a pointer
+            #[cfg(feature = "conservative_stack_scan")]
+            for i in 0..=frame_size / 8 {
+                walker(sp, i * 8, ObjectType::Pointer);
             }
 
             sp = unsafe {
                 #[cfg(target_arch = "aarch64")]
                 {
-                    sp.offset(frame.frame_size as _)
+                    sp.offset(frame_size as _)
                 }
                 #[cfg(target_arch = "x86_64")]
                 {
-                    sp.offset(frame.frame_size as isize + 8)
+                    sp.offset(frame_size as _)
                 }
             };
         } else {
@@ -385,15 +397,14 @@ impl Collector {
     unsafe extern "C" fn mark_ptr(&self, ptr: *mut u8) {
         let father = ptr;
         // check pointer is valid (divided by 8)
+        // immix suppose all stack pointers are aligned by 8
+        // and immix base pointer itself is always aligned by 8
+        // (infact aligned by 128(LINE_SIZE))
         if (ptr as usize) % 8 != 0 {
-            // eprintln!("invalid pointer: {:p}", ptr);
             return;
         }
 
         let ptr = *(ptr as *mut *mut u8);
-        if ptr.is_null() {
-            return;
-        }
         // eprintln!("mark ptr {:p} -> {:p}", father, ptr);
         // mark it if it is in heap
         if self.thread_local_allocator.as_mut().unwrap().in_heap(ptr) {
@@ -628,7 +639,7 @@ impl Collector {
                 // 线程数量变化了？
                 if waiting == *c {
                     GC_MARKING.store(true, Ordering::Release);
-                    GC_STW_COUNT.fetch_add(1, Ordering::Relaxed);
+                    GC_STW_COUNT.fetch_add(1, Ordering::SeqCst);
                     GC_MARK_COND.notify_all();
                     return false;
                 }
@@ -637,7 +648,7 @@ impl Collector {
             drop(v);
         } else {
             GC_MARKING.store(true, Ordering::Release);
-            GC_STW_COUNT.fetch_add(1, Ordering::Relaxed);
+            GC_STW_COUNT.fetch_add(1, Ordering::SeqCst);
             GC_MARK_COND.notify_all();
             unsafe {
                 self.thread_local_allocator
@@ -684,27 +695,6 @@ impl Collector {
                     self.mark_gc_frames(frames);
                 } else {
                     walk_gc_frames(sp, |sp, offset, obj_type| {
-                        log::debug!("{}", {
-                            let root = unsafe { sp.offset(offset as isize) } as *mut *mut *mut u8;
-                            format!(
-                                "gc {} root: {:p}, value: {:p}, *value: {:p}",
-                                self.id,
-                                root,
-                                unsafe { *root },
-                                unsafe {
-                                    if self
-                                        .thread_local_allocator
-                                        .as_mut()
-                                        .unwrap()
-                                        .in_heap(*root as _)
-                                    {
-                                        **root
-                                    } else {
-                                        std::ptr::null_mut()
-                                    }
-                                }
-                            )
-                        });
                         self.mark_stack_offset(sp, offset, obj_type);
                     });
                 }
@@ -781,6 +771,8 @@ impl Collector {
 
     #[cfg(feature = "llvm_stackmap")]
     fn mark_globals(&self) {
+        use int_enum::IntEnum;
+
         if GLOBAL_MARK_FLAG
             .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
             .is_ok()
@@ -791,7 +783,7 @@ impl Collector {
                     .as_mut()
                     .unwrap()
                     .iter()
-                    .for_each(|root| {
+                    .for_each(|(root, tp)| {
                         log::debug!(
                             "gc {}: mark global {:p} {:p} {:p}",
                             self.id,
@@ -810,7 +802,20 @@ impl Collector {
                                 }
                             }
                         );
-                        self.mark_ptr(*root);
+
+                        match IntEnum::from_int(*tp).unwrap() {
+                            ObjectType::Atomic => {}
+                            ObjectType::Complex => {
+                                self.mark_complex(*root);
+                            }
+                            ObjectType::Trait => {
+                                self.mark_trait(*root);
+                            }
+                            ObjectType::Pointer => {
+                                self.mark_ptr(*root);
+                            }
+                        }
+                        // self.mark_ptr(*root);
                     });
             }
         }

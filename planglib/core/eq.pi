@@ -5,15 +5,7 @@ pub trait Eq<S> {
 
 impl Eq<gc::string> for gc::string {
     fn eq(r:*gc::string) bool {
-        if self.len() != r.len() {
-            return false;
-        }
-        for let i = 0; i < self.len(); i = i + 1 {
-            if self.bytes()[i] != r.bytes()[i] {
-                return false;
-            }
-        }
-        return true;
+        return gc::string_eq(*self, *r);
     }
 }
 

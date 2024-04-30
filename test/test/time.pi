@@ -1,0 +1,16 @@
+use std::time;
+
+
+pub fn test_time() i64 {
+    let t = time::now();
+
+    let aa = 0;
+    for let i = 0; i < 1000; i = i + 1 {
+        aa = aa + i;
+    }
+    let ep = t.elapsed();
+    println!(ep.secs());
+    println!(ep.sub_sec_nanos());
+    println!(ep);
+    return 0;
+}

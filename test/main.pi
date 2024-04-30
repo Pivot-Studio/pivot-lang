@@ -1,3 +1,6 @@
+use project1::test::_match;
+use project1::test::time;
+use project1::test::print;
 use project1::test::ifel;
 use project1::test::generic;
 use project1::test::st;
@@ -26,14 +29,10 @@ use project1::test::deconstruct;
 use project1::test::st::*;
 use project1::test::arr;
 use project1::test::iter;
-use std::libc;
-use std::io;
-use std::cols::hashtable;
 use project1::test::inference;
-use project1::test::futuretest;
 use project1::test::rand;
-
-use core::hash::pl_hash::*;
+use project1::test::_hashtable;
+use project1::test::_io;
 // use std::cols::hashtable::new_hash_table;
 
 pub fn main() i64 {
@@ -64,56 +63,11 @@ pub fn main() i64 {
     test_compile_time_reflection();
     iter::test_generator();
     inference::test_inference();
-    futuretest::test_future();
     rand::test_rand();
     sort_test::test_sort();
-
-
-    let fd = io::open_read("./Cargo.toml");
-    let s = fd.read_all_as_string() as string!;
-    
-    println!(s);
-    
-    fd.close();
-    
     arr::test_arr();
-    let table1 = hashtable::new_hash_table(10 as u64, 100 as u64);
-    table1.insert(1, "");
-
-    let table;
-    table = hashtable::new_hash_table(10 as u64, 100 as u64);
-    table.insert("hi", "World");
-    table.insert("tj", "love hj");
-    let v = table.get("hi") as string!;
-    println!(v);
-    v = table.get("tj") as string!;
-    println!(v);
-    table.insert("hi", "World2");
-    v = table.get("hi") as string!;
-    println!(v);
-    let str = "1";
-    for let i = 0; i < 10; i = i + 1 {
-        str.append("1");
-        table.insert(str, "World2");
-    }
-    // println!(table.bucket_size());
-    let i_table = hashtable::new_hash_table(10 as u64, 100 as u64);
-    i_table.insert(1, 2);
-    i_table.insert(3, 4);
-    let one =  i_table.get(1) as i64!;
-    let three = i_table.get(3) as i64!;
-    let hasher;
-    hasher = new_paul_larson_hasher(1 as u64);
-    three.hash(&hasher);
-    println!(one);
-    println!(three);
-    let attt = 1;
-    let ttt:Eq<i64> = attt;
-    let bbbb = 1;
-    let re = ttt.eq(&bbbb);
-    println!(re);
-    let opt:Option<i64> = 100 as i64;
-    println!(opt);
+    _hashtable::test_hashtable();
+    _io::test_io();
+    
     return 0;
 }
-

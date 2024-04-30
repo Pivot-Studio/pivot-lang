@@ -124,8 +124,6 @@ pub struct Ctx<'a> {
     pub function: Option<ValueHandle>,
     /// the init function called first in main
     pub init_func: Option<ValueHandle>,
-    /// current block
-    pub block: Option<BlockHandle>,
     /// the block to jump when continue if it's a loop statement
     pub continue_block: Option<BlockHandle>,
     /// the block to jump to when break if it's a loop statement
@@ -249,6 +247,32 @@ impl<'a, 'ctx> Ctx<'a> {
         data.clone()
     }
 
+    pub fn get_gc_mod_f<'b>(
+        &mut self,
+        builder: &'b BuilderEnum<'a, 'ctx>,
+        malloc_fn: &str,
+    ) -> ValueHandle {
+        let mut root_ctx = &*self;
+        while let Some(f) = root_ctx.root {
+            root_ctx = f
+        }
+        let gcmod = root_ctx
+            .plmod
+            .submods
+            .get("gc")
+            .map(|rc| rc.as_ref())
+            .unwrap_or(&root_ctx.plmod);
+        let f: FNValue = gcmod
+            .types
+            .get(malloc_fn)
+            .unwrap()
+            .borrow()
+            .clone()
+            .try_into()
+            .unwrap();
+        let f = builder.get_or_insert_fn_handle(&f, self);
+        f.0
+    }
     pub fn check_self_ref(&self, name: &str, range: Range) -> Result<(), PLDiag> {
         if let Some(root) = self.root {
             root.check_self_ref_inner(name, name, range)
@@ -322,7 +346,6 @@ impl<'a, 'ctx> Ctx<'a> {
             table: FxHashMap::default(),
             config,
             db,
-            block: None,
             continue_block: None,
             break_block: None,
             return_block: None,
@@ -369,7 +392,6 @@ impl<'a, 'ctx> Ctx<'a> {
             table: FxHashMap::default(),
             config: self.config.clone(),
             db: self.db,
-            block: self.block,
             continue_block: self.continue_block,
             break_block: self.break_block,
             return_block: self.return_block,
@@ -952,8 +974,10 @@ impl<'a, 'ctx> Ctx<'a> {
         if self.disable_diag {
             return dia;
         }
-        if let Some(src) = &self.temp_source {
-            dia.set_source(src);
+        if dia.raw.source.is_none() {
+            if let Some(src) = &self.temp_source {
+                dia.set_source(src);
+            }
         }
         let dia2 = dia.clone();
         self.diagnose.borrow_mut().insert(dia);
@@ -1077,6 +1101,9 @@ impl<'a, 'ctx> Ctx<'a> {
     }
 
     pub fn get_file_url(&self) -> Url {
+        if self.plmod.path.starts_with("@__repl") {
+            return Url::parse("httss://example.com").unwrap();
+        }
         #[cfg(any(unix, windows, target_os = "redox", target_os = "wasi"))]
         return Url::from_file_path(self.plmod.path.clone()).unwrap();
         #[cfg(not(any(unix, windows, target_os = "redox", target_os = "wasi")))]
@@ -1105,7 +1132,6 @@ impl<'a, 'ctx> Ctx<'a> {
         block: BlockHandle,
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) {
-        self.block = Some(block);
         builder.position_at_end_block(block);
     }
 

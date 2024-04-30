@@ -293,7 +293,7 @@ pub trait IRBuilder<'a, 'ctx> {
         ret_tp: &PLType,
     ) -> ValueHandle;
     fn get_block_address(&self, block: BlockHandle) -> ValueHandle;
-    fn build_indirect_br(&self, block: ValueHandle, ctx: &Ctx<'a>);
+    fn build_indirect_br(&self, block: ValueHandle);
     // only used in special case, as it does not add gc root
     unsafe fn store_with_aoto_cast(&self, ptr: ValueHandle, value: ValueHandle);
     // fn stack_alloc(&self, name: &str, ctx: &mut Ctx<'a>, tp: &PLType) -> ValueHandle;
@@ -307,6 +307,7 @@ pub trait IRBuilder<'a, 'ctx> {
         len: ValueHandle,
         ctx: &mut Ctx<'a>,
     );
+    fn optimize(&self);
     fn build_bit_not(&self, v: ValueHandle) -> ValueHandle;
     fn build_bit_and(&self, lhs: ValueHandle, rhs: ValueHandle) -> ValueHandle;
     fn build_bit_or(&self, lhs: ValueHandle, rhs: ValueHandle) -> ValueHandle;

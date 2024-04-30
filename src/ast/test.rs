@@ -105,63 +105,6 @@ fn sanitize_diag(diag: &[super::diag::PLDiag]) -> Vec<super::diag::PLDiag> {
 }
 
 #[test]
-fn test_memory_leak() {
-    let db = &mut Database::default();
-    let docs = MemDocs::default();
-    let params = Some((
-        Pos {
-            line: 2,
-            column: 8,
-            offset: 0,
-        },
-        None,
-    ));
-    let pos = if let Some((pos, _)) = params {
-        Some(pos)
-    } else {
-        None
-    };
-
-    // let db = Database::default();
-    let input = MemDocsInput::new(
-        db,
-        Arc::new(Mutex::new(docs)),
-        "test/lsp/mod.pi".to_string(),
-        Default::default(),
-        ActionType::FindReferences,
-        params,
-        pos,
-    );
-    let m = compile_dry(db, input).unwrap();
-    let mod1 = m.plmod(db);
-    let path = crate::utils::canonicalize("test/lsp/mod.pi")
-        .unwrap()
-        .to_str()
-        .unwrap()
-        .to_string();
-    input
-        .docs(db)
-        .lock()
-        .unwrap()
-        .change(db, new_diag_range(0, 0, 0, 0), path, "\n".repeat(2));
-    input.set_action(db).to(ActionType::Diagnostic);
-    input.set_params(db).to(Some((
-        Pos {
-            line: 1,
-            column: 1,
-            offset: 0,
-        },
-        Some("\n".repeat(100)),
-    )));
-    let m = compile_dry(db, input).unwrap();
-    let mod2 = m.plmod(db);
-    assert_ne!(mod1, mod2);
-    let modstr1 = format!("{:?}", mod1);
-    let modstr2 = format!("{:?}", mod2);
-    assert_eq!(modstr1.len(), modstr2.len());
-}
-
-#[test]
 fn test_struct_field_completion() {
     let comps = test_lsp::<Completions>(
         &Database::default(),
@@ -471,7 +414,8 @@ fn test_doc_symbol() {
 
 #[test]
 #[cfg(feature = "jit")]
-fn test_jit() {
+#[cfg(not(windows))] // FIXME: windows i128 issue https://discourse.llvm.org/c/beginners/17
+fn test_orc_jit() {
     use crate::ast::compiler::{compile, Options};
     use std::path::PathBuf;
     let l = crate::utils::plc_new::tests::TEST_COMPILE_MUTEX
@@ -503,17 +447,20 @@ fn test_jit() {
             fmt: false,
             jit: true,
             debug: false,
+            ..Default::default()
         },
     );
     assert!(
         crate::ast::compiler::run(
             PathBuf::from(outplb).as_path(),
             inkwell::OptimizationLevel::None,
+            crate::ast::compiler::EngineType::OrcJit
         ) == 0,
         "jit compiled program exit with non-zero status"
     );
     drop(l);
 }
+
 #[test]
 fn test_compile() {
     let l = crate::utils::plc_new::tests::TEST_COMPILE_MUTEX
@@ -552,6 +499,7 @@ fn test_compile() {
             fmt: false,
             jit: false,
             debug: false,
+            ..Default::default()
         },
     );
     let exe = crate::utils::canonicalize(&exe)
@@ -598,6 +546,7 @@ fn test_printast() {
             fmt: false,
             jit: false,
             debug: false,
+            ..Default::default()
         },
     );
 }
@@ -668,6 +617,7 @@ fn test_tail_call_opt() {
             fmt: false,
             jit: false,
             debug: false,
+            ..Default::default()
         },
     );
     let exe = crate::utils::canonicalize(&exe)

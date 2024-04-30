@@ -41,6 +41,7 @@ shadow_stack = []
 llvm_stackmap = []
 llvm_gc_plugin = []
 auto_gc = []
+conservative_stack_scan = []
 
 
 [build-dependencies]

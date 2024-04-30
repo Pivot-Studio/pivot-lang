@@ -85,10 +85,10 @@ define_diag!(
     FUNCTION_MUST_HAVE_RETURN = "function must have a return value",
     REDEFINE_TYPE = "redefine type",
     STRUCT_FIELD_TYPE_NOT_MATCH = "struct field type not match",
-    MISSING_SEMI = "missing semicolon",
+    SYNTAX_ERROR_MISSING_SEMI = "expect semicolon here",
     EXPECT_TYPE = "expect type",
     EXPECT_VALUE = "expect value",
-    REDEFINE_SYMBOL = "redefine symbol",
+    REDEFINE_SYMBOL = "redefined symbol",
     SYMBOL_NOT_FOUND = "symbol not found",
     UNRESOLVED_MODULE = "unresolved module",
     ARRAY_TYPE_NOT_MATCH = "array type not match",
@@ -121,7 +121,7 @@ define_diag!(
     TRAIT_METHOD_SHALL_NOT_HAVE_MODIFIER = "trait method shall not have modifier",
     MACRO_NOT_FOUND = "macro not found",
     EXPECT_IDENTIFIER = "expect identifier",
-    UNEXPECTED_TOKEN = "unexpected token",
+    SYNTAX_ERROR_UNEXPECTED_TOKEN = "syntax error: unexpected token",
     EXPECT_STRING = "expect string",
     EXPECT_EXPRESSION = "expect expression",
     EXPECT_STATEMENT = "expect statement",
@@ -149,7 +149,7 @@ define_diag!(
     ONLY_TRAIT_CAN_BE_IMPL = "only trait can be impl",
     EXPECT_TO_BE_A_TRAIT_IMPL = "expect to be a trait impl block",
     TARGET_TYPE_NOT_IMPL_ABLE = "target type not implable",
-    TUPLE_WRONG_DECONSTRUCT_PARAM_LEN = "tuple wrong deconstruct param len",
+    TUPLE_ELM_SIZE_MISS_MATCH = "tuple element size miss match",
     DEF_DECONSTRUCT_MUST_HAVE_VALUE = "def deconstruct must have value",
     STRUCT_FIELD_NOT_EXISTS = "struct field not exists",
     TRY_TO_EXPORT_NON_REEXPORT_SYMBOL = "try to export non reexport symbol",
@@ -166,8 +166,15 @@ define_diag!(
     GENERIC_NOT_ALLOWED_IN_TRAIT_METHOD = "generic not allowed in trait method",
     THE_TARGET_TRAIT_CANNOT_BE_INSTANTIATED = "the target trait type cannot be instantiated",
     MACRO_EXPAND_DEPTH_TOO_DEEP = "macro expand depth too deep",
-    GLOBAL_MUST_BE_POINTER = "global must be pointer type",
     ILLEGAL_GENERIC_PARAM = "illegal generic parameter",
+    ILLEGAL_MATCH_VALUE =
+        "illegal match value, match vale can only be of type `Union` or `Struct` or `Primitive`",
+    ILLEGAL_MATCH_ARM_CONDITION =
+        "illegal match arm condition: this match condition will never be met",
+    SYNTAX_ERROR_REDUNDENT_SYMBOL = "syntax error: redundant symbol",
+    SYNTAX_ERROR_IF_CONDITION = "syntax error: if condition",
+    SYNTAX_ERROR_WHILE_CONDITION = "syntax error: while condition",
+    SYNTAX_ERROR_FOR_CONDITION = "syntax error: for condition",
 );
 
 define_diag! {
@@ -499,26 +506,7 @@ pub(crate) fn ensure_no_error(db: &dyn Db, docs: MemDocsInput) {
     let mut warn_num = 0;
     let errs = compile_dry::accumulated::<Diagnostics>(db, docs);
     if !errs.is_empty() {
-        for e in errs.iter() {
-            let mut path = e.0.clone();
-            for e in e.1.iter() {
-                if let Some(src) = e.raw.source.clone() {
-                    path = src;
-                }
-                e.print(
-                    &path,
-                    move |db, id| {
-                        Source::from(docs.get_file_content(db, id.to_string()).unwrap().text(db))
-                    },
-                    db,
-                );
-                if e.is_err() {
-                    errs_num += 1
-                } else if e.is_warn() {
-                    warn_num += 1
-                }
-            }
-        }
+        print_diags(errs, docs, db, &mut errs_num, &mut warn_num, false);
         if errs_num > 0 {
             eprintln!(
                 "check failed: {} error(s), {} warning(s)",
@@ -532,5 +520,38 @@ pub(crate) fn ensure_no_error(db: &dyn Db, docs: MemDocsInput) {
             errs_num.to_string().bright_red(),
             warn_num.to_string().yellow()
         );
+    }
+}
+
+pub(crate) fn print_diags(
+    errs: Vec<(String, Vec<PLDiag>)>,
+    docs: MemDocsInput,
+    db: &dyn Db,
+    errs_num: &mut i32,
+    warn_num: &mut i32,
+    err_only: bool,
+) {
+    for e in errs.iter() {
+        let mut path = e.0.clone();
+        for e in e.1.iter() {
+            if err_only && e.is_warn() {
+                continue;
+            }
+            if let Some(src) = e.raw.source.clone() {
+                path = src;
+            }
+            e.print(
+                &path,
+                move |db, id| {
+                    Source::from(docs.get_file_content(db, id.to_string()).unwrap().text(db))
+                },
+                db,
+            );
+            if e.is_err() {
+                *errs_num += 1
+            } else if e.is_warn() {
+                *warn_num += 1
+            }
+        }
     }
 }

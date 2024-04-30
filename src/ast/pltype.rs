@@ -112,6 +112,9 @@ impl TraitImplAble for PriType {
     fn get_full_name_except_generic(&self) -> String {
         self.get_name()
     }
+    fn get_mod_path(&self) -> Option<std::borrow::Cow<String>> {
+        None
+    }
 }
 
 #[derive(Debug, Clone, Eq)]
@@ -167,6 +170,9 @@ impl TraitImplAble for ClosureType {
     fn get_full_name_except_generic(&self) -> String {
         self.get_name()
     }
+    fn get_mod_path(&self) -> Option<std::borrow::Cow<String>> {
+        None
+    }
 }
 
 mod method;
@@ -189,6 +195,10 @@ macro_rules! impl_mthd {
                 let full_name = self.get_full_name();
                 full_name.split('<').collect::<Vec<_>>()[0].to_string()
             }
+
+            fn get_mod_path(&self) -> Option<std::borrow::Cow<String>> {
+                Some(std::borrow::Cow::Borrowed(&self.path))
+            }
         }
     };
     ($($n:ident),*) => (
@@ -205,7 +215,7 @@ macro_rules! impl_mthd {
 }
 
 #[range]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Eq)]
 pub struct UnionType {
     pub name: String,
     pub generic_map: IndexMap<String, Arc<RefCell<PLType>>>,
@@ -213,6 +223,15 @@ pub struct UnionType {
     pub path: String,
     pub modifier: Option<(TokenType, Range)>,
     pub methods: Arc<RefCell<FxHashMap<String, Arc<RefCell<FNValue>>>>>,
+}
+
+impl PartialEq for UnionType {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+            && self.generic_map == other.generic_map
+            && self.sum_types == other.sum_types
+            && self.path == other.path
+    }
 }
 
 impl_mthd!(UnionType, STType, PlaceHolderType);
@@ -281,10 +300,8 @@ impl UnionType {
                 .iter()
                 .enumerate()
                 .find(|(_, t)| {
-                    get_type_deep(
-                        t.get_type(ctx, builder, true)
-                            .unwrap_or_else(|_| panic!("{:?}", t)),
-                    ) == get_type_deep(Arc::new(RefCell::new(pltype.clone())))
+                    get_type_deep(t.get_type(ctx, builder, true).unwrap_or(unknown_arc()))
+                        == get_type_deep(Arc::new(RefCell::new(pltype.clone())))
                 })
                 .map(|(i, _)| i)
         })
@@ -298,7 +315,7 @@ impl UnionType {
         ctx.run_in_type_mod(self, |ctx, u| {
             u.sum_types
                 .iter()
-                .map(|t| t.get_type(ctx, builder, true).unwrap())
+                .map(|t| t.get_type(ctx, builder, true).unwrap_or(unknown_arc()))
                 .collect()
         })
     }
@@ -321,6 +338,7 @@ pub enum PriType {
     F32,
     F64,
     BOOL,
+    CHAR,
 }
 impl PriType {
     pub fn get_name(&self) -> String {
@@ -338,6 +356,7 @@ impl PriType {
             PriType::F32 => String::from("f32"),
             PriType::F64 => String::from("f64"),
             PriType::BOOL => String::from("bool"),
+            PriType::CHAR => String::from("char"),
         }
     }
     pub fn signed(&self) -> bool {
@@ -360,6 +379,7 @@ impl PriType {
                 | PriType::U64
                 | PriType::U128
                 | PriType::BOOL
+                | PriType::CHAR
         )
     }
 
@@ -381,6 +401,7 @@ impl PriType {
             "f32" => Some(PriType::F32),
             "f64" => Some(PriType::F64),
             "bool" => Some(PriType::BOOL),
+            "char" => Some(PriType::CHAR),
             _ => None,
         }
     }
@@ -438,6 +459,7 @@ pub fn get_type_deep(pltype: Arc<RefCell<PLType>>) -> Arc<RefCell<PLType>> {
             let a = ARRType {
                 element_type: get_type_deep(p.element_type.clone()),
                 size_handle: p.size_handle,
+                generic_map: p.generic_map.clone(),
             };
             Arc::new(RefCell::new(PLType::Arr(a)))
         }
@@ -468,7 +490,9 @@ impl PLType {
     #[cfg(feature = "llvm")]
     pub fn get_immix_type(&self) -> ObjectType {
         match self {
-            PLType::Struct(_) | PLType::Arr(_) => ObjectType::Complex,
+            PLType::Struct(s) if s.atomic => ObjectType::Atomic,
+            PLType::Struct(_) => ObjectType::Complex,
+            PLType::Arr(_) => ObjectType::Complex,
             PLType::Pointer(_) => ObjectType::Pointer,
             PLType::Trait(_) => ObjectType::Trait,
             PLType::Union(_) => ObjectType::Trait, // share same layout as trait
@@ -490,6 +514,7 @@ impl PLType {
         match self {
             PLType::Struct(s) => s.implements_trait(tp, ctx),
             PLType::Union(u) => u.implements_trait(tp, ctx),
+            PLType::Arr(a) => a.implements_trait(tp, ctx),
             _ => {
                 let plmod = if tp.path == ctx.plmod.path {
                     ctx.plmod.clone()
@@ -699,9 +724,7 @@ impl PLType {
             PLType::Struct(st) => st.get_full_name_except_generic(),
             PLType::Trait(st) => st.get_full_name_except_generic(),
             PLType::Primitive(pri) => pri.get_name(),
-            PLType::Arr(arr) => {
-                format!("[{}]", arr.element_type.borrow().get_full_elm_name())
-            }
+            PLType::Arr(_) => "[]".to_string(),
             PLType::Void => "void".to_string(),
             PLType::Pointer(p) => p.borrow().get_full_elm_name(),
             PLType::PlaceHolder(p) => p.name.clone(),
@@ -835,13 +858,19 @@ fn impl_in_mod(plmod: &Mod, name: &String, tp: &STType) -> bool {
         .unwrap_or_default()
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Eq)]
 pub struct Field {
     pub index: u32,
     pub typenode: Box<TypeNodeEnum>,
     pub name: String,
     pub range: Range,
     pub modifier: Option<(TokenType, Range)>,
+}
+
+impl PartialEq for Field {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name && self.typenode == other.typenode
+    }
 }
 
 impl Field {
@@ -912,16 +941,20 @@ impl FNValue {
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, '_>,
     ) -> ClosureType {
-        return ClosureType {
+        ctx.run_in_type_mod(self, |ctx, f| ClosureType {
             range: Default::default(),
-            ret_type: self.fntype.ret_pltype.get_type(ctx, builder, true).unwrap(),
-            arg_types: self
+            ret_type: f
+                .fntype
+                .ret_pltype
+                .get_type(ctx, builder, true)
+                .unwrap_or(unknown_arc()),
+            arg_types: f
                 .fntype
                 .param_pltypes
                 .iter()
-                .map(|x| x.get_type(ctx, builder, true).unwrap())
+                .map(|x| x.get_type(ctx, builder, true).unwrap_or(unknown_arc()))
                 .collect(),
-        };
+        })
     }
     pub fn is_modified_by(&self, modifier: TokenType) -> bool {
         if let Some((t, _)) = self.fntype.modifier {
@@ -1015,12 +1048,12 @@ impl FNValue {
         builder: &'b BuilderEnum<'a, '_>,
     ) -> Result<FNValue, PLDiag> {
         let name = self.append_name_with_generic(self.name.clone());
-        if let Some(pltype) = self.generic_infer.borrow().get(&name) {
-            if let PLType::Fn(f) = &*pltype.borrow() {
-                return Ok(f.clone());
-            }
-            unreachable!()
-        }
+        // if let Some(pltype) = self.generic_infer.borrow().get(&name) {
+        //     if let PLType::Fn(f) = &*pltype.borrow() {
+        //         return Ok(f.clone());
+        //     }
+        //     unreachable!()
+        // }
         let mut res = self.clone();
         res.llvmname = format!(
             "{}..{}",
@@ -1034,7 +1067,7 @@ impl FNValue {
             .borrow_mut()
             .insert(name, Arc::new(RefCell::new(PLType::Fn(res.clone()))));
 
-        let block = ctx.block;
+        let block = builder.get_cur_basic_block();
         *ctx.need_highlight.borrow_mut() += 1;
         let f = self.clone();
         if let Some(n) = &mut self.node {
@@ -1046,7 +1079,7 @@ impl FNValue {
             unreachable!()
         }
         *ctx.need_highlight.borrow_mut() -= 1;
-        ctx.position_at_end(block.unwrap(), builder);
+        ctx.position_at_end(block, builder);
 
         res.fntype.ret_pltype = self
             .fntype
@@ -1070,6 +1103,9 @@ impl FNValue {
             .collect::<Vec<Box<TypeNodeEnum>>>();
         let pltype = self.generic_infer.borrow().get(&res.name).unwrap().clone();
         pltype.replace(PLType::Fn(res.clone()));
+        if matches!(builder, BuilderEnum::NoOp(_)) {
+            self.generic_infer.borrow_mut().remove(&res.name);
+        }
         Ok(res.clone())
     }
     pub fn gen_snippet(&self) -> String {
@@ -1138,6 +1174,7 @@ impl FNValue {
 pub struct ARRType {
     pub element_type: Arc<RefCell<PLType>>,
     pub size_handle: ValueHandle,
+    pub generic_map: IndexMap<String, Arc<RefCell<PLType>>>,
 }
 
 impl TraitImplAble for ARRType {
@@ -1147,6 +1184,10 @@ impl TraitImplAble for ARRType {
 
     fn get_full_name(&self) -> String {
         format!("[{}]", self.element_type.borrow().get_full_elm_name())
+    }
+
+    fn get_mod_path(&self) -> Option<std::borrow::Cow<String>> {
+        None
     }
 }
 
@@ -1165,7 +1206,7 @@ impl PartialEq for ARRType {
 impl Eq for ARRType {}
 
 #[range]
-#[derive(Debug, Clone, Eq)]
+#[derive(Debug, Clone, Eq, Default)]
 pub struct STType {
     pub name: String,
     pub path: String,
@@ -1180,6 +1221,7 @@ pub struct STType {
     pub generic_infer_types: IndexMap<String, Arc<RefCell<PLType>>>,
     pub methods: Arc<RefCell<FxHashMap<String, Arc<RefCell<FNValue>>>>>,
     pub trait_methods_impl: TraitMthdImpl,
+    pub atomic: bool,
 }
 
 pub type TraitMthdImpl = Arc<RefCell<FxHashMap<String, FxHashMap<String, Arc<RefCell<FNValue>>>>>>;
@@ -1196,6 +1238,9 @@ pub fn append_name_with_generic(gm: &IndexMap<String, Arc<RefCell<PLType>>>, nam
     if typeinfer.is_empty() {
         return name.to_string();
     }
+    if name == "[]" {
+        return format!("[{}]", typeinfer);
+    }
     format!("{}<{}>", name, typeinfer)
 }
 
@@ -1211,8 +1256,7 @@ impl PartialEq for STType {
 
 impl STType {
     pub fn is_atomic(&self) -> bool {
-        // TODO recursive check
-        false
+        self.atomic
     }
     pub fn check_impl_derives(&self, ctx: &Ctx, st: &STType, range: Range) {
         debug_assert!(self.is_trait);
@@ -1346,13 +1390,15 @@ impl STType {
             });
         } else {
             // gcrtti fields
-            fields.push(Field {
-                index: 0,
-                typenode: Box::new(TypeNameNode::new_from_str("u64").into()),
-                name: "_vtable".to_string(),
-                range: Default::default(),
-                modifier: None,
-            });
+            if !self.atomic {
+                fields.push(Field {
+                    index: 0,
+                    typenode: Box::new(TypeNameNode::new_from_str("u64").into()),
+                    name: "_rtti".to_string(),
+                    range: Default::default(),
+                    modifier: None,
+                });
+            }
         }
         self.merge_field().iter().for_each(|f| {
             fields.push(f.clone());
@@ -1462,7 +1508,15 @@ impl STType {
                 })
                 .collect::<Vec<_>>();
             if !res.is_trait {
-                builder.gen_st_visit_function(ctx, &res, &field_pltps);
+                let is_atomic = field_pltps.iter().all(|f| f.borrow().is_atomic());
+                res.atomic = is_atomic;
+                if is_atomic {
+                    res.fields.iter_mut().for_each(|(_, f)| {
+                        f.index -= 1;
+                    });
+                } else {
+                    builder.gen_st_visit_function(ctx, &res, &field_pltps);
+                }
             }
             res.generic_map.clear();
             res.generic_infer_types = generic_infer_types;
@@ -1620,6 +1674,7 @@ impl GenericType {
                 methods: Default::default(),
                 trait_methods_impl: Default::default(),
                 range,
+                atomic: false,
             };
             let ph = Arc::new(RefCell::new(PLType::Struct(place_holder)));
 

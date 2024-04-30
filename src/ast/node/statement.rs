@@ -225,12 +225,15 @@ impl Node for DefNode {
                         ctx.up_cast(
                             c,
                             oritp,
-                            Default::default(),
-                            Default::default(),
+                            self.var.range(),
+                            self.value_expression
+                                .as_ref()
+                                .map(|v| v.range())
+                                .unwrap_or(self.range()),
                             node_val.get_value(),
                             builder,
                         )
-                        .unwrap()
+                        .unwrap_or_default()
                     } else {
                         node_val.get_value()
                     };
@@ -351,7 +354,7 @@ fn handle_deconstruct<'a, 'b>(
                     if var.len() != st.fields.len() {
                         return Err(ctx.add_diag(
                             range
-                                .new_err(ErrorCode::TUPLE_WRONG_DECONSTRUCT_PARAM_LEN)
+                                .new_err(ErrorCode::TUPLE_ELM_SIZE_MISS_MATCH)
                                 .add_label(
                                     *dec_range,
                                     ctx.get_file(),

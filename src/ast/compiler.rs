@@ -14,12 +14,7 @@ use crate::{
 use colored::Colorize;
 use indicatif::ProgressBar;
 #[cfg(feature = "llvm")]
-use inkwell::{
-    context::Context,
-    module::Module,
-    passes::{PassManager, PassManagerBuilder},
-    OptimizationLevel,
-};
+use inkwell::{context::Context, module::Module};
 use log::{trace, warn};
 #[cfg(feature = "llvm")]
 use pl_linker::{linker::create_with_target, mun_target::spec::Target};
@@ -63,6 +58,35 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
     immix::register_llvm_gc_plugins();
     ensure_target_folder();
 
+    let p = PathBuf::from(docs.file(db).to_string());
+    if p.extension().unwrap_or_default() == "bc" || p.extension().unwrap_or_default() == "ll" {
+        if !p.exists() {
+            eprintln!("{} file not found", p.to_str().unwrap().red());
+            exit(1)
+        }
+        let ctx = Context::create();
+        let tm = crate::ast::builder::llvmbuilder::get_target_machine(op.optimization.to_llvm());
+        let obj_f = &format!("{}/{}", &ASSET_PATH.lock().unwrap(), "out.o");
+        let module = if p.extension().unwrap_or_default() == "bc" {
+            Module::parse_bitcode_from_path(p, &ctx).unwrap()
+        } else {
+            let c_str = std::ffi::CString::new(p.to_str().unwrap()).unwrap();
+            let mem = unsafe { immix::parse_ir(c_str.as_ptr()) };
+            Module::parse_bitcode_from_buffer(
+                unsafe { &inkwell::memory_buffer::MemoryBuffer::new(mem as _) },
+                &ctx,
+            )
+            .unwrap()
+        };
+        tm.write_to_file(
+            &module,
+            inkwell::targets::FileType::Object,
+            Path::new(obj_f),
+        )
+        .unwrap();
+        pl_link(module, vec![obj_f.into()], out.clone(), op);
+        return;
+    }
     let total_steps = 3;
     let pb = &COMPILE_PROGRESS;
     prepare_prgressbar(
@@ -141,7 +165,11 @@ pub fn compile_dry_file(db: &dyn Db, parser_entry: FileCompileInput) -> Option<M
     let parsing_result = parse(db, entry_file_content);
     match parsing_result {
         Err(e) => {
-            log::error!("source code parse failed {}", e);
+            log::warn!(
+                "source code parse failed {}\n{:?}",
+                e,
+                entry_file_content.text(db)
+            );
             None
         }
         Ok(root_node) => {
@@ -167,6 +195,8 @@ pub fn process_llvm_ir<'a>(
     ctx: &'a Context,
     op: Options,
 ) -> (Module<'a>, Vec<PathBuf>) {
+    use inkwell::memory_buffer::MemoryBuffer;
+
     let mods = compile_dry::accumulated::<ModBuffer>(db, docs);
 
     let total_steps = 3;
@@ -182,6 +212,7 @@ pub fn process_llvm_ir<'a>(
 
     for m in mods {
         pb.inc(1);
+        let mem = &m.buf;
         let m = m.path;
         if set.contains(&m) {
             continue;
@@ -189,13 +220,15 @@ pub fn process_llvm_ir<'a>(
         set.insert(m.clone());
         let o = m.with_extension("o");
         // println!("{}", m.clone().to_str().unwrap());
-        let module = Module::parse_bitcode_from_path(m.clone(), ctx)
-            .unwrap_or_else(|_| panic!("parse {} failed", m.to_str().unwrap()));
+        let module = Module::parse_bitcode_from_buffer(
+            &MemoryBuffer::create_from_memory_range(mem, m.file_name().unwrap().to_str().unwrap()),
+            ctx,
+        )
+        .unwrap_or_else(|_| panic!("parse {} failed", m.to_str().unwrap()));
         pb.set_message(format!(
             "正在优化模块 {} ",
             module.get_name().to_str().unwrap().yellow()
         ));
-        run_pass(&module, op.optimization.to_llvm());
         pb.set_message(format!(
             "正在生成模块 {} 的目标文件",
             module.get_name().to_str().unwrap().yellow()
@@ -220,7 +253,7 @@ pub fn process_llvm_ir<'a>(
             b.build_return(None).unwrap();
         }
         if f.get_linkage() == inkwell::module::Linkage::LinkOnceAny {
-            f.set_linkage(inkwell::module::Linkage::External);
+            f.set_linkage(inkwell::module::Linkage::Private);
         }
     });
     unsafe {
@@ -228,6 +261,7 @@ pub fn process_llvm_ir<'a>(
             llvmmod.as_mut_ptr() as _,
             op.optimization as _,
             op.debug as _,
+            op.print_escape as _,
         )
     };
 
@@ -242,13 +276,23 @@ pub fn process_llvm_ir<'a>(
         output_files.push(obj_f.into());
     }
     pb.finish_with_message("中间代码优化完成");
+    let asm_path = format!("{}/{}", &ASSET_PATH.lock().unwrap(), "out.asm");
+    if op.asm {
+        tm.write_to_file(
+            &llvmmod,
+            inkwell::targets::FileType::Assembly,
+            Path::new(&asm_path),
+        )
+        .unwrap();
+        eprintln!("asm file written to: {}", &asm_path);
+    }
     (llvmmod, output_files)
 }
 
 #[cfg(feature = "llvm")]
 pub fn pl_link(llvmmod: Module, oxbjs: Vec<PathBuf>, out: String, op: Options) {
     llvmmod.verify().unwrap();
-    llvmmod.strip_debug_info();
+    // llvmmod.strip_debug_info();
     if op.genir {
         let mut s = out.to_string();
         s.push_str(".ll");
@@ -322,32 +366,6 @@ pub fn pl_link(llvmmod: Module, oxbjs: Vec<PathBuf>, out: String, op: Options) {
         pb.finish_with_message("目标文件链接完成");
         eprintln!("{}link succ, output file: {}", SPARKLE, fo);
     }
-}
-
-#[cfg(feature = "llvm")]
-pub fn run_pass(llvmmod: &Module, op: OptimizationLevel) {
-    let pass_manager_builder = PassManagerBuilder::create();
-    // unsafe { llvmaddPass(pass_manager_builder.as_mut_ptr() as _) };
-    pass_manager_builder.set_optimization_level(op);
-    // Create FPM MPM
-    let fpm = PassManager::create(llvmmod);
-    let mpm: PassManager<Module> = PassManager::create(());
-    if op != OptimizationLevel::None {
-        pass_manager_builder.set_size_level(0);
-        pass_manager_builder.populate_function_pass_manager(&fpm);
-        pass_manager_builder.populate_module_pass_manager(&mpm);
-        // pass_manager_builder.populate_lto_pass_manager(&mpm, false, true);
-    }
-    let b = fpm.initialize();
-    trace!("fpm init: {}", b);
-    for f in llvmmod.get_functions() {
-        let optimized = fpm.run_on(&f);
-        trace!("try to optimize func {}", f.get_name().to_str().unwrap());
-        let oped = if optimized { "yes" } else { "no" };
-        trace!("optimized: {}", oped,);
-    }
-    fpm.finalize();
-    mpm.run_on(llvmmod);
 }
 
 #[cfg(not(feature = "llvm"))]

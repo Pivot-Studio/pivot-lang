@@ -1,4 +1,4 @@
-use std::{cell::RefCell, sync::Arc};
+use std::{borrow::Cow, cell::RefCell, sync::Arc};
 
 use indexmap::IndexMap;
 use lsp_types::{Command, CompletionItem, CompletionItemKind, InsertTextFormat};
@@ -6,6 +6,7 @@ use rustc_hash::FxHashMap;
 
 use crate::{
     ast::{
+        builder::BuilderEnum,
         ctx::Ctx,
         diag::{ErrorCode, PLDiag},
         node::RangeTrait,
@@ -17,7 +18,7 @@ use crate::{
     utils::get_hash_code,
 };
 
-use super::{append_name_with_generic, impl_in_mod, FNValue, PLType, STType, UnionType};
+use super::{append_name_with_generic, impl_in_mod, ARRType, FNValue, PLType, STType, UnionType};
 
 pub trait ImplAble: RangeTrait + CustomType + TraitImplAble {
     fn get_method_table(&self) -> Arc<RefCell<FxHashMap<String, Arc<RefCell<FNValue>>>>>;
@@ -91,6 +92,7 @@ pub trait TraitImplAble {
         }
         false
     }
+    fn get_mod_path(&self) -> Option<Cow<String>>;
 }
 
 /// # Generic
@@ -98,6 +100,7 @@ pub trait TraitImplAble {
 /// Describe a type that has generic parameters.
 pub trait Generic {
     fn get_generic_map(&self) -> &IndexMap<String, Arc<RefCell<PLType>>>;
+    fn get_generic_map_mut(&mut self) -> &mut IndexMap<String, Arc<RefCell<PLType>>>;
     fn get_generic_infer_map(&self) -> Option<&IndexMap<String, Arc<RefCell<PLType>>>>;
     /// return the size of generics that can be annotated explicitly
     /// by the user. For more details, see [get_generic_size].
@@ -113,9 +116,29 @@ pub trait Generic {
     }
 }
 
+impl Generic for ARRType {
+    fn get_generic_map(&self) -> &IndexMap<String, Arc<RefCell<PLType>>> {
+        &self.generic_map
+    }
+    fn get_generic_map_mut(&mut self) -> &mut IndexMap<String, Arc<RefCell<PLType>>> {
+        &mut self.generic_map
+    }
+
+    fn get_generic_infer_map(&self) -> Option<&IndexMap<String, Arc<RefCell<PLType>>>> {
+        None
+    }
+
+    fn get_user_generic_size(&self) -> usize {
+        1
+    }
+}
+
 impl Generic for STType {
     fn get_generic_map(&self) -> &IndexMap<String, Arc<RefCell<PLType>>> {
         &self.generic_map
+    }
+    fn get_generic_map_mut(&mut self) -> &mut IndexMap<String, Arc<RefCell<PLType>>> {
+        &mut self.generic_map
     }
 
     fn get_generic_infer_map(&self) -> Option<&IndexMap<String, Arc<RefCell<PLType>>>> {
@@ -131,6 +154,9 @@ impl Generic for FNValue {
     fn get_generic_map(&self) -> &IndexMap<String, Arc<RefCell<PLType>>> {
         &self.fntype.generic_map
     }
+    fn get_generic_map_mut(&mut self) -> &mut IndexMap<String, Arc<RefCell<PLType>>> {
+        &mut self.fntype.generic_map
+    }
 
     fn get_generic_infer_map(&self) -> Option<&IndexMap<String, Arc<RefCell<PLType>>>> {
         None
@@ -145,6 +171,9 @@ impl Generic for UnionType {
     fn get_generic_map(&self) -> &IndexMap<String, Arc<RefCell<PLType>>> {
         &self.generic_map
     }
+    fn get_generic_map_mut(&mut self) -> &mut IndexMap<String, Arc<RefCell<PLType>>> {
+        &mut self.generic_map
+    }
 
     fn get_generic_infer_map(&self) -> Option<&IndexMap<String, Arc<RefCell<PLType>>>> {
         None
@@ -155,7 +184,7 @@ impl Generic for UnionType {
     }
 }
 
-pub trait ImplAbleWithGeneric: Generic + ImplAble {
+pub trait TraitImplAbleWithGeneric: Generic + TraitImplAble {
     fn implements_trait_curr_mod(&self, tp: &STType, plmod: &Mod) -> bool {
         // FIXME: strange logic
         let re = plmod
@@ -246,21 +275,49 @@ pub trait ImplAbleWithGeneric: Generic + ImplAble {
         if self.implements_trait_curr_mod(tp, plmod) {
             return true;
         }
-        let p = self.get_path();
-        if p == ctx.plmod.path {
+        let p = self.get_mod_path();
+        if p.as_ref().map(|v| v.as_str()) == Some(ctx.plmod.path.as_str()) {
             let plmod = &ctx.plmod;
             if self.implements_trait_curr_mod(tp, plmod) {
                 return true;
             }
             return false;
         }
-        let plmod = &ctx.db.get_module(&p).unwrap();
-        if self.implements_trait_curr_mod(tp, plmod) {
-            return true;
-        }
-        false
+        ctx.db
+            .get_module(p.unwrap_or_default().as_str())
+            .map(|plmod| self.implements_trait_curr_mod(tp, &plmod))
+            .unwrap_or_default()
     }
 }
 
-impl ImplAbleWithGeneric for STType {}
-impl ImplAbleWithGeneric for UnionType {}
+impl TraitImplAbleWithGeneric for STType {}
+impl TraitImplAbleWithGeneric for UnionType {}
+impl TraitImplAbleWithGeneric for ARRType {}
+
+pub trait CanGenCode {
+    fn gen_code<'a, 'b>(
+        &self,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b BuilderEnum<'a, '_>,
+    ) -> Result<Arc<RefCell<PLType>>, PLDiag>;
+}
+
+impl CanGenCode for STType {
+    fn gen_code<'a, 'b>(
+        &self,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b BuilderEnum<'a, '_>,
+    ) -> Result<Arc<RefCell<PLType>>, PLDiag> {
+        STType::gen_code(self, ctx, builder)
+    }
+}
+
+impl CanGenCode for UnionType {
+    fn gen_code<'a, 'b>(
+        &self,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b BuilderEnum<'a, '_>,
+    ) -> Result<Arc<RefCell<PLType>>, PLDiag> {
+        UnionType::gen_code(self, ctx, builder).map(|v| Arc::new(RefCell::new(PLType::Union(v))))
+    }
+}

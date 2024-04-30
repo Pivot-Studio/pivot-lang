@@ -1,0 +1,83 @@
+use std::chan;
+pub struct Waker {
+    pub wake:|*chan::Chan<|Waker|=>void>|=>void;
+    pub ch:*chan::Chan<|Waker|=>void>;
+}
+
+pub struct Pending {}
+
+pub struct Ready<T> {
+    v: T;
+}
+
+pub type Poll<T> = Ready<T> | Pending;
+pub trait Future<T> {
+    fn poll(wk: Waker) Poll<T>;
+}
+
+
+pub trait FutureExt<T|R> {
+    fn continue_with(f:|T| => Future<R>) Future<R>;
+}
+
+
+pub struct FnFuture<T> {
+    f:|Waker|=>Poll<T>;
+    re:Poll<T>;
+}
+
+impl <T> Future<T> for FnFuture<T> {
+    fn poll(wk: Waker) Poll<T> {
+        if self.re is Ready<T> {
+            return self.re;  
+        }
+        let re = self.f(wk);
+        self.re = re;
+        return re;
+    }
+}
+
+use std::io;
+
+impl <T|R> FutureExt<T|R> for Future<T> {
+    fn continue_with(f:|T|=>Future<R>) Future<R> {
+        let re = Pending{} as Poll<R>;
+        let ff = FnFuture<R>{};
+        ff.re = re;
+        ff.f = |wk:Waker|=> {
+            let re = self.poll(Waker{wake:|ch|=>{
+                let re = self.poll(Waker{}) as Ready<T>!;
+
+                ch.send(|_wk:Waker|=>{
+                    let re1 = f(re.v);
+                    let result = re1.poll(wk);
+                    ff.re = result;
+                    if result is Ready<R>{
+                        wk.wake(wk.ch);
+                    }
+                    return;
+                });
+
+                return;
+            },ch:wk.ch});
+            if re is Ready<T> {
+                let re = f((re as Ready<T>!).v);
+                return re.poll(wk);
+            }
+            return Pending{} as Poll<R>;
+        };
+        return ff as Future<R>;
+    }
+}
+
+pub fn nothing_future() Future<()> {
+    
+    return FnFuture<()>{f:|_wk:Waker|=>{
+        return Ready<()>{} as Poll<()>;
+    }, re:Ready<()>{} as Poll<()>};
+}
+
+
+
+
+

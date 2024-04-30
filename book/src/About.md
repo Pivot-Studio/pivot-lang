@@ -24,18 +24,21 @@
 
 ## dependencies
 
-- [llvm-16](https://github.com/llvm/llvm-project/releases/tag/llvmorg-16.0.6)
+- [llvm-18](https://github.com/llvm/llvm-project/releases/tag/llvmorg-18.1.2)
 - [rust](https://www.rust-lang.org/)
 
 **重要**：如果你想参与开发，请先在项目目录`make vm install`，然后根据自己是linux还是mac运行`make devlinux`或者`make devmac`
 
 ## 特点
 
-- 静态编译 与 JIT
-- 极其方便的rust互操作
+- 支持静态编译与JIT
+- REPL
+- 热重载
+- 极其方便的Rust互操作
 - 支持debug
-- 支持lsp，自带vsc插件，能提供优秀的代码支持
+- 支持lsp，自带[vsc插件](https://github.com/Pivot-Studio/pivot-lang-support)，能提供优秀的代码支持
 - 有GC，自动管理内存
+- 强大的类型推断，支持省略大部分类型标注
 
 ## 一些ShowCase
 

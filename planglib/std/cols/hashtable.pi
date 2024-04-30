@@ -9,7 +9,7 @@ use std::iter::*;
 
 
 pub struct HashTable<G:Hash+Eq<G>|V> {
-    buckets:[Option<TableNode<G|V>>];
+    buckets:[Option<*TableNode<G|V>>];
     salt:u64;
     entries:u64;
 }
@@ -20,7 +20,7 @@ struct TableNode<Y:Hash+Eq<Y>|V> {
     key:Y;
     value:V;
     hash:u64;
-    next:Option<TableNode<Y|V>>;
+    next:Option<*TableNode<Y|V>>;
 }
 
 
@@ -31,7 +31,7 @@ impl <K:Hash+Eq<K>|V> HashTable<K|V>  {
         if self.entries as f64 / arr_len(self.buckets) as f64 > 0.5 {
             let new_size = arr_len(self.buckets) * 2;
             let new_table = new_hash_table<K|V>(new_size as u64, self.salt +1);
-            let iterator = self.into_inter();
+            let iterator = self.into_iter();
             for let i = iterator.next(); !i is None; i = iterator.next() {
                 let (key, value) = i as (K,V)!;
                 new_table.insert(key, value);
@@ -42,11 +42,11 @@ impl <K:Hash+Eq<K>|V> HashTable<K|V>  {
         }
         return;
     }
-    gen pub fn into_inter() Iterator<(K,V)> {
+    gen pub fn into_iter() Iterator<(K,V)> {
         for let i = 0; i < arr_len(self.buckets); i = i + 1 {
             let node = self.buckets[i];
-            while node is TableNode<K|V> {
-                let v = node as TableNode<K|V>!;
+            while node is *TableNode<K|V> {
+                let v = node as *TableNode<K|V>!;
                 yield return (v.key,v.value);
                 node = v.next;
             }
@@ -61,7 +61,7 @@ impl <K:Hash+Eq<K>|V> HashTable<K|V>  {
         k.hash(&hasher);
         let hash = hasher.finish();
         let bucket = hash % arr_len(self.buckets) as u64;
-        let next:Option<TableNode<K|V>> = None{};
+        let next:Option<*TableNode<K|V>> = None{};
         let node = TableNode<K|V> {
             key:k,
             value:v,
@@ -71,22 +71,25 @@ impl <K:Hash+Eq<K>|V> HashTable<K|V>  {
         self.entries = self.entries+1;
         let current = self.buckets[bucket as i64];
         if current is None {
-            self.buckets[bucket as i64] = node;
+            self.buckets[bucket as i64] = &node;
         } else {
             // check if there's same key
-            let head = current as TableNode<K|V>!;
-            while !head.next is None {
+            let head = current as *TableNode<K|V>!;
+            while true {
                 if head.key.eq(&k) {
                     head.value = v;
                     return;
                 }
-                head = head.next as TableNode<K|V>!;
+                if head.next is None {
+                    break;
+                }
+                head = head.next as *TableNode<K|V>!;
             }
             // if the key doesn't exist, insert it to the head
             // as the head is the most recently used
             let new_head = node;
-            new_head.next = head;
-            self.buckets[bucket as i64] = new_head;
+            new_head.next = head as Option<*TableNode<K|V>>;
+            self.buckets[bucket as i64] = &new_head;
         }
         
         return;
@@ -102,12 +105,12 @@ impl <K:Hash+Eq<K>|V> HashTable<K|V>  {
             return None{};
         } else {
             // current = self.buckets[bucket as i64];
-            let head = current as TableNode<K|V>!;
+            let head = current as *TableNode<K|V>!;
             while !head.next is None {
                 if head.hash == hash {
                     return head.value;
                 }
-                head = head.next as TableNode<K|V>!;
+                head = head.next as *TableNode<K|V>!;
             }
             if head.key.eq(&k) {
                 return head.value;
@@ -125,7 +128,7 @@ impl <K:Hash+Eq<K>|V> HashTable<K|V>  {
 
 pub fn new_hash_table<K:Hash+Eq<K>|V>(bucket_size:u64,salt:u64) HashTable<K|V> {
     let  table = HashTable<K|V> {
-        buckets:[Option<TableNode<K|V>>*bucket_size as i64;],
+        buckets:[Option<*TableNode<K|V>>*bucket_size as i64;],
         salt:salt,
     };
     // init to None
@@ -135,6 +138,23 @@ pub fn new_hash_table<K:Hash+Eq<K>|V>(bucket_size:u64,salt:u64) HashTable<K|V> {
     return table;
 }
 
+pub use core::string::ToString;
 
-
-
+impl <K:ToString+Hash+Eq<K>|V:ToString> ToString for HashTable<K|V> {
+    fn to_string() string {
+        let ret = "HashTable{";
+        let iterator = self.into_iter();
+        for let i = iterator.next(); !i is None; {
+            let (key, value) = i as (K,V)!;
+            ret.append(key.to_string());
+            ret.append(": ");
+            ret.append(value.to_string());
+            i = iterator.next();
+            if !i is None {
+                ret.append(", ");
+            }
+        }
+        ret.append("}");
+        return ret;
+    }
+}

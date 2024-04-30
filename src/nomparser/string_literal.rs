@@ -28,6 +28,7 @@ where
     // `take_while_m_n` parses between `m` and `n` bytes (inclusive) that match
     // a predicate. `parse_hex` here parses between 1 and 6 hexadecimal numerals.
     let parse_hex = take_while_m_n::<_, Span, _>(1, 6, |c: char| c.is_ascii_hexdigit());
+    let parse_hex2 = take_while_m_n::<_, Span, _>(1, 6, |c: char| c.is_ascii_hexdigit());
 
     // `preceded` takes a prefix parser, and if it succeeds, returns the result
     // of the body parser. In this case, it parses u{XXXX}.
@@ -36,14 +37,14 @@ where
         // `delimited` is like `preceded`, but it parses both a prefix and a suffix.
         // It returns the result of the middle parser. In this case, it parses
         // {XXXX}, where XXXX is 1 to 6 hex numerals, and returns XXXX
-        delimited(char('{'), parse_hex, char('}')),
+        alt((delimited(char('{'), parse_hex, char('}')), parse_hex2)),
     );
 
     // `map_res` takes the result of a parser and applies a function that returns
     // a Result. In this case we take the hex bytes from parse_hex and attempt to
     // convert them to a u32.
     let parse_u32 = map_res(parse_delimited_hex, move |hex| {
-        u32::from_str_radix(&hex, 16)
+        u64::from_str_radix(&hex, 16).map(|n| n as u32)
     });
 
     // map_opt is like map_res, but it takes an Option instead of a Result. If
@@ -54,7 +55,7 @@ where
 }
 
 /// Parse an escaped character: \n, \t, \r, \u{00AC}, etc.
-fn parse_escaped_char<'a, E>(input: Span<'a>) -> IResult<Span<'a>, char, E>
+pub fn parse_escaped_char<'a, E>(input: Span<'a>) -> IResult<Span<'a>, char, E>
 where
     E: ParseError<Span<'a>> + FromExternalError<Span<'a>, std::num::ParseIntError>,
 {
@@ -104,7 +105,7 @@ fn parse_literal<'a, E: ParseError<Span<'a>>>(input: Span<'a>) -> IResult<Span<'
 /// A string fragment contains a fragment of a string being parsed: either
 /// a non-empty Literal (a series of non-escaped characters), a single
 /// parsed escaped character, or a block of escaped whitespace.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 enum StringFragment<'a> {
     Literal(Span<'a>),
     EscapedChar(char),
@@ -162,21 +163,16 @@ where
 #[test_parser("\"dsajdkahdkaj\"")]
 #[test_parser(r#""\u{1234} \" dsadsa""#)]
 #[test_parser_error(r#""\u{1234} " dsadsa""#)]
-pub fn string_literal(input: Span) -> IResult<Span, Box<NodeEnum>> {
-    map_res(
+pub fn string_literal(input: Span) -> IResult<Span, StringNode> {
+    map(
         tuple((
             tag_token(TokenType::DOUBLE_QUOTE),
             parse_string_content,
             tag_token(TokenType::DOUBLE_QUOTE),
         )),
-        |((_, st), s, (_, end))| {
-            res_enum(
-                StringNode {
-                    content: s,
-                    range: st.start.to(end.end),
-                }
-                .into(),
-            )
+        |((_, st), s, (_, end))| StringNode {
+            content: s,
+            range: st.start.to(end.end),
         },
     )(input)
 }

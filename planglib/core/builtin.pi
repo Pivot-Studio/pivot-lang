@@ -19,6 +19,20 @@ impl <T> Option<T> {
         return f(v);
     }
 }
+pub use core::string::ToString;
+impl <T:ToString>ToString for Option<T> {
+    fn to_string() gc::string {
+        let v = *self;
+        if v is None {
+            return "None";
+        } else {
+            let ret = "Some(";
+            ret.append((v as T!).to_string());
+            ret.append(")");
+            return ret;
+        }
+    }
+}
 
 pub use core::gc::string;
 pub use core::gc::string_from_bytes;
@@ -57,6 +71,23 @@ impl <T|E> Result<T|E> {
         }
         let v = (*self) as E!;
         return f(v);
+    }
+}
+
+impl <T:ToString|E:ToString>ToString for Result<T|E> {
+    fn to_string() gc::string {
+        let v = *self;
+        if v is E {
+            let ret = "Err(";
+            ret.append((v as E!).to_string());
+            ret.append(")");
+            return ret;
+        } else {
+            let ret = "Ok(";
+            ret.append((v as T!).to_string());
+            ret.append(")");
+            return ret;
+        }
     }
 }
 

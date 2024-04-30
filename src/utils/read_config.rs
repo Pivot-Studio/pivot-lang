@@ -10,6 +10,9 @@ use crate::{
     Db,
 };
 
+#[cfg(feature = "repl")]
+use crate::repl::{REPL_VIRTUAL_CONF, REPL_VIRTUAL_ENTRY};
+
 static KAGARI_CONFIG_FILE: &str = "Kagari.toml";
 
 /// search_config_file search configuration file KAGARI_CONFIG_FILE recursively from current path and return the file path,
@@ -27,13 +30,21 @@ pub fn search_config_file(current: String) -> Result<String, &'static str> {
             return Ok("std/Kagari.toml".to_string());
         }
     }
+    #[cfg(feature = "repl")]
+    if current == REPL_VIRTUAL_ENTRY {
+        return Ok(REPL_VIRTUAL_CONF.to_string());
+    }
 
     let mut cur_path = PathBuf::from(current);
     if cur_path.is_file() && !cur_path.pop() {
         return Err("找不到配置文件～");
     }
+    let re = cur_path.read_dir();
 
-    let iter = cur_path.read_dir().unwrap();
+    if re.is_err() {
+        return Err("找不到配置文件～");
+    }
+    let iter = re.unwrap();
     for f in iter.flatten() {
         if f.file_name().eq(KAGARI_CONFIG_FILE) {
             let p = f.path();
@@ -55,7 +66,7 @@ pub fn search_config_file(current: String) -> Result<String, &'static str> {
 
 /// Config is the code representation of the configuration with toml format in a kagari.toml file.
 /// Each config stands for a pivot-lang project.
-#[derive(Deserialize, Clone, Debug, PartialEq, Eq, Default, Hash)]
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq, Default, Hash)]
 pub struct Config {
     /// project is the name of a pivot-lang project
     pub project: String,
@@ -115,7 +126,7 @@ impl ConfigWrapper {
     }
 }
 
-#[derive(Deserialize, Clone, Debug, PartialEq, Eq, Default, Hash)]
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq, Default, Hash)]
 pub struct Dependency {
     pub version: Option<String>,
     pub git: Option<String>,

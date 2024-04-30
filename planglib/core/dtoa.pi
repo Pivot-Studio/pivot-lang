@@ -1,0 +1,14 @@
+fn vm_dtoa(f: f64, rec: *u8)void;
+fn vm_ftoa(f: f32, rec: *u8)void;
+
+pub fn dtoa(f: f64) gc::string {
+    let bs = [u8*64;];
+    vm_dtoa(f, &bs[0]);
+    return gc::string_from_bytes(bs);
+}
+
+pub fn ftoa(f: f32) gc::string {
+    let bs = [u8*64;];
+    vm_ftoa(f, &bs[0]);
+    return gc::string_from_bytes(bs);
+}
