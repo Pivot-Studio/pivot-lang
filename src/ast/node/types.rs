@@ -618,6 +618,8 @@ impl StructDefNode {
                         st,
                         ctx,
                     );
+                    // An inkwell bug on windows, remove this line may result in an assert panic
+                    builder.clear_insertion_position();
                     // gen st vist function must be called after add_body_to_struct_type
                     builder.gen_st_visit_function(ctx, st, &field_pltps);
                 }
