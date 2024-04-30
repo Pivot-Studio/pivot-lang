@@ -2,6 +2,10 @@ use std::libc;
 use core::string::*;
 
 
+var MILLI_PER_SEC = 1_000;
+var MICRO_PER_SEC = 1_000_000;
+var NANO_PER_SEC = 1_000_000_000;
+
 struct Instant {
     d:Duration;
 }
@@ -16,7 +20,7 @@ struct Duration {
 pub fn now() Instant {
     return Instant{
         d:Duration{
-            t:libc::LibC__clock_gettime(libc::CLOCK_REALTIME)
+            t:libc::pl_clock_gettime()
         }
     };
 }
@@ -44,6 +48,48 @@ impl Instant {
         let now = now();
         return now.d.sub(self.d);
     }
+}
+
+pub fn new_duration_from_secs(secs:i64) Duration {
+    return Duration{
+        t:libc::Timespec{
+            sec: secs,
+            nano: 0 as u32
+        }
+    };
+}
+
+pub fn new_duration_from_micros(micros:i128) Duration {
+    let secs = micros / 1_000_000;
+    let nano = (micros % 1_000_000) * 1000;
+    return Duration{
+        t:libc::Timespec{
+            sec: secs as i64,
+            nano: nano as u32
+        }
+    };
+}
+
+pub fn new_duration_from_millis(millis:i128) Duration {
+    let secs = millis / 1_000;
+    let nano = (millis % 1_000) * 1_000_000;
+    return Duration{
+        t:libc::Timespec{
+            sec: secs as i64,
+            nano: nano as u32
+        }
+    };
+}
+
+pub fn new_duration_from_nanos(nanos:i128) Duration {
+    let secs = nanos / 1_000_000_000;
+    let nano = nanos % 1_000_000_000;
+    return Duration{
+        t:libc::Timespec{
+            sec: secs as i64,
+            nano: nano as u32
+        }
+    };
 }
 
 

@@ -13,15 +13,14 @@ const O_WRONLY:i32;
 const O_RDWR:i32;
 const O_CREAT:i32;
 
-const CLOCK_REALTIME:u32;
 
 
 pub struct Timespec {
     pub sec:i64;
-    pub nano:i64;
+    pub nano:u32;
 }
 
-pub fn LibC__clock_gettime(clk_id:u32) Timespec;
+pub fn pl_clock_gettime() Timespec;
 
 
 pub fn LibC__memcpy(dest:*u8, src:*u8, n:u64) *u8;

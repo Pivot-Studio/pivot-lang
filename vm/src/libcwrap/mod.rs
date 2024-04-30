@@ -1,5 +1,5 @@
 #![allow(clippy::useless_conversion)]
-use std::{ffi::CString, mem::MaybeUninit};
+use std::ffi::CString;
 #[cfg(target_os = "windows")]
 extern crate winapi;
 use internal_macro::is_runtime;
@@ -47,11 +47,7 @@ pub static O_CREAT: libc::c_int = libc::O_CREAT;
 #[no_mangle]
 pub static RAND_MAX: libc::c_int = libc::RAND_MAX;
 
-#[no_mangle]
-pub static CLOCK_REALTIME: libc::c_uint = libc::CLOCK_REALTIME as libc::c_uint;
-
 internal_macro::add_symbol_consts!(
-    CLOCK_REALTIME,
     STDIN_FILENO,
     STDOUT_FILENO,
     STDERR_FILENO,
@@ -87,14 +83,6 @@ impl LibC {
     }
     fn close(fd: libc::c_int) -> libc::c_int {
         unsafe { libc::close(fd) }
-    }
-
-    fn clock_gettime(clk_id: libc::clockid_t) -> libc::timespec {
-        let mut spec = MaybeUninit::<libc::timespec>::uninit();
-        unsafe {
-            libc::clock_gettime(clk_id, spec.as_mut_ptr());
-            spec.assume_init()
-        }
     }
 
     fn memcpy(
