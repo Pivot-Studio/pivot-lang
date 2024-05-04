@@ -1,3 +1,4 @@
 # Set default behavior to automatically normalize line endings.
 * text=auto
 *.pi eol=lf
+*.sh eol=lf
