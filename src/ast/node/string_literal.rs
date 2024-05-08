@@ -8,6 +8,7 @@ use crate::ast::builder::BuilderEnum;
 use crate::ast::builder::IRBuilder;
 use internal_macro::node;
 use lsp_types::SemanticTokenType;
+use ustr::ustr;
 
 use super::{node_result::NodeResultBuilder, Node, NodeResult, PrintTrait};
 
@@ -35,9 +36,9 @@ impl Node for StringNode {
         let tp = ctx
             .plmod
             .submods
-            .get("gc")
-            .map(|m| m.types.get("string").unwrap().clone())
-            .unwrap_or_else(|| ctx.plmod.types.get("string").unwrap().clone());
+            .get(&ustr("gc"))
+            .map(|m| m.types.get(&ustr("string")).unwrap().clone())
+            .unwrap_or_else(|| ctx.plmod.types.get(&ustr("string")).unwrap().clone());
         let alloca = builder.alloc("string", &tp.borrow(), ctx, None);
         let len = builder
             .build_struct_gep(alloca, 1, "len", &tp.borrow(), ctx)

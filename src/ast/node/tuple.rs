@@ -7,6 +7,7 @@ use crate::ast::node::RangeTrait;
 use crate::ast::range::Range;
 use internal_macro::node;
 use linked_hash_map::LinkedHashMap;
+use ustr::Ustr;
 
 use crate::ast::pltype::{get_type_deep, Field};
 use crate::ast::{
@@ -51,7 +52,7 @@ impl Node for TupleInitNode {
                     if !tp.is_atomic() {
                         is_atomic = false;
                     }
-                    fields.insert(i.to_string(), f);
+                    fields.insert(i.to_string().into(), f);
                 }
                 Err(diag) => {
                     err = Some(diag);
@@ -62,7 +63,7 @@ impl Node for TupleInitNode {
         if let Some(err) = err {
             return Err(err);
         }
-        let mut sttype = new_tuple_type(name, fields, self.range);
+        let mut sttype = new_tuple_type(name.into(), fields, self.range);
         sttype.atomic = is_atomic;
         let mut offset = 1;
         // atomic struct has no gc pointer in it, so it doesn't need
@@ -94,20 +95,20 @@ impl Node for TupleInitNode {
     }
 }
 
-pub fn new_tuple_field(i: usize, tp: &PLType, f: &str) -> Field {
+pub fn new_tuple_field(i: usize, tp: &PLType, f: &Ustr) -> Field {
     Field {
         index: i as u32 + 1,
         typenode: tp.get_typenode(f),
-        name: i.to_string(),
+        name: i.to_string().into(),
         range: Default::default(),
         modifier: Some((TokenType::PUB, Default::default())),
     }
 }
 
-pub fn new_tuple_type(name: String, fields: LinkedHashMap<String, Field>, range: Range) -> STType {
+pub fn new_tuple_type(name: Ustr, fields: LinkedHashMap<Ustr, Field>, range: Range) -> STType {
     STType {
         name,
-        path: "".to_string(),
+        path: "".to_string().into(),
         fields,
         range: Default::default(),
         doc: vec![],
@@ -170,11 +171,11 @@ impl TypeNode for TupleTypeNode {
                     let f = Field {
                         index: i as u32 + 1,
                         typenode: tp.get_typenode(&ctx.get_file()),
-                        name: i.to_string(),
+                        name: i.to_string().into(),
                         range: Default::default(),
                         modifier: Some((TokenType::PUB, Default::default())),
                     };
-                    fields.insert(i.to_string(), f);
+                    fields.insert(i.to_string().into(), f);
                 }
                 Err(diag) => {
                     err = Some(diag);
@@ -185,7 +186,7 @@ impl TypeNode for TupleTypeNode {
         if let Some(err) = err {
             return Err(err);
         }
-        let mut sttype = new_tuple_type(name, fields, self.range);
+        let mut sttype = new_tuple_type(name.into(), fields, self.range);
         sttype.atomic = is_atomic;
         if is_atomic {
             sttype.fields.iter_mut().for_each(|(_, f)| {

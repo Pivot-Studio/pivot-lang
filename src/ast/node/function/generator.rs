@@ -15,6 +15,7 @@ use crate::ast::pltype::PriType;
 use crate::ast::tokens::TokenType;
 
 use linked_hash_map::LinkedHashMap;
+use ustr::Ustr;
 
 use crate::ast::pltype::FNValue;
 
@@ -30,7 +31,7 @@ use crate::ast::pltype::PLType;
 
 #[derive(Clone, Default)]
 pub struct GeneratorCtxData {
-    pub table: LinkedHashMap<String, PLSymbolData>,
+    pub table: LinkedHashMap<Ustr, PLSymbolData>,
     pub entry_bb: BlockHandle,
     pub ctx_handle: ValueHandle,       //handle in setup function
     pub ret_handle: ValueHandle,       //handle in setup function
@@ -56,7 +57,7 @@ pub enum CtxFlag {
 #[derive(Clone, Default)]
 pub struct ClosureCtxData {
     // only the capture lists
-    pub table: LinkedHashMap<String, (PLSymbolData, ValueHandle)>,
+    pub table: LinkedHashMap<Ustr, (PLSymbolData, ValueHandle)>,
 
     // the logic of the closure
     pub data_handle: ValueHandle,
@@ -87,11 +88,11 @@ pub(crate) fn end_generator<'a>(
     for (k, v) in &child.generator_data.as_ref().unwrap().borrow().table {
         let pltp = PLType::Pointer(v.pltype.to_owned());
         st_tp.fields.insert(
-            k.to_owned(),
+            *k,
             Field {
                 index: i,
                 typenode: pltp.get_typenode(&child.plmod.path),
-                name: k.to_owned(),
+                name: *k,
                 range: Default::default(),
                 modifier: None,
             },
@@ -191,18 +192,18 @@ pub(crate) fn init_generator<'a>(
     child.generator_data = Some(Default::default());
     let mut m = LinkedHashMap::default();
     m.insert(
-        "address".to_owned(),
+        "address".into(),
         Field {
             index: 1,
             typenode: i8ptr.clone().get_typenode(&child.plmod.path),
-            name: "address".to_owned(),
+            name: "address".into(),
             range: Default::default(),
             modifier: None,
         },
     );
     let st_tp = STType {
         name: fnvalue.get_generator_ctx_name(),
-        path: child.plmod.path.clone(),
+        path: child.plmod.path,
         fields: m,
         range: Default::default(),
         doc: vec![],

@@ -27,6 +27,7 @@ use indexmap::IndexMap;
 use internal_macro::node;
 use linked_hash_map::LinkedHashMap;
 use lsp_types::SemanticTokenType;
+use ustr::Ustr;
 
 #[node]
 pub struct TypeNameNode {
@@ -50,10 +51,10 @@ impl GenericInferenceAble for TypeNameNode {
 }
 
 impl TypeNameNode {
-    pub fn new_from_str(s: &str) -> Self {
+    pub fn new_from_str(s: &Ustr) -> Self {
         let id = ExternIdNode {
             id: Box::new(VarNode {
-                name: s.to_string(),
+                name: *s,
                 range: Default::default(),
                 id: None,
             }),
@@ -330,7 +331,7 @@ impl TypeNode for ArrayTypeNameNode {
         let arrtype = ARRType {
             element_type: pltype.clone(),
             size_handle: 0,
-            generic_map: IndexMap::from([(String::from("T"), pltype)]),
+            generic_map: IndexMap::from([(Ustr::from("T"), pltype)]),
         };
         let arrtype = Arc::new(RefCell::new(PLType::Arr(arrtype)));
         Ok(arrtype)
@@ -511,8 +512,8 @@ impl StructDefNode {
             IndexMap::default()
         };
         let stu = Arc::new(RefCell::new(PLType::Struct(STType {
-            name: self.id.name.clone(),
-            path: ctx.plmod.path.clone(),
+            name: self.id.name,
+            path: ctx.plmod.path,
             fields: LinkedHashMap::new(),
             range: self.id.range(),
             doc: vec![],
@@ -529,9 +530,9 @@ impl StructDefNode {
             atomic: false,
         })));
         if self.generics.is_none() {
-            builder.opaque_struct_type(&ctx.plmod.get_full_name(&self.id.name));
+            builder.opaque_struct_type(&ctx.plmod.get_full_name(self.id.name));
         }
-        _ = ctx.add_type(self.id.name.clone(), stu, self.id.range);
+        _ = ctx.add_type(self.id.name, stu, self.id.range);
     }
 
     pub fn emit_struct_def<'a, 'b>(
@@ -539,7 +540,7 @@ impl StructDefNode {
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, '_>,
     ) -> Result<(), PLDiag> {
-        let pltype = ctx.get_type(self.id.name.as_str(), self.id.range)?;
+        let pltype = ctx.get_type(&self.id.name, self.id.range)?;
         for f in self.fields.iter() {
             let id = &f.id;
             // 自引用检查
@@ -547,8 +548,8 @@ impl StructDefNode {
                 if let Some(id) = &b.id {
                     if id.namespace.is_empty() {
                         // 只有本包内类型可能自引用
-                        let v = ctx.self_ref_map.entry(id.id.name.clone()).or_default();
-                        v.insert((self.id.name.clone(), self.id.range()));
+                        let v = ctx.self_ref_map.entry(id.id.name).or_default();
+                        v.insert((self.id.name, self.id.range()));
                         ctx.check_self_ref(&id.id.name, id.range)?;
                     }
                 }
@@ -572,7 +573,7 @@ impl StructDefNode {
                 let f = Field {
                     index: i as u32 + 1,
                     typenode: field.id.typenode.clone(),
-                    name: id.name.clone(),
+                    name: id.name,
                     range: field.id.id.range,
                     modifier: field.modifier,
                 };
@@ -589,8 +590,8 @@ impl StructDefNode {
                 }
                 field_pltps.push(tp.clone());
                 ctx.set_field_refs(pltype.typ.clone(), &f, f.range);
-                ctx.send_if_go_to_def(f.range, f.range, ctx.plmod.path.clone());
-                fields.insert(id.name.to_string(), f.clone());
+                ctx.send_if_go_to_def(f.range, f.range, ctx.plmod.path);
+                fields.insert(id.name.to_string().into(), f.clone());
             }
             ctx.plmod.types = clone_map;
             if let PLType::Struct(st) = &mut *pltype.borrow_mut() {
@@ -614,7 +615,7 @@ impl StructDefNode {
             if let PLType::Struct(st) = &*pltype.borrow() {
                 if self.generics.is_none() {
                     builder.add_body_to_struct_type(
-                        &ctx.plmod.get_full_name(&self.id.name),
+                        &ctx.plmod.get_full_name(self.id.name),
                         st,
                         ctx,
                     );
@@ -705,7 +706,7 @@ impl Node for StructInitNode {
                     .add_to_ctx(ctx))
             }
         };
-        ctx.send_if_go_to_def(self.typename.range(), sttype.range, sttype.path.clone());
+        ctx.send_if_go_to_def(self.typename.range(), sttype.range, sttype.path);
         // let mut field_init_values = vec![];
         let mut idx = 0;
         ctx.save_if_comment_doc_hover(self.typename.range(), Some(sttype.doc.clone()));
@@ -884,7 +885,7 @@ impl Node for ArrayInitNode {
         let arr_tp = Arc::new(RefCell::new(PLType::Arr(ARRType {
             element_type: tp.clone(),
             size_handle,
-            generic_map: IndexMap::from([(String::from("T"), tp.clone())]),
+            generic_map: IndexMap::from([(Ustr::from("T"), tp.clone())]),
         })));
         let arr = builder.alloc("array_alloca", &arr_tp.borrow(), ctx, None);
         let real_arr = builder
@@ -945,20 +946,20 @@ impl GenericDefNode {
     pub fn set_traits(
         &self,
         ctx: &mut Ctx<'_>,
-        generic_map: &IndexMap<String, Arc<RefCell<PLType>>>,
+        generic_map: &IndexMap<Ustr, Arc<RefCell<PLType>>>,
     ) -> Result<(), PLDiag> {
         for g in self.generics.iter() {
             g.set_traits(ctx, generic_map)?;
         }
         Ok(())
     }
-    pub fn gen_generic_type(&self, ctx: &Ctx) -> IndexMap<String, Arc<RefCell<PLType>>> {
+    pub fn gen_generic_type(&self, ctx: &Ctx) -> IndexMap<Ustr, Arc<RefCell<PLType>>> {
         let mut res = IndexMap::default();
         for g in self.generics.iter() {
             let range = g.identifier.range;
-            let name = g.identifier.name.clone();
+            let name = g.identifier.name;
             let gentype = GenericType {
-                name: name.clone(),
+                name,
                 range,
                 curpltype: None,
                 trait_impl: None,
@@ -1071,7 +1072,7 @@ impl TypeNode for ClosureTypeNode {
                 return Ok(EqRes {
                     eq: false,
                     need_up_cast: false,
-                    reason: Some("closure arg len not match".to_string()),
+                    reason: Some("closure arg len not match".into()),
                 });
             }
             for (i, arg) in closure.arg_types.iter().enumerate() {
@@ -1079,7 +1080,7 @@ impl TypeNode for ClosureTypeNode {
                     return Ok(EqRes {
                         eq: false,
                         need_up_cast: false,
-                        reason: Some("closure arg type not match".to_string()),
+                        reason: Some("closure arg type not match".into()),
                     });
                 }
             }
@@ -1091,7 +1092,7 @@ impl TypeNode for ClosureTypeNode {
                 return Ok(EqRes {
                     eq: false,
                     need_up_cast: false,
-                    reason: Some("closure ret type not match".to_string()),
+                    reason: Some("closure ret type not match".into()),
                 });
             }
             return Ok(EqRes {
@@ -1128,9 +1129,9 @@ impl PrintTrait for ClosureTypeNode {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CustomTypeNode {
-    pub name: String,
+    pub name: Ustr,
     pub range: Range,
-    pub path: String,
+    pub path: Ustr,
 }
 
 impl TypeNode for CustomTypeNode {

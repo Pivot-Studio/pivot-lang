@@ -7,6 +7,7 @@ use indexmap::IndexMap;
 use internal_macro::node;
 use lsp_types::{DocumentSymbol, SymbolKind};
 use rustc_hash::FxHashSet;
+use ustr::Ustr;
 
 #[node(comment)]
 pub struct ImplNode {
@@ -108,7 +109,7 @@ fn check_fn<'a, 'b>(
     builder: &'b BuilderEnum<'a, '_>,
     method: &FuncDefNode,
     trait_tp: Arc<RefCell<PLType>>,
-    traitfns: &mut FxHashSet<String>,
+    traitfns: &mut FxHashSet<Ustr>,
     fntype: Arc<RefCell<PLType>>,
 ) -> Result<(), PLDiag> {
     if let Some((m, r)) = method.modifier {
@@ -150,13 +151,13 @@ fn check_fn<'a, 'b>(
                         format_label!(
                             "method {} not in trait {}",
                             method.id.name.split("::").last().unwrap(),
-                            &st.name
+                            st.name
                         ),
                     )
                     .add_label(
                         st.range,
                         st.get_path(),
-                        format_label!("trait {} def here", &st.name),
+                        format_label!("trait {} def here", st.name),
                     )
                     .add_help(
                         "move this method to another impl block or remove it from current impl block",
@@ -192,10 +193,10 @@ impl Node for ImplNode {
                 typename.emit_highlight(ctx);
                 let trait_tp = typename.get_type(ctx, builder, true)?;
                 if let PLType::Trait(st) = &*trait_tp.borrow() {
-                    ctx.send_if_go_to_def(typename.range(), st.range, st.path.clone());
+                    ctx.send_if_go_to_def(typename.range(), st.range, st.path);
                     traittpandrange = Some((trait_tp.clone(), typename.range()));
                     for name in st.fields.keys() {
-                        traitfns.insert(name.clone());
+                        traitfns.insert(*name);
                     }
                 } else {
                     return Err(typename
@@ -229,7 +230,7 @@ impl Node for ImplNode {
                             unreachable!()
                         }
                     }
-                    ctx.send_if_go_to_def(self.target.range(), sttp.range, sttp.path.clone());
+                    ctx.send_if_go_to_def(self.target.range(), sttp.range, sttp.path);
                 };
             }
             for method in &mut self.methods {

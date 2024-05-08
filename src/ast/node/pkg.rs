@@ -14,6 +14,7 @@ use crate::ast::{
 };
 use internal_macro::node;
 use lsp_types::SemanticTokenType;
+use ustr::{ustr, Ustr};
 
 use super::macro_nodes::MacroNode;
 use super::node_result::NodeResultBuilder;
@@ -39,8 +40,8 @@ pub struct UseNode {
 }
 
 impl UseNode {
-    pub(crate) fn get_last_id(&self) -> Option<String> {
-        self.namespace.last().map(|x| x.as_ref().name.clone())
+    pub(crate) fn get_last_id(&self) -> Option<Ustr> {
+        self.namespace.last().map(|x| x.as_ref().name)
     }
 }
 
@@ -77,7 +78,7 @@ impl Node for UseNode {
                     path = path.join(&dep.path);
                 }
                 for i in 1..self.namespace.len() {
-                    path = path.join(self.namespace[i].get_name(ctx));
+                    path = path.join(self.namespace[i].get_name(ctx).as_str());
                 }
             }
         }
@@ -118,15 +119,15 @@ impl Node for UseNode {
                     if self.singlecolon {
                         return vec![];
                     }
-                    let mut comp = get_ns_path_completions(path.to_str().unwrap());
-                    let mod_id = path.file_name().unwrap_or_default().to_str().unwrap();
-                    if let Some(m) = ctx.plmod.submods.get(mod_id) {
+                    let mut comp = get_ns_path_completions(&path.to_str().unwrap().into());
+                    let mod_id = ustr(path.file_name().unwrap_or_default().to_str().unwrap());
+                    if let Some(m) = ctx.plmod.submods.get(&(mod_id)) {
                         comp.extend(m.get_pltp_completions_list())
                     }
                     comp
                 });
-                let mod_id = path.file_name().unwrap_or_default().to_str().unwrap();
-                if let Some(m) = ctx.plmod.submods.get(mod_id) {
+                let mod_id = ustr(path.file_name().unwrap_or_default().to_str().unwrap());
+                if let Some(m) = ctx.plmod.submods.get(&mod_id) {
                     let n = self.namespace.last().unwrap();
                     if let Ok(tp) = m.get_type(&n.name, n.range, ctx) {
                         let t = match &*tp.borrow() {
@@ -151,8 +152,11 @@ impl Node for UseNode {
                         return Ok(Default::default());
                     } else if let Some(mac) = m.macros.get(&n.name) {
                         ctx.push_semantic_token(n.range, SemanticTokenType::MACRO, 0);
-                        ctx.send_if_go_to_def(n.range, mac.range, mac.file.clone());
-                        ctx.set_glob_refs(&format!("{}..{}", &mac.file, &mac.id.name), n.range);
+                        ctx.send_if_go_to_def(n.range, mac.range, mac.file);
+                        ctx.set_glob_refs(
+                            format!("{}..{}", &mac.file, &mac.id.name).into(),
+                            n.range,
+                        );
                         if !self.complete {
                             return Err(ctx.add_diag(
                                 self.range.new_err(crate::ast::diag::ErrorCode::COMPLETION),
@@ -170,20 +174,20 @@ impl Node for UseNode {
             let last = self.namespace.last().unwrap();
             ctx.push_semantic_token(last.range, SemanticTokenType::NAMESPACE, 0);
             if let Some(m) = ctx.plmod.submods.get(&last.name) {
-                ctx.send_if_go_to_def(last.range, Default::default(), m.path.to_owned());
+                ctx.send_if_go_to_def(last.range, Default::default(), m.path);
             }
         }
         ctx.generate_completion_if(ctx.should_gen(self.range), || {
             if self.singlecolon {
                 return vec![];
             }
-            let mut completions = get_ns_path_completions(path.to_str().unwrap());
+            let mut completions = get_ns_path_completions(&path.to_str().unwrap().into());
             if self.namespace.len() < 2 && self.complete {
                 completions.clear();
                 if let Some(deps) = &ctx.config.deps {
                     for dep in deps.keys() {
                         completions.push(lsp_types::CompletionItem {
-                            label: dep.clone(),
+                            label: dep.to_string(),
                             kind: Some(lsp_types::CompletionItemKind::MODULE),
                             ..Default::default()
                         });
@@ -255,13 +259,13 @@ impl Node for ExternIdNode {
                 if self.singlecolon {
                     return vec![];
                 }
-                ctx.get_completions_in_ns(&self.id.get_name(ctx))
+                ctx.get_completions_in_ns(self.id.get_name(ctx))
                 // eprintln!("comp {:?}", completions);
             });
             return Err(ctx.add_diag(self.range.new_err(ErrorCode::COMPLETION)));
         }
         ctx.generate_completion_if(ctx.should_gen(self.range), || {
-            ctx.get_completions_in_ns(&self.namespace[0].get_name(ctx))
+            ctx.get_completions_in_ns(self.namespace[0].get_name(ctx))
         });
         for id in &self.namespace {
             ctx.push_semantic_token(id.range, SemanticTokenType::NAMESPACE, 0);
@@ -272,12 +276,12 @@ impl Node for ExternIdNode {
         if let Some(symbol) = plmod.get_global_symbol(&self.id.get_name(ctx)) {
             ctx.push_semantic_token(self.id.range, SemanticTokenType::VARIABLE, 0);
             let pltype = symbol.tp.clone();
-            ctx.set_glob_refs(&plmod.get_full_name(&self.id.get_name(ctx)), self.id.range);
-            ctx.send_if_go_to_def(self.range, symbol.range, plmod.path.clone());
+            ctx.set_glob_refs(plmod.get_full_name(self.id.get_name(ctx)), self.id.range);
+            ctx.send_if_go_to_def(self.range, symbol.range, plmod.path);
             let name = if symbol.is_extern {
                 self.id.get_name(ctx)
             } else {
-                plmod.get_full_name(&self.id.get_name(ctx))
+                plmod.get_full_name(self.id.get_name(ctx))
             };
             let g = ctx.get_or_add_global(&name, symbol.tp.clone(), builder, false);
             return g.new_output(pltype).set_const().to_result();
@@ -314,12 +318,12 @@ impl ExternIdNode {
                 if self.singlecolon {
                     return vec![];
                 }
-                ctx.get_completions_in_ns(&self.id.get_name(ctx))
+                ctx.get_completions_in_ns(self.id.get_name(ctx))
             });
             return Err(ctx.add_diag(self.range.new_err(ErrorCode::COMPLETION)));
         } else {
             ctx.generate_completion_if(ctx.should_gen(self.range), || {
-                ctx.get_completions_in_ns(&self.namespace[0].get_name(ctx))
+                ctx.get_completions_in_ns(self.namespace[0].get_name(ctx))
             });
         }
         let mut plmod = &ctx.plmod;

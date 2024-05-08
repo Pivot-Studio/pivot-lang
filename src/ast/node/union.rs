@@ -79,8 +79,8 @@ impl UnionDefNode {
             }
         });
         let stu = Arc::new(RefCell::new(PLType::Union(UnionType {
-            name: self.name.name.clone(),
-            path: ctx.plmod.path.clone(),
+            name: self.name.name,
+            path: ctx.plmod.path,
             range: self.name.range,
             generic_map,
             modifier: self.modifier,
@@ -88,7 +88,7 @@ impl UnionDefNode {
             methods: Default::default(),
             // generic_infer: Default::default(),
         })));
-        builder.opaque_struct_type(&ctx.plmod.get_full_name(&self.name.name));
-        _ = ctx.add_type(self.name.name.clone(), stu, self.name.range);
+        builder.opaque_struct_type(&ctx.plmod.get_full_name(self.name.name));
+        _ = ctx.add_type(self.name.name, stu, self.name.range);
     }
 }

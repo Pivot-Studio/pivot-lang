@@ -302,7 +302,7 @@ fn handle_deconstruct<'a, 'b>(
                     Some(def_var.range().start),
                 );
                 ctx.add_symbol(
-                    var.name.clone(),
+                    var.name,
                     ptr2value,
                     pltype.clone(),
                     def_var.range(),
@@ -433,7 +433,7 @@ fn handle_deconstruct<'a, 'b>(
                                         .add_label(
                                             v.range(),
                                             ctx.get_file(),
-                                            format_label!("expect field {}", &v.name),
+                                            format_label!("expect field {}", v.name),
                                         )
                                         .add_to_ctx(ctx));
                                 }
@@ -682,7 +682,7 @@ impl Node for StatementsNode {
         if ctx.need_highlight.borrow().eq(&0) {
             for (v, symbol) in &ctx.table {
                 if let Some(refs) = &symbol.refs {
-                    if refs.borrow().len() <= 1 && v != "self" && !v.starts_with('_') {
+                    if refs.borrow().len() <= 1 && *v != "self" && !v.starts_with('_') {
                         symbol
                             .range
                             .new_warn(WarnCode::UNUSED_VARIABLE)
@@ -690,7 +690,7 @@ impl Node for StatementsNode {
                             .add_label(
                                 symbol.range,
                                 ctx.get_file(),
-                                format_label!("Unused variable `{}`", v),
+                                format_label!("Unused variable `{}`", *v),
                             )
                             .add_to_ctx(ctx);
                     }

@@ -15,6 +15,7 @@ use crate::inference::TyVariable;
 use crate::modifier_set;
 use internal_macro::node;
 use lsp_types::SemanticTokenType;
+use ustr::Ustr;
 
 #[node(comment)]
 pub struct PrimaryNode {
@@ -116,7 +117,7 @@ impl Node for NumNode {
 #[node]
 pub struct VarNode {
     /// identifier name of a symbol, which could be either a variable or a type
-    pub name: String,
+    pub name: Ustr,
     pub id: Option<TyVariable>,
 }
 
@@ -130,7 +131,7 @@ impl Node for VarNode {
             // verify whether the macro is a valid macro
             let re = ctx
                 // the parser ensures the name is more than 1 charactor
-                .find_macro_symbol(&self.name[1..])
+                .find_macro_symbol(&self.name[1..].into())
                 .cloned()
                 .or_else(|| {
                     if ctx.macro_loop {
@@ -199,14 +200,14 @@ impl Node for VarNode {
                 ),
             };
 
-            ctx.send_if_go_to_def(self.range, symbol_data.range, ctx.plmod.path.clone());
+            ctx.send_if_go_to_def(self.range, symbol_data.range, ctx.plmod.path);
             symbol_data
                 .refs
                 .map(|refs| {
                     ctx.set_local_refs(refs, self.range);
                 })
                 .or_else(|| {
-                    ctx.set_glob_refs(&ctx.plmod.get_full_name(&self.name), self.range);
+                    ctx.set_glob_refs(ctx.plmod.get_full_name(self.name), self.range);
                     Some(())
                 });
 
@@ -226,7 +227,7 @@ impl Node for VarNode {
         if let Ok(tp) = ctx.get_type(&self.name, self.range) {
             match &*tp.borrow() {
                 PLType::Fn(f) => {
-                    ctx.send_if_go_to_def(self.range, f.range, f.path.clone());
+                    ctx.send_if_go_to_def(self.range, f.range, f.path);
                     ctx.push_semantic_token(self.range, SemanticTokenType::FUNCTION, 0);
                     if !f.fntype.generic {
                         let handle = builder.get_or_insert_fn_handle(f, ctx).0;
@@ -253,22 +254,22 @@ impl VarNode {
     fn is_macro_var(&self) -> bool {
         self.name.starts_with('$')
     }
-    pub fn get_name(&self, ctx: &Ctx) -> String {
+    pub fn get_name(&self, ctx: &Ctx) -> Ustr {
         if self.is_macro_var() {
-            let re = ctx.macro_vars.get(&self.name[1..]).unwrap();
+            let re = ctx.macro_vars.get(&self.name[1..].into()).unwrap();
             if let MacroReplaceNode::NodeEnum(NodeEnum::Var(v)) = re {
-                v.name.clone()
+                v.name
             } else {
                 todo!()
             }
         } else {
-            self.name.clone()
+            self.name
         }
     }
 
     pub fn get_type(&self, ctx: &Ctx) -> NodeResult {
         if self.is_macro_var() {
-            let re = ctx.macro_vars.get(&self.name[1..]).unwrap();
+            let re = ctx.macro_vars.get(&self.name[1..].into()).unwrap();
             if let MacroReplaceNode::NodeEnum(NodeEnum::Var(v)) = re {
                 return v.get_type(ctx);
             } else {
@@ -287,9 +288,9 @@ impl VarNode {
                 | PLType::PlaceHolder(_)
                 | PLType::Union(_) => {
                     if let PLType::Struct(st) | PLType::Trait(st) = &*tp.clone().borrow() {
-                        ctx.send_if_go_to_def(self.range, st.range, st.path.clone());
+                        ctx.send_if_go_to_def(self.range, st.range, st.path);
                     } else if let PLType::Union(u) = &*tp.clone().borrow() {
-                        ctx.send_if_go_to_def(self.range, u.range, u.path.clone());
+                        ctx.send_if_go_to_def(self.range, u.range, u.path);
                     }
                     return usize::MAX.new_output(tp.typ.clone()).to_result();
                 }

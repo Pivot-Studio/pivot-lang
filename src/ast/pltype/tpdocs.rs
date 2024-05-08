@@ -8,7 +8,7 @@ impl PLType {
             PLType::Fn(f) => f.get_docs_string(),
             PLType::Struct(s) | PLType::Trait(s) => s.get_docs_string(),
             PLType::Unknown => Some("A type cannot be inferred".to_string()),
-            _ => Some(self.get_kind_name()),
+            _ => Some(self.get_kind_name().to_string()),
         }
     }
 }

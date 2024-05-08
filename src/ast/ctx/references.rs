@@ -19,6 +19,7 @@
 use std::{cell::RefCell, sync::Arc};
 
 use lsp_types::*;
+use ustr::Ustr;
 
 use super::super::{
     ctx::Ctx,
@@ -43,7 +44,7 @@ impl<'a> Ctx<'a> {
             tp.if_refs(
                 |tp| {
                     let name = tp.get_full_elm_name_without_generic();
-                    self.set_glob_refs(&name, range)
+                    self.set_glob_refs(name, range)
                 },
                 |g| self.set_local_refs(g.refs.clone(), range),
             )
@@ -58,11 +59,12 @@ impl<'a> Ctx<'a> {
     /// For details, see the module documentation.
     pub fn set_field_refs(&self, pltype: Arc<RefCell<PLType>>, f: &Field, range: Range) {
         self.set_glob_refs(
-            &format!(
+            format!(
                 "{}..{}",
                 &pltype.borrow().get_full_elm_name_without_generic(),
                 f.name
-            ),
+            )
+            .into(),
             range,
         );
     }
@@ -72,7 +74,7 @@ impl<'a> Ctx<'a> {
     /// This function is used to set global references.
     ///
     /// For details, see the module documentation.
-    pub fn set_glob_refs(&self, name: &str, range: Range) {
+    pub fn set_glob_refs(&self, name: Ustr, range: Range) {
         if self.need_highlight.borrow().ne(&0) {
             return;
         }
@@ -89,21 +91,18 @@ impl<'a> Ctx<'a> {
                 range.start.column
             );
         }
-        root.plmod
-            .glob_refs
-            .borrow_mut()
-            .insert(range, name.to_string());
+        root.plmod.glob_refs.borrow_mut().insert(range, name);
         let mut rm = root.plmod.refs_map.borrow_mut();
-        if let Some(refsmap) = rm.get(name) {
+        if let Some(refsmap) = rm.get(&name) {
             refsmap.borrow_mut().push(root.get_location(range));
         } else {
             let v = RefCell::new(vec![]);
             v.borrow_mut().push(root.get_location(range));
-            rm.insert(name.to_string(), Arc::new(v));
+            rm.insert(name, Arc::new(v));
         }
     }
 
-    pub fn set_if_sig(&self, range: Range, name: String, params: &[String], n: u32) {
+    pub fn set_if_sig(&self, range: Range, name: String, params: &[Ustr], n: u32) {
         self.plmod.sig_helps.borrow_mut().insert(
             range,
             SignatureHelp {
@@ -114,7 +113,7 @@ impl<'a> Ctx<'a> {
                         params
                             .iter()
                             .map(|s| ParameterInformation {
-                                label: ParameterLabel::Simple(s.clone()),
+                                label: ParameterLabel::Simple(s.to_string()),
                                 documentation: None,
                             })
                             .collect(),

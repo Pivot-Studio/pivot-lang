@@ -46,6 +46,7 @@ use lsp_types::Location;
 use lsp_types::Url;
 use rustc_hash::FxHashMap;
 use rustc_hash::FxHashSet;
+use ustr::Ustr;
 
 use std::cell::RefCell;
 
@@ -102,14 +103,14 @@ impl PLSymbol {
     }
 }
 
-type GenericCacheMap = IndexMap<String, Arc<RefCell<IndexMap<String, Arc<RefCell<PLType>>>>>>;
+type GenericCacheMap = IndexMap<Ustr, Arc<RefCell<IndexMap<Ustr, Arc<RefCell<PLType>>>>>>;
 
 pub type GenericCache = Arc<RefCell<GenericCacheMap>>;
 
 /// # Ctx
 /// Context for code generation and LSP features
 pub struct Ctx<'a> {
-    pub generic_types: FxHashMap<String, Arc<RefCell<PLType>>>,
+    pub generic_types: FxHashMap<Ustr, Arc<RefCell<PLType>>>,
     pub plmod: Mod,
 
     pub parent: Option<&'a Ctx<'a>>, // parent context, for symbol lookup
@@ -139,7 +140,7 @@ pub struct Ctx<'a> {
 
     /// available varaibles in the current block,
     /// the outside variables could be accessed through the parent ctx.                             
-    pub table: FxHashMap<String, PLSymbolData>,
+    pub table: FxHashMap<Ustr, PLSymbolData>,
     pub config: Config, // config
     pub db: &'a dyn Db,
 
@@ -154,13 +155,13 @@ pub struct Ctx<'a> {
     /// generics requires a code generation at the place where the identifiers are defined
     /// hence, we need to perserve the definition position as well for a better error report.
     /// the temp_source stores the position where the code is generated.
-    pub temp_source: Option<String>,
+    pub temp_source: Option<Ustr>,
 
     /// stores the the additional date of a closure
     pub closure_data: Option<Arc<RefCell<ClosureCtxData>>>,
 
     /// used to recognize self reference to avoid endless loop
-    pub self_ref_map: FxHashMap<String, FxHashSet<(String, Range)>>,
+    pub self_ref_map: FxHashMap<Ustr, FxHashSet<(Ustr, Range)>>,
 
     pub ctx_flag: CtxFlag, // can ignore first
     pub generator_data: Option<Arc<RefCell<GeneratorCtxData>>>,
@@ -182,7 +183,7 @@ pub struct Ctx<'a> {
     pub unify_table: Arc<RefCell<UnificationTable<InPlace<TyVariable>>>>,
     pub disable_diag: bool,
 
-    pub macro_vars: FxHashMap<String, MacroReplaceNode>,
+    pub macro_vars: FxHashMap<Ustr, MacroReplaceNode>,
     pub macro_skip_level: usize,
     pub macro_loop: bool,
     pub macro_loop_idx: usize,
@@ -250,7 +251,7 @@ impl<'a, 'ctx> Ctx<'a> {
     pub fn get_gc_mod_f<'b>(
         &mut self,
         builder: &'b BuilderEnum<'a, 'ctx>,
-        malloc_fn: &str,
+        malloc_fn: &Ustr,
     ) -> ValueHandle {
         let mut root_ctx = &*self;
         while let Some(f) = root_ctx.root {
@@ -259,7 +260,7 @@ impl<'a, 'ctx> Ctx<'a> {
         let gcmod = root_ctx
             .plmod
             .submods
-            .get("gc")
+            .get(&"gc".into())
             .map(|rc| rc.as_ref())
             .unwrap_or(&root_ctx.plmod);
         let f: FNValue = gcmod
@@ -273,7 +274,7 @@ impl<'a, 'ctx> Ctx<'a> {
         let f = builder.get_or_insert_fn_handle(&f, self);
         f.0
     }
-    pub fn check_self_ref(&self, name: &str, range: Range) -> Result<(), PLDiag> {
+    pub fn check_self_ref(&self, name: &Ustr, range: Range) -> Result<(), PLDiag> {
         if let Some(root) = self.root {
             root.check_self_ref_inner(name, name, range)
                 .map_err(|e| e.add_to_ctx(self))
@@ -285,8 +286,8 @@ impl<'a, 'ctx> Ctx<'a> {
 
     fn check_self_ref_inner(
         &self,
-        name: &str,
-        root_name: &str,
+        name: &Ustr,
+        root_name: &Ustr,
         range: Range,
     ) -> Result<(), PLDiag> {
         // self ref map's key is field type name, value is a set of (host type name, host type range)
@@ -295,13 +296,13 @@ impl<'a, 'ctx> Ctx<'a> {
                 if host_name == root_name {
                     return Err(range
                         .new_err(ErrorCode::ILLEGAL_SELF_RECURSION)
-                        .add_label(*r, self.get_file(), format_label!("in type {}", name))
+                        .add_label(*r, self.get_file(), format_label!("in type {}", *name))
                         .clone());
                 } else {
                     return self
                         .check_self_ref_inner(host_name, root_name, range)
                         .map_err(|mut e| {
-                            e.add_label(*r, self.get_file(), format_label!("in type {}", name))
+                            e.add_label(*r, self.get_file(), format_label!("in type {}", *name))
                                 .clone()
                         });
                 }
@@ -309,7 +310,7 @@ impl<'a, 'ctx> Ctx<'a> {
         }
         Ok(())
     }
-    pub fn find_macro_symbol(&self, name: &str) -> Option<&MacroReplaceNode> {
+    pub fn find_macro_symbol(&self, name: &Ustr) -> Option<&MacroReplaceNode> {
         let mut ctx = Some(self);
         let mut i = 0;
         while let Some(p) = ctx {
@@ -337,7 +338,7 @@ impl<'a, 'ctx> Ctx<'a> {
         Ctx {
             need_highlight: Default::default(),
             generic_types: FxHashMap::default(),
-            plmod: Mod::new(src_file_path.to_string(), generic_infer.clone()),
+            plmod: Mod::new(src_file_path.into(), generic_infer.clone()),
             parent: None,
             init_func: None,
             function: None,
@@ -402,7 +403,7 @@ impl<'a, 'ctx> Ctx<'a> {
             macro_loop: self.macro_loop,
             macro_loop_idx: self.macro_loop_idx,
             macro_loop_len: self.macro_loop_len,
-            temp_source: self.temp_source.clone(),
+            temp_source: self.temp_source,
             in_macro: self.in_macro,
             closure_data: None,
             expect_ty: None,
@@ -478,7 +479,7 @@ impl<'a, 'ctx> Ctx<'a> {
     }
     pub fn set_init_fn<'b>(&'b mut self, builder: &'b BuilderEnum<'a, 'ctx>) {
         self.function = Some(builder.add_function(
-            &self.plmod.get_full_name("__init_global"),
+            &self.plmod.get_full_name("__init_global".into()),
             &[],
             PLType::Void,
             self,
@@ -499,8 +500,8 @@ impl<'a, 'ctx> Ctx<'a> {
     }
     fn add_to_global_mthd_table(
         &self,
-        st_name: &str,
-        mthd_name: &str,
+        st_name: &Ustr,
+        mthd_name: &Ustr,
         fntp: Arc<RefCell<FNValue>>,
     ) {
         self.plmod
@@ -514,14 +515,14 @@ impl<'a, 'ctx> Ctx<'a> {
         ctx
     }
 
-    pub fn find_global_method(&self, name: &str, mthd: &str) -> Option<Arc<RefCell<FNValue>>> {
+    pub fn find_global_method(&self, name: &Ustr, mthd: &Ustr) -> Option<Arc<RefCell<FNValue>>> {
         self.plmod.find_global_method(name, mthd)
     }
 
     pub fn get_global_mthd_completions(
         &self,
-        name: &str,
-        set: &mut FxHashMap<String, CompletionItem>,
+        name: &Ustr,
+        set: &mut FxHashMap<Ustr, CompletionItem>,
     ) {
         self.plmod.get_global_mthd_completions(name, set);
     }
@@ -529,7 +530,7 @@ impl<'a, 'ctx> Ctx<'a> {
     fn add_trait_impl_method<T: TraitImplAble>(
         &mut self,
         t: &T,
-        mthd: &str,
+        mthd: &Ustr,
         fntp: Arc<RefCell<FNValue>>,
         impl_trait: Option<(Arc<RefCell<PLType>>, Range)>,
         generic: bool,
@@ -550,9 +551,7 @@ impl<'a, 'ctx> Ctx<'a> {
                 };
                 let table = m.get_mut(&st_name);
                 if let Some(table) = table {
-                    if table.insert(mthd.to_string(), fntp.clone()).is_some()
-                        && target != Default::default()
-                    {
+                    if table.insert(*mthd, fntp.clone()).is_some() && target != Default::default() {
                         return Err(fntp
                             .borrow()
                             .range
@@ -564,9 +563,9 @@ impl<'a, 'ctx> Ctx<'a> {
                 } else {
                     #[allow(clippy::drop_non_drop)]
                     drop(table);
-                    m.insert(st_name.clone(), FxHashMap::default());
+                    m.insert(st_name, FxHashMap::default());
                     let table = m.get_mut(&st_name).unwrap();
-                    table.insert(mthd.to_string(), fntp.clone());
+                    table.insert(*mthd, fntp.clone());
                     self.add_to_global_mthd_table(&st_name, mthd, fntp);
                     Ok(())
                 }
@@ -585,7 +584,7 @@ impl<'a, 'ctx> Ctx<'a> {
     fn add_method_to_tp<T: ImplAble>(
         &mut self,
         t: &T,
-        mthd: &str,
+        mthd: &Ustr,
         fntp: Arc<RefCell<FNValue>>,
         impl_trait: Option<(Arc<RefCell<PLType>>, Range)>,
         generic: bool,
@@ -594,14 +593,14 @@ impl<'a, 'ctx> Ctx<'a> {
         if t.get_path() != self.get_file() {
             self.add_trait_impl_method(t, mthd, fntp, impl_trait, generic, target)
         } else {
-            t.add_method(mthd, fntp).map_err(|e| e.add_to_ctx(self))
+            t.add_method(*mthd, fntp).map_err(|e| e.add_to_ctx(self))
         }
     }
 
     pub fn add_method(
         &mut self,
         tp: &PLType,
-        mthd: &str,
+        mthd: &Ustr,
         fntp: FNValue,
         impl_trait: Option<(Arc<RefCell<PLType>>, Range)>,
         generic: bool,
@@ -635,7 +634,7 @@ impl<'a, 'ctx> Ctx<'a> {
     /// search in current and all parent symbol tables
     pub fn get_symbol<'b>(
         &'b mut self,
-        name: &str,
+        name: &Ustr,
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> Option<PLSymbol> {
         let reference = unsafe { (self as *mut Self).as_ref().unwrap() };
@@ -647,7 +646,7 @@ impl<'a, 'ctx> Ctx<'a> {
     /// search in all parent symbol tables
     pub fn get_symbol_parent<'b>(
         &'b mut self,
-        name: &str,
+        name: &Ustr,
         builder: &'b BuilderEnum<'a, 'ctx>,
         parent: &'b Ctx<'a>,
     ) -> Option<PLSymbol> {
@@ -703,8 +702,7 @@ impl<'a, 'ctx> Ctx<'a> {
                             ),
                             ..new_symbol
                         };
-                        data.table
-                            .insert(name.to_string(), (new_symbol.clone(), symbol.value));
+                        data.table.insert(*name, (new_symbol.clone(), symbol.value));
                         builder.position_at_end_block(cur);
                         return Some(PLSymbol::Captured(new_symbol));
                     }
@@ -723,7 +721,7 @@ impl<'a, 'ctx> Ctx<'a> {
         }) = parent.get_root_ctx().plmod.get_global_symbol(name)
         {
             return builder
-                .get_global_var_handle(&parent.plmod.get_full_name(name))
+                .get_global_var_handle(&parent.plmod.get_full_name(*name))
                 .or(builder.get_global_var_handle(name))
                 .map(|value| {
                     PLSymbol::Global(PLSymbolData {
@@ -739,7 +737,7 @@ impl<'a, 'ctx> Ctx<'a> {
 
     pub fn add_symbol(
         &mut self,
-        name: String,
+        name: Ustr,
         pv: ValueHandle,
         pltype: Arc<RefCell<PLType>>,
         range: Range,
@@ -756,7 +754,7 @@ impl<'a, 'ctx> Ctx<'a> {
     }
     pub fn add_symbol_without_check(
         &mut self,
-        name: String,
+        name: Ustr,
         pv: ValueHandle,
         pltype: Arc<RefCell<PLType>>,
         range: Range,
@@ -764,7 +762,7 @@ impl<'a, 'ctx> Ctx<'a> {
         is_extern: bool,
     ) -> Result<(), PLDiag> {
         if is_glob {
-            self.set_glob_refs(&self.plmod.get_full_name(&name), range);
+            self.set_glob_refs(self.plmod.get_full_name(name), range);
             self.plmod
                 .add_global_symbol(name, pltype, range, is_extern)?;
         } else {
@@ -780,7 +778,7 @@ impl<'a, 'ctx> Ctx<'a> {
             );
             self.set_local_refs(refs, range);
         }
-        self.send_if_go_to_def(range, range, self.plmod.path.clone());
+        self.send_if_go_to_def(range, range, self.plmod.path);
         Ok(())
     }
 
@@ -793,7 +791,7 @@ impl<'a, 'ctx> Ctx<'a> {
     /// mostly used in builtin functions
     pub fn add_symbol_raw(
         &mut self,
-        name: String,
+        name: Ustr,
         pv: ValueHandle,
         pltype: Arc<RefCell<PLType>>,
         range: Range,
@@ -814,15 +812,11 @@ impl<'a, 'ctx> Ctx<'a> {
     ///
     /// Get type based on name from the generic types,
     /// from the current context to its ancestor context until one element is found, otherwise it return an error.
-    pub fn get_type(&self, name: &str, range: Range) -> Result<GlobalType, PLDiag> {
+    pub fn get_type(&self, name: &Ustr, range: Range) -> Result<GlobalType, PLDiag> {
         if let Some(pv) = self.generic_types.get(name) {
             self.set_if_refs_tp(pv.clone(), range);
             if let Ok(pv) = pv.try_borrow() {
-                self.send_if_go_to_def(
-                    range,
-                    pv.get_range().unwrap_or(range),
-                    self.plmod.path.clone(),
-                );
+                self.send_if_go_to_def(range, pv.get_range().unwrap_or(range), self.plmod.path);
             }
             return Ok(pv.clone().into());
         }
@@ -836,13 +830,18 @@ impl<'a, 'ctx> Ctx<'a> {
         Err(range.new_err(ErrorCode::UNDEFINED_TYPE))
     }
 
-    pub fn get_type_in_mod(&self, m: &Mod, name: &str, range: Range) -> Result<GlobalType, PLDiag> {
+    pub fn get_type_in_mod(
+        &self,
+        m: &Mod,
+        name: &Ustr,
+        range: Range,
+    ) -> Result<GlobalType, PLDiag> {
         if let Some(pv) = self.generic_types.get(name) {
             self.set_if_refs_tp(pv.clone(), range);
             self.send_if_go_to_def(
                 range,
                 pv.borrow().get_range().unwrap_or(range),
-                self.plmod.path.clone(),
+                self.plmod.path,
             );
             return Ok(pv.clone().into());
         }
@@ -864,7 +863,7 @@ impl<'a, 'ctx> Ctx<'a> {
     /// 该全局变量的声明
     pub fn get_or_add_global<'b>(
         &'b mut self,
-        name: &str,
+        name: &Ustr,
         pltype: Arc<RefCell<PLType>>,
         builder: &'b BuilderEnum<'a, 'ctx>,
         constant: bool,
@@ -872,7 +871,7 @@ impl<'a, 'ctx> Ctx<'a> {
         builder.get_or_add_global(name, pltype, self, constant)
     }
     pub fn init_global<'b>(&'b mut self, builder: &'b BuilderEnum<'a, 'ctx>) {
-        let mut set: FxHashSet<String> = FxHashSet::default();
+        let mut set: FxHashSet<Ustr> = FxHashSet::default();
         for sub in self.plmod.clone().submods.values() {
             self.init_global_walk(sub, &mut set, builder);
         }
@@ -880,7 +879,7 @@ impl<'a, 'ctx> Ctx<'a> {
         builder.rm_curr_debug_location();
         builder.build_call(
             builder
-                .get_function(&self.plmod.get_full_name("__init_global"))
+                .get_function(&self.plmod.get_full_name("__init_global".into()))
                 .unwrap(),
             &[],
             &PLType::Void,
@@ -891,10 +890,10 @@ impl<'a, 'ctx> Ctx<'a> {
     fn init_global_walk<'b>(
         &'b mut self,
         m: &Mod,
-        set: &mut FxHashSet<String>,
+        set: &mut FxHashSet<Ustr>,
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) {
-        let name = m.get_full_name("__init_global");
+        let name = m.get_full_name("__init_global".into());
         if set.contains(&name) {
             return;
         }
@@ -909,7 +908,7 @@ impl<'a, 'ctx> Ctx<'a> {
 
     pub fn add_type(
         &mut self,
-        name: String,
+        name: Ustr,
         pltype: Arc<RefCell<PLType>>,
         range: Range,
     ) -> Result<(), PLDiag> {
@@ -917,9 +916,8 @@ impl<'a, 'ctx> Ctx<'a> {
             return Err(self.add_diag(range.new_err(ErrorCode::REDEFINE_TYPE)));
         }
         self.set_if_refs_tp(pltype.clone(), range);
-        self.send_if_go_to_def(range, range, self.plmod.path.clone());
-        self.db
-            .add_tp_to_mod(&self.plmod.path, &name, pltype.clone());
+        self.send_if_go_to_def(range, range, self.plmod.path);
+        self.db.add_tp_to_mod(self.plmod.path, name, pltype.clone());
         self.plmod.types.insert(name, pltype.into());
         Ok(())
     }
@@ -928,12 +926,11 @@ impl<'a, 'ctx> Ctx<'a> {
             unreachable!()
         }
         let name = pltype.borrow().get_name();
-        self.db
-            .add_tp_to_mod(&self.plmod.path, &name, pltype.clone());
+        self.db.add_tp_to_mod(self.plmod.path, name, pltype.clone());
         self.plmod.types.insert(name, pltype.into());
     }
     #[inline]
-    fn add_generic_type(&mut self, name: String, pltype: Arc<RefCell<PLType>>) {
+    fn add_generic_type(&mut self, name: Ustr, pltype: Arc<RefCell<PLType>>) {
         self.generic_types.insert(name, pltype);
     }
     pub fn add_doc_symbols(&mut self, pltype: Arc<RefCell<PLType>>) {
@@ -962,9 +959,9 @@ impl<'a, 'ctx> Ctx<'a> {
         }
     }
 
-    pub fn with_diag_src<T>(&mut self, src: &str, f: impl FnOnce(&mut Self) -> T) -> T {
-        let old = self.temp_source.clone();
-        self.temp_source = Some(src.to_string());
+    pub fn with_diag_src<T>(&mut self, src: &Ustr, f: impl FnOnce(&mut Self) -> T) -> T {
+        let old = self.temp_source;
+        self.temp_source = Some(*src);
         let re = f(self);
         self.temp_source = old;
         re
@@ -1008,12 +1005,12 @@ impl<'a, 'ctx> Ctx<'a> {
     /// and restores context generic types to its original value.
     pub fn protect_generic_context<'b, T, F: FnMut(&mut Ctx<'a>) -> T>(
         &mut self,
-        generic_map: &IndexMap<String, Arc<RefCell<PLType>>>,
+        generic_map: &IndexMap<Ustr, Arc<RefCell<PLType>>>,
         mut f: F,
     ) -> T {
         let mp = self.generic_types.clone();
         for (name, pltype) in generic_map.iter() {
-            self.add_generic_type(name.clone(), pltype.clone());
+            self.add_generic_type(*name, pltype.clone());
         }
         let res = f(self);
         self.generic_types = mp;
@@ -1034,7 +1031,7 @@ impl<'a, 'ctx> Ctx<'a> {
             let m = if custom_type.get_path() == ori_mod.path {
                 ori_mod.clone()
             } else {
-                self.db.get_module(&custom_type.get_path()).unwrap()
+                self.db.get_module(custom_type.get_path()).unwrap()
             };
             let oldm = self.set_mod(m);
             let origin = self.origin_mod as isize == &self.plmod as *const Mod as isize;
@@ -1070,7 +1067,7 @@ impl<'a, 'ctx> Ctx<'a> {
             let m = if u.get_path() == ori_mod.path {
                 ori_mod.clone()
             } else {
-                self.db.get_module(&u.get_path()).unwrap()
+                self.db.get_module(u.get_path()).unwrap()
             };
             let oldm = self.set_mod(m);
             let origin = self.origin_mod as isize == &self.plmod as *const Mod as isize;
@@ -1088,15 +1085,15 @@ impl<'a, 'ctx> Ctx<'a> {
         }
     }
 
-    pub fn get_mod(&self, path: &str) -> Mod {
+    pub fn get_mod(&self, path: &Ustr) -> Mod {
         let ori_mod = unsafe { &*self.origin_mod as &Mod };
 
-        if path == self.plmod.path {
+        if *path == self.plmod.path {
             self.plmod.clone()
-        } else if path == ori_mod.path {
+        } else if *path == ori_mod.path {
             ori_mod.clone()
         } else {
-            self.db.get_module(path).unwrap()
+            self.db.get_module(*path).unwrap()
         }
     }
 
@@ -1105,18 +1102,18 @@ impl<'a, 'ctx> Ctx<'a> {
             return Url::parse("httss://example.com").unwrap();
         }
         #[cfg(any(unix, windows, target_os = "redox", target_os = "wasi"))]
-        return Url::from_file_path(self.plmod.path.clone()).unwrap();
+        return Url::from_file_path(self.plmod.path.as_str()).unwrap();
         #[cfg(not(any(unix, windows, target_os = "redox", target_os = "wasi")))]
         {
             if self.plmod.path.starts_with("http") {
-                return Url::parse(&self.plmod.path).unwrap();
+                return Url::parse(self.plmod.path.as_str()).unwrap();
             }
             return Url::parse("httss://example.com").unwrap();
         }
     }
 
-    pub fn get_file(&self) -> String {
-        self.plmod.path.clone()
+    pub fn get_file(&self) -> Ustr {
+        self.plmod.path
     }
 
     pub fn get_location(&self, range: Range) -> Location {
@@ -1164,7 +1161,7 @@ impl<'a, 'ctx> Ctx<'a> {
         tp
     }
 
-    pub fn get_macro(&self, name: &str) -> Option<Arc<MacroNode>> {
+    pub fn get_macro(&self, name: &Ustr) -> Option<Arc<MacroNode>> {
         if let Some(m) = self.plmod.macros.get(name) {
             return Some(m.clone());
         }
@@ -1174,7 +1171,7 @@ impl<'a, 'ctx> Ctx<'a> {
         None
     }
 
-    fn diff_trait_impl(&mut self, l: &GenericType, r: &GenericType) -> Option<String> {
+    fn diff_trait_impl(&mut self, l: &GenericType, r: &GenericType) -> Option<Ustr> {
         let noop = BuilderEnum::NoOp(NoOpBuilder::default());
         // get it's pointer
         let noop_ptr = &noop as *const BuilderEnum<'a, '_>;
@@ -1203,7 +1200,7 @@ impl<'a, 'ctx> Ctx<'a> {
         for m in miss {
             s.push_str(&format!(" `{}`", m.borrow().get_name()));
         }
-        Some(s)
+        Some(s.into())
     }
 
     /// # try_set_closure_alloca_bb

@@ -16,6 +16,7 @@ use notify::{Event, EventKind, RecursiveMode, Watcher};
 use rustc_hash::{FxHashMap, FxHashSet};
 use rustyline::config::Configurer;
 use rustyline::error::ReadlineError;
+use ustr::{ustr, Ustr};
 
 mod completer;
 mod repl_cmd;
@@ -45,7 +46,7 @@ pub const REPL_VIRTUAL_CONF: &str = "@__repl__\\Kagari.toml";
 static REPL_COUNTER: AtomicI32 = AtomicI32::new(0);
 
 lazy_static::lazy_static! {
-    pub static ref REPL_VARIABLES: Arc<Mutex<FxHashMap<String, GlobalVar>>> = Arc::new(Mutex::new(FxHashMap::default()));
+    pub static ref REPL_VARIABLES: Arc<Mutex<FxHashMap<Ustr, GlobalVar>>> = Arc::new(Mutex::new(FxHashMap::default()));
     pub static ref LOADED_SET:Arc<Mutex<FxHashSet<PathBuf>>> = Arc::new(Mutex::new(FxHashSet::default()));
 }
 
@@ -415,7 +416,7 @@ fn add_deps(
     ori_cfg
         .deps
         .get_or_insert(Default::default())
-        .insert(_as.to_owned(), proj_path.clone());
+        .insert(ustr(_as), proj_path.clone());
     let new_cfg = toml::to_string(&ori_cfg).unwrap();
     docs2.lock().unwrap().insert(
         db2,

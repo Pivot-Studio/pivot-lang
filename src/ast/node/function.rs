@@ -24,6 +24,7 @@ use internal_macro::node;
 use linked_hash_map::LinkedHashMap;
 use lsp_types::{CodeLens, Command, SemanticTokenType};
 use std::cell::RefCell;
+use ustr::ustr;
 
 use std::sync::atomic::{AtomicI32, Ordering};
 use std::vec;
@@ -187,9 +188,9 @@ impl FuncCallNode {
             let pararange = para.range();
             let mut b = FmtBuilder::default();
             para.format(&mut b);
-            let param_string = b.generate();
+            let param_string = ustr(&b.generate());
             if param_string != fnvalue.param_names[i + skip as usize] {
-                ctx.push_param_hint(pararange, fnvalue.param_names[i + skip as usize].clone());
+                ctx.push_param_hint(pararange, fnvalue.param_names[i + skip as usize]);
             }
             ctx.set_if_sig(
                 para.range(),
@@ -200,7 +201,7 @@ impl FuncCallNode {
                         .iter()
                         .enumerate()
                         .map(|(i, s)| {
-                            s.clone()
+                            s.to_string()
                                 + ": "
                                 + FmtBuilder::generate_node(&fnvalue.fntype.param_pltypes[i])
                                     .as_str()
@@ -397,7 +398,7 @@ pub fn generic_tp_apply<'a, 'b, T: Generic + CustomType, N: GenericInferenceAble
                     diag.add_label(
                         g.1.borrow().get_range().unwrap_or_default(),
                         t.get_path(),
-                        format_label!("parameter `{}` defined in `{}`", g.0, t.get_name()),
+                        format_label!("parameter `{}` defined in `{}`", *g.0, t.get_name()),
                     );
                     return Err(diag.add_to_ctx(ctx));
                 } else if i < t.get_user_generic_size() {
@@ -605,13 +606,13 @@ impl TypeNode for FuncDefNode {
                 // generate highlight and diagnostic
                 _ = para.typenode.get_type(child, builder, true)?;
                 param_pltypes.push(para.typenode.clone());
-                param_names.push(para.id.name.clone());
+                param_names.push(para.id.name);
             }
             self.ret.get_type(child, builder, true)?;
             let method = self.is_method;
 
             let fnvalue = FNValue {
-                name: self.id.name.clone(),
+                name: self.id.name,
                 param_names,
                 range: self.id.range(),
                 doc: self.doc.clone(),
@@ -622,11 +623,11 @@ impl TypeNode for FuncDefNode {
                             .new_err(ErrorCode::METHODS_MUST_HAVE_BODY)
                             .add_to_ctx(ctx));
                     }
-                    self.id.name.clone()
+                    self.id.name
                 } else {
-                    child.plmod.get_full_name(&self.id.name)
+                    child.plmod.get_full_name(self.id.name)
                 },
-                path: child.plmod.path.clone(),
+                path: child.plmod.path,
                 fntype: FnType {
                     ret_pltype: self.ret.clone(),
                     param_pltypes,
@@ -671,7 +672,7 @@ impl TypeNode for FuncDefNode {
                     flater = Some(Box::new(move |ctx: &mut Ctx| {
                         ctx.add_method(
                             &s.borrow(),
-                            self.id.name.split("::").last().unwrap(),
+                            &self.id.name.split("::").last().unwrap().into(),
                             fnvalue,
                             trait_tp,
                             generic,
@@ -718,7 +719,7 @@ impl TypeNode for FuncDefNode {
 
 impl FuncDefNode {
     pub fn gen_snippet(&self) -> String {
-        self.id.name.clone()
+        self.id.name.to_string()
             + "("
             + &self
                 .paralist
@@ -735,11 +736,11 @@ impl FuncDefNode {
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, '_>,
     ) -> Result<(), PLDiag> {
-        if ctx.get_type(self.id.name.as_str(), self.id.range).is_ok() {
+        if ctx.get_type(&self.id.name, self.id.range).is_ok() {
             return Err(ctx.add_diag(self.id.range.new_err(ErrorCode::REDEFINE_SYMBOL)));
         }
         let pltype = self.get_type(ctx, builder, true)?;
-        ctx.add_type(self.id.name.clone(), pltype, self.id.range)?;
+        ctx.add_type(self.id.name, pltype, self.id.range)?;
         Ok(())
     }
     pub fn gen_fntype<'a, 'b>(
@@ -763,7 +764,8 @@ impl FuncDefNode {
             let noop = BuilderEnum::NoOp(NoOpBuilder::default());
             // get it's pointer
             let noop_ptr = &noop as *const BuilderEnum<'a, '_>;
-            let i8ptr = PLType::Pointer(ctx.get_type("i8", Default::default()).unwrap().typ);
+            let i8ptr =
+                PLType::Pointer(ctx.get_type(&"i8".into(), Default::default()).unwrap().typ);
             let child = &mut ctx.new_child(self.range.start, builder);
             child.protect_generic_context(&fnvalue.fntype.generic_map, |child| {
                 if first && fnvalue.fntype.generic {
@@ -787,12 +789,12 @@ impl FuncDefNode {
                             _ => unreachable!(),
                         });
                     let mut place_holder_fn = fnvalue.clone();
-                    let name =
-                        place_holder_fn.append_name_with_generic(place_holder_fn.name.clone());
+                    let name = place_holder_fn.append_name_with_generic(place_holder_fn.name);
                     place_holder_fn.llvmname = place_holder_fn
                         .llvmname
-                        .replace(&place_holder_fn.name, &name);
-                    place_holder_fn.name = name.clone();
+                        .replace(place_holder_fn.name.as_str(), name.as_str())
+                        .into();
+                    place_holder_fn.name = name;
                     place_holder_fn.fntype.generic_map.clear();
                     place_holder_fn.generic_infer = Arc::new(RefCell::new(IndexMap::default()));
                     if !matches!(builder, BuilderEnum::NoOp(_)) {
@@ -911,7 +913,7 @@ impl FuncDefNode {
                         let parapltype = tp;
                         child
                             .add_symbol(
-                                fnvalue.param_names[i].clone(),
+                                fnvalue.param_names[i],
                                 alloca,
                                 parapltype,
                                 self.paralist[i].id.range,
@@ -930,7 +932,7 @@ impl FuncDefNode {
                         );
                         child
                             .add_symbol(
-                                fnvalue.param_names[i].clone(),
+                                fnvalue.param_names[i],
                                 p,
                                 tp,
                                 self.paralist[i].id.range,
@@ -1121,7 +1123,7 @@ impl Node for ClosureNode {
         builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
         // 设计： https://github.com/Pivot-Studio/pivot-lang/issues/284
-        let i8ptr = PLType::Pointer(ctx.get_type("i8", Default::default()).unwrap().typ);
+        let i8ptr = PLType::Pointer(ctx.get_type(&"i8".into(), Default::default()).unwrap().typ);
         let closure_name = format!(
             "closure_line{}_{}",
             self.range.start.line,
@@ -1130,8 +1132,8 @@ impl Node for ClosureNode {
 
         // struct_captured_typs stores all captured variables together in a structure
         let mut struct_captured_typs = STType {
-            name: closure_name.clone(),
-            path: ctx.plmod.path.clone(),
+            name: closure_name.clone().into(),
+            path: ctx.plmod.path,
             fields: LinkedHashMap::default(),
             range: Default::default(),
             doc: vec![],
@@ -1339,7 +1341,7 @@ impl Node for ClosureNode {
                 );
                 child
                     .add_symbol(
-                        self.paralist[i].0.name.clone(),
+                        self.paralist[i].0.name,
                         alloca,
                         parapltype.to_owned(),
                         self.paralist[i].0.range,
@@ -1351,7 +1353,7 @@ impl Node for ClosureNode {
                 let p = builder.get_nth_param(closure_fn_handle, 1 + i as u32);
                 child
                     .add_symbol(
-                        self.paralist[i].0.name.clone(),
+                        self.paralist[i].0.name,
                         p,
                         tp.clone(),
                         self.paralist[i].0.range,
@@ -1383,11 +1385,11 @@ impl Node for ClosureNode {
         for (captured_identifier, (v, _)) in &child.closure_data.as_ref().unwrap().borrow().table {
             let v_typ = PLType::Pointer(v.pltype.to_owned());
             struct_captured_typs.fields.insert(
-                captured_identifier.to_owned(),
+                *captured_identifier,
                 Field {
                     index: i,
                     typenode: v_typ.get_typenode(&child.plmod.path),
-                    name: captured_identifier.to_owned(),
+                    name: *captured_identifier,
                     range: Default::default(),
                     modifier: None,
                 },

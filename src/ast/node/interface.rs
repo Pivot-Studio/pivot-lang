@@ -11,6 +11,7 @@ use crate::{
 use indexmap::IndexMap;
 use internal_macro::node;
 use linked_hash_map::LinkedHashMap;
+use ustr::Ustr;
 #[node]
 pub struct MultiTraitNode {
     pub traits: Vec<Box<TypeNodeEnum>>,
@@ -50,7 +51,7 @@ impl TraitBoundNode {
     pub fn set_traits(
         &self,
         ctx: &mut Ctx<'_>,
-        generic_map: &IndexMap<String, Arc<RefCell<PLType>>>,
+        generic_map: &IndexMap<Ustr, Arc<RefCell<PLType>>>,
     ) -> Result<(), PLDiag> {
         if !generic_map.contains_key(&self.identifier.name) {
             return Err(ctx.add_diag(
@@ -136,8 +137,8 @@ impl TraitDefNode {
         };
         let stu = Arc::new(RefCell::new(PLType::Trait(STType {
             generic_map,
-            name: self.id.name.clone(),
-            path: ctx.plmod.path.clone(),
+            name: self.id.name,
+            path: ctx.plmod.path,
             fields: LinkedHashMap::default(),
             range: self.id.range(),
             doc: vec![],
@@ -152,15 +153,15 @@ impl TraitDefNode {
             trait_methods_impl: Default::default(),
             atomic: false,
         })));
-        builder.opaque_struct_type(&ctx.plmod.get_full_name(&self.id.name));
-        _ = ctx.add_type(self.id.name.clone(), stu, self.id.range);
+        builder.opaque_struct_type(&ctx.plmod.get_full_name(self.id.name));
+        _ = ctx.add_type(self.id.name, stu, self.id.range);
     }
     pub fn emit_trait_def<'a, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, '_>,
     ) -> Result<(), PLDiag> {
-        let pltype = ctx.get_type(self.id.name.as_str(), self.id.range)?;
+        let pltype = ctx.get_type(&self.id.name, self.id.range)?;
         let generic_map = if let PLType::Trait(st) = &mut *pltype.borrow_mut() {
             st.generic_map.clone()
         } else {
@@ -174,12 +175,12 @@ impl TraitDefNode {
             for (i, field) in self.methods.iter().enumerate() {
                 let mut tp = field.clone();
                 tp.paralist
-                    .insert(0, Box::new(new_selfptr_tf_with_name("self")));
+                    .insert(0, Box::new(new_selfptr_tf_with_name("self".into())));
                 let id = field.id.clone();
                 let f = Field {
                     index: i as u32 + 2,
                     typenode: Box::new(tp.into()),
-                    name: field.id.name.clone(),
+                    name: field.id.name,
                     range: field.range,
                     modifier: Some((TokenType::PUB, field.range)),
                 };
@@ -203,7 +204,7 @@ impl TraitDefNode {
                 }
 
                 // ctx.set_if_refs(f.refs.clone(), field.id.range);
-                fields.insert(id.name.to_string(), f.clone());
+                fields.insert(id.name, f.clone());
             }
             if let PLType::Trait(st) = &mut *pltype.borrow_mut() {
                 st.fields = fields.clone();
@@ -216,7 +217,7 @@ impl TraitDefNode {
                         }
                     }
                 }
-                builder.add_body_to_struct_type(&ctx.plmod.get_full_name(&self.id.name), st, ctx);
+                builder.add_body_to_struct_type(&ctx.plmod.get_full_name(self.id.name), st, ctx);
             }
             ctx.add_doc_symbols(pltype.clone().typ);
             // ctx.save_if_comment_doc_hover(self.range, Some(self.doc.clone()));
@@ -225,15 +226,15 @@ impl TraitDefNode {
     }
 }
 
-fn new_selfptr_tf_with_name(n: &str) -> TypedIdentifierNode {
+fn new_selfptr_tf_with_name(n: Ustr) -> TypedIdentifierNode {
     TypedIdentifierNode {
         id: VarNode {
-            name: n.to_string(),
+            name: n,
             range: Default::default(),
             id: None,
         },
         typenode: Box::new(TypeNodeEnum::Pointer(PointerTypeNode {
-            elm: Box::new(TypeNameNode::new_from_str("i64").into()),
+            elm: Box::new(TypeNameNode::new_from_str(&"i64".into()).into()),
             range: Default::default(),
         })),
         doc: None,

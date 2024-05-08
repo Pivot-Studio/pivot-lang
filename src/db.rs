@@ -5,6 +5,7 @@ use std::{
 
 use rustc_hash::FxHashMap;
 use salsa::DebugWithDb;
+use ustr::Ustr;
 
 use crate::{
     ast::{plmod::Mod, pltype::PLType},
@@ -20,8 +21,8 @@ pub struct Database {
     // The logs are only used for testing and demonstrating reuse:
     //
     logs: Option<Arc<Mutex<Vec<String>>>>,
-    ref_str: Arc<Mutex<Cell<Option<String>>>>,
-    module_map: Arc<Mutex<FxHashMap<String, Mod>>>,
+    ref_str: Arc<Mutex<Cell<Option<Ustr>>>>,
+    module_map: Arc<Mutex<FxHashMap<Ustr, Mod>>>,
 }
 // ANCHOR_END: db_struct
 
@@ -56,27 +57,27 @@ impl salsa::ParallelDatabase for Database {
 // ANCHOR_END: par_db_impl
 
 impl Db for Database {
-    fn set_ref_str(&self, ref_str: Option<String>) {
+    fn set_ref_str(&self, ref_str: Option<Ustr>) {
         self.ref_str.lock().unwrap().set(ref_str);
     }
-    fn get_ref_str(&self) -> Option<String> {
-        self.ref_str.lock().unwrap().get_mut().clone()
+    fn get_ref_str(&self) -> Option<Ustr> {
+        *self.ref_str.lock().unwrap().get_mut()
     }
 
-    fn add_module(&self, name: String, plmod: Mod) {
+    fn add_module(&self, name: Ustr, plmod: Mod) {
         self.module_map.lock().unwrap().insert(name, plmod);
     }
 
-    fn get_module(&self, name: &str) -> Option<Mod> {
-        self.module_map.lock().unwrap().get(name).cloned()
+    fn get_module(&self, name: Ustr) -> Option<Mod> {
+        self.module_map.lock().unwrap().get(&name).cloned()
     }
 
-    fn add_tp_to_mod(&self, name: &str, tpname: &str, pltype: Arc<RefCell<PLType>>) {
+    fn add_tp_to_mod(&self, name: Ustr, tpname: Ustr, pltype: Arc<RefCell<PLType>>) {
         self.module_map
             .lock()
             .unwrap()
-            .get_mut(name)
-            .and_then(|m| m.types.insert(tpname.to_string(), pltype.into()));
+            .get_mut(&name)
+            .and_then(|m| m.types.insert(tpname, pltype.into()));
     }
 }
 

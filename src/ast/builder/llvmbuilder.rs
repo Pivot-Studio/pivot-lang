@@ -35,6 +35,7 @@ use inkwell::{
 };
 use llvm_sys::{core::LLVMStructSetBody, prelude::LLVMTypeRef};
 use rustc_hash::FxHashMap;
+use ustr::Ustr;
 
 use crate::ast::{
     ctx::{PLSymbolData, STUCK_FNS},
@@ -150,8 +151,8 @@ pub struct LLVMBuilder<'a, 'ctx> {
     diunit: &'a DICompileUnit<'ctx>,       // debug info unit
     targetmachine: &'a TargetMachine,      // might be used in debug info
     discope: Cell<DIScope<'ctx>>,          // debug info scope
-    ditypes_placeholder: Arc<RefCell<FxHashMap<String, RefCell<Vec<DIDerivedType<'ctx>>>>>>, // hold the generated debug info type place holder
-    ditypes: Arc<RefCell<FxHashMap<String, DIType<'ctx>>>>, // hold the generated debug info type
+    ditypes_placeholder: Arc<RefCell<FxHashMap<Ustr, RefCell<Vec<DIDerivedType<'ctx>>>>>>, // hold the generated debug info type place holder
+    ditypes: Arc<RefCell<FxHashMap<Ustr, DIType<'ctx>>>>, // hold the generated debug info type
     optimized: Arc<RefCell<bool>>,
     used: Arc<RefCell<Vec<FunctionValue<'ctx>>>>,
     difile: Cell<DIFile<'ctx>>,
@@ -302,7 +303,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
 
             let id = data.borrow().table.len().to_string();
             data.borrow_mut().table.insert(
-                name.to_string() + &id,
+                format!("{}{}", name, id).into(),
                 PLSymbolData {
                     value: data_ptr,
                     pltype: Arc::new(RefCell::new(pltype.clone())),
@@ -679,12 +680,12 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         let gcmod = root_ctx
             .plmod
             .submods
-            .get("gc")
+            .get(&"gc".into())
             .map(|rc| rc.as_ref())
             .unwrap_or(&root_ctx.plmod);
         let f: FNValue = gcmod
             .types
-            .get(malloc_fn)
+            .get(&malloc_fn.into())
             .unwrap()
             .borrow()
             .clone()
@@ -761,7 +762,8 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         // to prevent symbol trim), so we need to do a hash here to remove the special caracters
         let mut hasher = DefaultHasher::new();
         let name = v.get_full_name();
-        (name.clone() + "@" + &ctx.plmod.path).hash(&mut hasher);
+
+        (format!("{}@{}", name.clone(), ctx.plmod.path)).hash(&mut hasher);
         let fname = &format!("arr_visit{:x}_visitorf@", hasher.finish());
         // eprintln!("name: {}, hashname: {}", name, fname);
         if let Some(f) = self.module.get_function(fname) {
@@ -995,7 +997,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         });
 
         self.gen_st_visit_function(ctx, st, &fields);
-        let llvmname = st.get_full_name() + "_visitorf@";
+        let llvmname = format!("{}_visitorf@", st.get_full_name());
         self.module.get_function(&llvmname).unwrap()
     }
 
@@ -1176,7 +1178,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
     ) -> (DIType<'ctx>, u64) {
         let field_pltype = match field.typenode.get_type(ctx, &self.clone().into(), true) {
             Ok(field_pltype) => field_pltype,
-            Err(_) => ctx.get_type("i64", Default::default()).unwrap().typ,
+            Err(_) => ctx.get_type(&"i64".into(), Default::default()).unwrap().typ,
         };
         let di_type = self.get_ditype(&field_pltype.borrow(), ctx);
         let debug_type = di_type.unwrap();
@@ -1448,13 +1450,13 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     DIFlags::PUBLIC,
                     &ditps,
                     0,
-                    &(u.name.clone() + "_data"),
+                    &format!("{}_data", u.name.clone()),
                 );
 
                 let tag_di = self
                     .dibuilder
                     .create_basic_type(
-                        &(u.name.clone() + "_tag"),
+                        &format!("{}_tag", u.name.clone()),
                         td.get_bit_size(&self.context.i64_type()),
                         get_dw_ate_encoding(&PriType::I64),
                         0,
@@ -1535,7 +1537,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
     ///
     /// The bool means whether the function exists in the llvm builder or not.
     fn get_or_insert_fn(&self, pltp: &FNValue, ctx: &mut Ctx<'a>) -> (FunctionValue<'ctx>, bool) {
-        let final_llvm_name = pltp.append_name_with_generic(pltp.llvmname.clone());
+        let final_llvm_name = pltp.append_name_with_generic(pltp.llvmname);
 
         if let Some(v) = self.module.get_function(&final_llvm_name) {
             return (v, v.count_basic_blocks() != 0);
@@ -2579,7 +2581,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         );
         let subprogram = self.dibuilder.create_function(
             f.as_debug_info_scope(),
-            &fntype.append_name_with_generic(fntype.name.clone()),
+            &fntype.append_name_with_generic(fntype.name),
             None,
             f,
             fntype.range.start.line as u32,
@@ -2927,7 +2929,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         self.builder.unset_current_debug_location();
         let ty = self.struct_type(v, ctx);
         let ftp = self.visit_fn_tp();
-        let name = v.get_full_name() + "_visitorf@";
+        let name = format!("{}_visitorf@", v.get_full_name());
 
         let linkage = Linkage::Internal;
 

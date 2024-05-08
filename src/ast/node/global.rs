@@ -33,7 +33,7 @@ impl Node for GlobalConstNode {
         let pltype = self.constant.typenode.get_type(ctx, builder, true)?;
         let globalptr = builder.global_const(&self.constant.id.name, &pltype.borrow(), ctx);
         ctx.add_symbol(
-            self.constant.id.name.clone(),
+            self.constant.id.name,
             globalptr,
             pltype,
             self.constant.range,
@@ -113,14 +113,14 @@ impl GlobalNode {
         let v = v.unwrap();
         let pltype = v.get_ty();
         let globalptr = builder.add_global(
-            &ctx.plmod.get_full_name(&self.var.name),
+            &ctx.plmod.get_full_name(self.var.name),
             pltype.clone(),
             ctx,
             self.var.range.start.line as u32,
             &pltype.borrow(),
         );
         ctx.add_symbol(
-            self.var.name.clone(),
+            self.var.name,
             globalptr,
             pltype.clone(),
             self.var.range,

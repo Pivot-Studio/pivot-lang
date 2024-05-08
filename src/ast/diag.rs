@@ -9,6 +9,7 @@ use std::{
     fmt::{Display, Formatter},
     process::exit,
 };
+use ustr::Ustr;
 
 macro_rules! define_diag {
     (
@@ -219,8 +220,8 @@ use super::{
 #[range]
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct PLLabel {
-    file: String,
-    txt: Option<(String, Vec<String>)>,
+    file: Ustr,
+    txt: Option<(Ustr, Vec<Ustr>)>,
 }
 #[range]
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -251,7 +252,7 @@ impl PLDiag {
     pub fn rm_file(&mut self) {
         self.raw.source = None;
         self.raw.labels.iter_mut().for_each(|label| {
-            label.file = String::new();
+            label.file = "".into();
         })
     }
     pub fn print(&self, path: &str, f: impl Fn(&dyn Db, &str) -> Source + 'static, db: &dyn Db) {
@@ -275,8 +276,8 @@ impl PLDiag {
             .or_else(|| {
                 labels.push(PLLabel {
                     range: self.raw.range,
-                    file: path.to_string(),
-                    txt: Some(("here".to_string(), vec![])),
+                    file: path.into(),
+                    txt: Some(("here".into(), vec![])),
                 });
                 None
             });
@@ -290,13 +291,15 @@ impl PLDiag {
                     label.range.start.utf8_offset(&f(db, label.file.as_str()))
                         ..label.range.end.utf8_offset(&f(db, label.file.as_str())),
                 ));
-                let mut msg = tpl.clone();
-                msg = msg.format(
-                    &args
-                        .iter()
-                        .map(|s| s.fg(color).to_string())
-                        .collect::<Vec<_>>(),
-                );
+                let mut msg = *tpl;
+                msg = msg
+                    .format(
+                        &args
+                            .iter()
+                            .map(|s| s.fg(color).to_string())
+                            .collect::<Vec<_>>(),
+                    )
+                    .into();
                 lab = lab.with_message(msg);
             } else {
                 lab = Label::new((
@@ -396,7 +399,7 @@ impl PLDiag {
                 message: "related source here".to_string(),
             };
             if let Some((tpl, args)) = &label.txt {
-                lab.message = tpl.clone();
+                lab.message = tpl.to_string();
                 lab.message = lab.message.format(args);
             }
             labels.push(lab);
@@ -444,8 +447,8 @@ impl PLDiag {
     pub fn add_label(
         &mut self,
         range: Range,
-        file: String,
-        txt: Option<(String, Vec<String>)>,
+        file: Ustr,
+        txt: Option<(Ustr, Vec<Ustr>)>,
     ) -> &mut Self {
         if range == Default::default() {
             return self;

@@ -9,6 +9,7 @@ use crate::ast::traits::CustomType;
 use crate::format_label;
 use crate::inference::unknown_arc;
 use internal_macro::node;
+use ustr::ustr;
 
 #[node(comment)]
 /// IfNode is consisted by a 'if' clause and a 'else' clause.
@@ -433,7 +434,7 @@ impl MatchArmCondition {
             }
             MatchArmCondition::Var(a) => {
                 ctx.push_semantic_token(a.range, SemanticTokenType::VARIABLE, 0);
-                _ = ctx.add_symbol(a.name.clone(), v, ty.clone(), a.range, false, false);
+                _ = ctx.add_symbol(a.name, v, ty.clone(), a.range, false, false);
                 ctx.push_type_hints(a.range, ty);
                 let i = builder.int_value(&PriType::BOOL, 1, false);
                 Self::add_matched_bb(i, not_matched, ctx, builder);
@@ -518,14 +519,14 @@ impl MatchArmCondition {
                 }
                 Literal::String(s) => {
                     match &*ty.borrow() {
-                        PLType::Struct(STType { name: n, .. }) if n == "string" => (),
+                        PLType::Struct(STType { name: n, .. }) if *n == "string" => (),
                         _ => {
                             s.range.new_err(ErrorCode::ILLEGAL_MATCH_ARM_CONDITION)
                             .add_label(s.range, ctx.get_file(), format_label!("match condition is of type `{}`, imcompatible with type `{}`", "string", ty.borrow().get_name()))
                             .add_to_ctx(ctx);
                         }
                     }
-                    let f = ctx.get_gc_mod_f(builder, "string_eq");
+                    let f = ctx.get_gc_mod_f(builder, &"string_eq".into());
                     let s = s
                         .emit(ctx, builder)
                         .unwrap()
@@ -611,11 +612,13 @@ impl MatchArmCondition {
                                         "match condition is of \
                             type `{}`, expected to be one of: `{}`",
                                         match_ty.borrow().get_name(),
-                                        u.get_sum_types(ctx, builder)
-                                            .iter()
-                                            .map(|t| t.borrow().get_name())
-                                            .collect::<Vec<_>>()
-                                            .join(", ")
+                                        ustr(
+                                            &u.get_sum_types(ctx, builder)
+                                                .iter()
+                                                .map(|t| t.borrow().get_name().to_string())
+                                                .collect::<Vec<_>>()
+                                                .join(", ")
+                                        )
                                     ),
                                 )
                                 .add_to_ctx(ctx);
@@ -669,7 +672,7 @@ impl MatchArmCondition {
                                     .add_label(
                                         s.range,
                                         s.get_path(),
-                                        format_label!("struct `{}` is defined here", &s.name),
+                                        format_label!("struct `{}` is defined here", s.name),
                                     )
                                     .add_to_ctx(ctx);
                             }
@@ -729,7 +732,7 @@ impl MatchArmCondition {
                                 v_ptr,
                                 tuple
                                     .fields
-                                    .get(&i.to_string())
+                                    .get(&i.to_string().into())
                                     .unwrap()
                                     .typenode
                                     .get_type(ctx, builder, false)

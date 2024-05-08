@@ -12,6 +12,7 @@ use crate::format_label;
 
 use rustc_hash::FxHashMap;
 use salsa::AsId;
+use ustr::ustr;
 
 use crate::lsp::mem_docs::FileCompileInput;
 
@@ -62,13 +63,13 @@ pub fn cycle_deps_recover(
     diag.set_source(src_file_path);
     for (f, r) in files.iter() {
         let msg = "import in cycle here";
-        diag.add_label(*r, f.to_string(), format_label!(msg));
+        diag.add_label(*r, ustr(f), format_label!(msg));
     }
     Diagnostics::push(db, (src_file_path.to_string(), vec![diag]));
     db.report_untracked_read();
     Some(ModWrapper::new(
         db,
-        Mod::new(src_file_path.to_string(), Default::default()),
+        Mod::new(ustr(src_file_path), Default::default()),
     ))
 }
 

@@ -72,14 +72,14 @@ pub fn program(input: Span) -> IResult<Span, Box<NodeEnum>> {
                                 g.generics_size = 0;
                             }
                         }
-                        mth.id.name = format!("|{}::{}", imname, mth.id.name);
+                        mth.id.name = format!("|{}::{}", imname, mth.id.name).into();
                         mth.is_method = true;
                         let r = mth.range.start_point();
                         mth.paralist.insert(
                             0,
                             Box::new(TypedIdentifierNode {
                                 id: VarNode {
-                                    name: "self".to_string(),
+                                    name: "self".into(),
                                     range: r,
                                     id: None,
                                 },

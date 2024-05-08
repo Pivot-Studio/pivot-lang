@@ -12,6 +12,7 @@ use super::BUILTIN_FN_SNIPPET_MAP;
 use lsp_types::InsertTextFormat;
 
 use lsp_types::Command;
+use ustr::Ustr;
 
 use crate::ast::tokens::TokenType;
 use crate::skip_if_not_modified_by;
@@ -45,7 +46,7 @@ impl Ctx<'_> {
         cm
     }
 
-    pub fn get_completions_in_ns(&self, ns: &str) -> Vec<CompletionItem> {
+    pub fn get_completions_in_ns(&self, ns: Ustr) -> Vec<CompletionItem> {
         let mut m = FxHashMap::default();
         self.get_glob_var_completions_in_ns(ns, &mut m);
         self.get_type_completions_in_ns(ns, &mut m);
@@ -55,8 +56,8 @@ impl Ctx<'_> {
         cm
     }
 
-    pub(crate) fn with_ns(&self, ns: &str, f: impl FnOnce(&Mod)) {
-        let ns = self.plmod.submods.get(ns);
+    pub(crate) fn with_ns(&self, ns: Ustr, f: impl FnOnce(&Mod)) {
+        let ns = self.plmod.submods.get(&ns);
         if let Some(ns) = ns {
             f(ns);
         }
@@ -64,16 +65,16 @@ impl Ctx<'_> {
 
     pub(crate) fn get_glob_var_completions_in_ns(
         &self,
-        ns: &str,
-        m: &mut FxHashMap<String, CompletionItem>,
+        ns: Ustr,
+        m: &mut FxHashMap<Ustr, CompletionItem>,
     ) {
         self.with_ns(ns, |ns| ns.get_glob_var_completions(m));
     }
 
     pub(crate) fn get_type_completions_in_ns(
         &self,
-        ns: &str,
-        m: &mut FxHashMap<String, CompletionItem>,
+        ns: Ustr,
+        m: &mut FxHashMap<Ustr, CompletionItem>,
     ) {
         self.with_ns(ns, |ns| {
             for (k, v) in ns.types.iter() {
@@ -106,21 +107,21 @@ impl Ctx<'_> {
                 let mut item = CompletionItem {
                     label: k.to_string(),
                     kind: Some(tp),
-                    insert_text,
+                    insert_text: insert_text.map(|x| x.to_string()),
                     insert_text_format: Some(InsertTextFormat::SNIPPET),
                     command,
                     ..Default::default()
                 };
                 item.detail = Some(k.to_string());
-                m.insert(k.clone(), item);
+                m.insert(*k, item);
             }
         });
     }
 
     pub(crate) fn get_macro_completion_in_ns(
         &self,
-        ns: &str,
-        m: &mut FxHashMap<String, CompletionItem>,
+        ns: Ustr,
+        m: &mut FxHashMap<Ustr, CompletionItem>,
     ) {
         self.with_ns(ns, |ns| {
             ns.get_macro_completions(m);
@@ -134,13 +135,13 @@ impl Ctx<'_> {
         m.values().cloned().collect()
     }
 
-    pub(crate) fn get_var_completions(&self, vmap: &mut FxHashMap<String, CompletionItem>) {
+    pub(crate) fn get_var_completions(&self, vmap: &mut FxHashMap<Ustr, CompletionItem>) {
         if self.as_root {
             return;
         }
         for (k, _) in self.table.iter() {
             vmap.insert(
-                k.to_string(),
+                *k,
                 CompletionItem {
                     label: k.to_string(),
                     kind: Some(CompletionItemKind::VARIABLE),
@@ -153,17 +154,17 @@ impl Ctx<'_> {
         }
     }
 
-    pub(crate) fn get_macro_completions(&self, vmap: &mut FxHashMap<String, CompletionItem>) {
+    pub(crate) fn get_macro_completions(&self, vmap: &mut FxHashMap<Ustr, CompletionItem>) {
         self.plmod.get_macro_completions(vmap);
         if let Some(father) = self.parent {
             father.get_macro_completions(vmap);
         }
     }
 
-    pub(crate) fn get_builtin_completions(&self, vmap: &mut FxHashMap<String, CompletionItem>) {
+    pub(crate) fn get_builtin_completions(&self, vmap: &mut FxHashMap<Ustr, CompletionItem>) {
         for (name, handle) in BUILTIN_FN_NAME_MAP.iter() {
             vmap.insert(
-                name.to_string(),
+                (*name).into(),
                 CompletionItem {
                     label: name.to_string(),
                     kind: Some(CompletionItemKind::FUNCTION),
@@ -177,7 +178,7 @@ impl Ctx<'_> {
 
     pub(crate) fn get_pltp_completions(
         &self,
-        vmap: &mut FxHashMap<String, CompletionItem>,
+        vmap: &mut FxHashMap<Ustr, CompletionItem>,
         filter: impl Fn(&GlobalType) -> bool,
     ) {
         self.plmod
@@ -218,7 +219,7 @@ impl Ctx<'_> {
         self.plmod.completion_gened.borrow_mut().set_true();
     }
 
-    pub(crate) fn get_keyword_completions(&self, vmap: &mut FxHashMap<String, CompletionItem>) {
+    pub(crate) fn get_keyword_completions(&self, vmap: &mut FxHashMap<Ustr, CompletionItem>) {
         let keywords = vec![
             "if", "else", "while", "for", "return", "struct", "let", "true", "false", "as", "is",
             "gen", "yield", "match",
@@ -230,7 +231,7 @@ impl Ctx<'_> {
         if self.parent.is_none() {
             for k in toplevel {
                 vmap.insert(
-                    k.to_string(),
+                    k.into(),
                     CompletionItem {
                         label: k.to_string(),
                         kind: Some(CompletionItemKind::KEYWORD),
@@ -241,7 +242,7 @@ impl Ctx<'_> {
         } else {
             for k in keywords {
                 vmap.insert(
-                    k.to_string(),
+                    k.into(),
                     CompletionItem {
                         label: k.to_string(),
                         kind: Some(CompletionItemKind::KEYWORD),
@@ -253,7 +254,7 @@ impl Ctx<'_> {
         if self.break_block.is_some() && self.continue_block.is_some() {
             for k in loopkeys {
                 vmap.insert(
-                    k.to_string(),
+                    k.into(),
                     CompletionItem {
                         label: k.to_string(),
                         kind: Some(CompletionItemKind::KEYWORD),
@@ -266,15 +267,15 @@ impl Ctx<'_> {
 }
 
 impl Mod {
-    pub(crate) fn get_glob_var_completions(&self, m: &mut FxHashMap<String, CompletionItem>) {
+    pub(crate) fn get_glob_var_completions(&self, m: &mut FxHashMap<Ustr, CompletionItem>) {
         for (k, v) in self.global_table.iter() {
             let mut item = CompletionItem {
                 label: k.to_string(),
                 kind: Some(CompletionItemKind::CONSTANT),
                 ..Default::default()
             };
-            item.detail = Some(v.tp.borrow().get_name());
-            m.insert(k.clone(), item);
+            item.detail = Some(v.tp.borrow().get_name().to_string());
+            m.insert(*k, item);
         }
     }
 }

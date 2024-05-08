@@ -28,7 +28,7 @@ macro_rules! add_basic_types {
             paste::paste! {
                 let [<pltype_$ident>] = PLType::Primitive(PriType::[<$ident:upper>]);
                 $map
-                .insert(stringify!($ident).to_string(),$crate::ast::plmod::GlobalType::new([<pltype_$ident>]));
+                .insert(stringify!($ident).into(),$crate::ast::plmod::GlobalType::new([<pltype_$ident>]));
             }
         )*
     };
@@ -70,7 +70,7 @@ macro_rules! generic_impl {
                             }
                             unreachable!()
                         })
-                        .collect::<IndexMap<String, Arc<RefCell<PLType>>>>();
+                        .collect::<IndexMap<Ustr, Arc<RefCell<PLType>>>>();
                     res.generic_map
                         .iter()
                         .for_each(|(_, v)| match &mut *v.clone().borrow_mut() {

@@ -28,6 +28,7 @@ use lsp_types::Location;
 use lsp_types::SignatureHelp;
 
 use rustc_hash::{FxHashMap, FxHashSet};
+use ustr::{ustr, Ustr};
 
 use std::cell::{Ref, RefCell, RefMut};
 use std::collections::BTreeMap;
@@ -48,7 +49,7 @@ pub struct GlobalVar {
 unsafe impl Sync for GlobalVar {}
 unsafe impl Send for GlobalVar {}
 
-pub type ImplMap = FxHashMap<String, FxHashMap<String, IndexMap<String, Arc<RefCell<PLType>>>>>;
+pub type ImplMap = FxHashMap<Ustr, FxHashMap<Ustr, IndexMap<Ustr, Arc<RefCell<PLType>>>>>;
 
 /// # Mod
 /// Mod represents a module in pivot-lang, which is a single pi file as well.
@@ -56,20 +57,20 @@ pub type ImplMap = FxHashMap<String, FxHashMap<String, IndexMap<String, Arc<RefC
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Mod {
     /// mod name
-    pub name: String,
+    pub name: Ustr,
     /// file path of the module
-    pub path: String,
+    pub path: Ustr,
     /// func and types
-    pub types: FxHashMap<String, GlobalType>,
+    pub types: FxHashMap<Ustr, GlobalType>,
     /// sub modules used by the current module
-    pub submods: FxHashMap<String, Arc<Mod>>,
+    pub submods: FxHashMap<Ustr, Arc<Mod>>,
     /// global variable table which is visiable for the current module
     /// it is consisted by the variables defined in this module or exported variables outside
-    pub global_table: FxHashMap<String, GlobalVar>,
+    pub global_table: FxHashMap<Ustr, GlobalVar>,
     pub defs: LSPRangeMap<Range, LSPDef>,
     pub local_refs: LSPRangeMap<Range, Arc<MutVec<Location>>>, // hold local vars
-    pub glob_refs: LSPRangeMap<Range, String>,                 // hold global refs
-    pub refs_map: LSPRangeMap<String, Arc<MutVec<Location>>>,
+    pub glob_refs: LSPRangeMap<Range, Ustr>,                   // hold global refs
+    pub refs_map: LSPRangeMap<Ustr, Arc<MutVec<Location>>>,
     pub sig_helps: LSPRangeMap<Range, SignatureHelp>,
     pub hovers: LSPRangeMap<Range, Hover>,
     pub completions: Arc<RefCell<Vec<CompletionItemWrapper>>>,
@@ -80,7 +81,7 @@ pub struct Mod {
     pub hints: Arc<RefCell<Vec<InlayHint>>>,
     pub doc_symbols: Arc<RefCell<Vec<DocumentSymbol>>>,
     pub impls: Arc<RefCell<ImplMap>>,
-    pub macros: FxHashMap<String, Arc<MacroNode>>,
+    pub macros: FxHashMap<Ustr, Arc<MacroNode>>,
     pub trait_mthd_table: TraitMthdImpl,
     pub generic_infer: GenericCache,
 }
@@ -162,10 +163,10 @@ pub enum LSPDef {
 }
 
 impl Mod {
-    pub fn get_macro_completions(&self, vmap: &mut FxHashMap<String, CompletionItem>) {
+    pub fn get_macro_completions(&self, vmap: &mut FxHashMap<Ustr, CompletionItem>) {
         for (k, _) in self.macros.iter() {
             vmap.insert(
-                k.to_string(),
+                *k,
                 CompletionItem {
                     label: k.to_string(),
                     kind: Some(CompletionItemKind::FUNCTION),
@@ -185,7 +186,7 @@ impl Mod {
             match &*v.borrow() {
                 PLType::Fn(_) | PLType::Struct(_) | PLType::Trait(_) | PLType::Union(_) => {
                     self.types.insert(
-                        k.to_string(),
+                        *k,
                         GlobalType {
                             typ: v.typ.clone(),
                             is_extern: true,
@@ -197,18 +198,19 @@ impl Mod {
             }
         }
         for (k, v) in other.macros.iter() {
-            self.macros.insert(k.to_string(), v.clone());
+            self.macros.insert(*k, v.clone());
         }
     }
 
-    pub fn new(path: String, generic_infer: GenericCache) -> Self {
-        let name = Path::new(Path::new(&path).file_stem().unwrap())
-            .file_name()
-            .take()
-            .unwrap()
-            .to_str()
-            .unwrap()
-            .to_string();
+    pub fn new(path: Ustr, generic_infer: GenericCache) -> Self {
+        let name = ustr(
+            Path::new(Path::new(path.as_str()).file_stem().unwrap())
+                .file_name()
+                .take()
+                .unwrap()
+                .to_str()
+                .unwrap(),
+        );
         Self {
             name,
             path,
@@ -238,8 +240,8 @@ impl Mod {
     }
     pub fn new_child(&self) -> Self {
         Mod {
-            name: self.name.clone(),
-            path: self.path.clone(),
+            name: self.name,
+            path: self.path,
             types: FxHashMap::default(),
             submods: self.submods.clone(),
             global_table: FxHashMap::default(),
@@ -262,11 +264,11 @@ impl Mod {
             generic_infer: self.generic_infer.clone(),
         }
     }
-    pub fn get_refs(&self, name: &str, db: &dyn Db, set: &mut FxHashSet<String>) {
+    pub fn get_refs(&self, name: &Ustr, db: &dyn Db, set: &mut FxHashSet<Ustr>) {
         if set.contains(&self.path) {
             return;
         }
-        set.insert(self.path.clone());
+        set.insert(self.path);
         self.push_refs(name, db);
         for m in self.submods.values() {
             m.get_refs(name, db, set);
@@ -274,17 +276,15 @@ impl Mod {
     }
     pub fn add_to_global_mthd_table(
         &self,
-        st_name: &str,
-        mthd_name: &str,
+        st_name: &Ustr,
+        mthd_name: &Ustr,
         fntp: Arc<RefCell<FNValue>>,
     ) {
         let mut m = self.trait_mthd_table.borrow_mut();
-        m.entry(st_name.to_string())
-            .or_default()
-            .insert(mthd_name.to_owned(), fntp);
+        m.entry(*st_name).or_default().insert(*mthd_name, fntp);
     }
 
-    pub fn find_global_method(&self, name: &str, mthd: &str) -> Option<Arc<RefCell<FNValue>>> {
+    pub fn find_global_method(&self, name: &Ustr, mthd: &Ustr) -> Option<Arc<RefCell<FNValue>>> {
         let mut m = self.trait_mthd_table.borrow_mut();
         let table = m.get_mut(name);
         if let Some(table) = table {
@@ -297,20 +297,20 @@ impl Mod {
 
     pub fn get_global_mthd_completions(
         &self,
-        name: &str,
-        set: &mut FxHashMap<String, CompletionItem>,
+        name: &Ustr,
+        set: &mut FxHashMap<Ustr, CompletionItem>,
     ) {
         let mut m = self.trait_mthd_table.borrow_mut();
         let table = m.get_mut(name);
         if let Some(table) = table {
             table.iter().for_each(|(k, v)| {
                 set.insert(
-                    k.clone(),
+                    *k,
                     CompletionItem {
                         kind: Some(CompletionItemKind::METHOD),
-                        label: k.clone(),
+                        label: k.to_string(),
                         detail: Some("method".to_string()),
-                        insert_text: Some(v.borrow().gen_snippet()),
+                        insert_text: Some(v.borrow().gen_snippet().to_string()),
                         insert_text_format: Some(InsertTextFormat::SNIPPET),
                         command: Some(Command::new(
                             "trigger help".to_string(),
@@ -323,22 +323,21 @@ impl Mod {
             });
         }
     }
-    pub fn push_refs(&self, name: &str, db: &dyn Db) {
+    pub fn push_refs(&self, name: &Ustr, db: &dyn Db) {
         if let Some(res) = self.refs_map.borrow().get(name) {
             PLReferences::push(db, res.borrow().clone());
         }
     }
-    pub fn get_global_symbol(&self, name: &str) -> Option<&GlobalVar> {
+    pub fn get_global_symbol(&self, name: &Ustr) -> Option<&GlobalVar> {
         self.global_table.get(name)
     }
 
     pub fn add_macro(&mut self, node: &MacroNode) {
-        self.macros
-            .insert(node.id.name.clone(), Arc::new(node.clone()));
+        self.macros.insert(node.id.name, Arc::new(node.clone()));
     }
     pub fn add_global_symbol(
         &mut self,
-        name: String,
+        name: Ustr,
         tp: Arc<RefCell<PLType>>,
         range: Range,
         is_extern: bool,
@@ -363,22 +362,18 @@ impl Mod {
     /// and then queries the types to try to find a custom type.
     ///
     /// None is returned if no sasified type matches the name.
-    fn get_type_inner(&self, name: &str, range: Range, ctx: &Ctx) -> Option<GlobalType> {
+    fn get_type_inner(&self, name: &Ustr, range: Range, ctx: &Ctx) -> Option<GlobalType> {
         if let Some(x) = PriType::try_from_str(name) {
             return Some(PLType::Primitive(x).into());
         }
-        if name == "void" {
+        if *name == ustr("void") {
             return Some(PLType::Void.into());
         }
         let v = self.types.get(name);
         if let Some(pv) = v {
             if range != Default::default() {
                 ctx.set_if_refs_tp(pv.typ.clone(), range);
-                ctx.send_if_go_to_def(
-                    range,
-                    pv.borrow().get_range().unwrap_or(range),
-                    self.path.clone(),
-                );
+                ctx.send_if_go_to_def(range, pv.borrow().get_range().unwrap_or(range), self.path);
             }
             return Some(pv.clone());
         }
@@ -388,14 +383,10 @@ impl Mod {
     /// # get_type_walker
     ///
     /// it inspects the generic types, and triggers [get_type_inner] to find among primary types and types.
-    fn get_type_walker(&self, name: &str, range: Range, ctx: &Ctx) -> Result<GlobalType, PLDiag> {
+    fn get_type_walker(&self, name: &Ustr, range: Range, ctx: &Ctx) -> Result<GlobalType, PLDiag> {
         if let Some(pv) = ctx.generic_types.get(name) {
             ctx.set_if_refs_tp(pv.clone(), range);
-            ctx.send_if_go_to_def(
-                range,
-                pv.borrow().get_range().unwrap_or(range),
-                self.path.clone(),
-            );
+            ctx.send_if_go_to_def(range, pv.borrow().get_range().unwrap_or(range), self.path);
             return Ok(pv.clone().into());
         }
         if let Some(pv) = self.get_type_inner(name, range, ctx) {
@@ -410,18 +401,18 @@ impl Mod {
     /// otherwise it returns an error.
     ///
     /// It supports both simple type and generic types during finding. The generic argument lists won't be respected during querying.
-    pub fn get_type(&self, name: &str, range: Range, ctx: &Ctx) -> Result<GlobalType, PLDiag> {
+    pub fn get_type(&self, name: &Ustr, range: Range, ctx: &Ctx) -> Result<GlobalType, PLDiag> {
         if let Ok(re) = self.get_type_walker(name, range, ctx) {
             return Ok(re);
         }
         if name.contains('<') {
             // generic
             // name<i64> ctx --name-> name --name<i64>--> name<i64>
-            let st_name = name.split('<').collect::<Vec<_>>()[0];
-            let st_with_generic = self.get_type_walker(st_name, range, ctx)?;
+            let st_name = ustr(name.split('<').collect::<Vec<_>>()[0]);
+            let st_with_generic = self.get_type_walker(&st_name, range, ctx)?;
             match &*st_with_generic.borrow() {
                 PLType::Struct(st) | PLType::Trait(st) => {
-                    if let Some(res) = ctx.get_infer_result(st, name) {
+                    if let Some(res) = ctx.get_infer_result(st, *name) {
                         if let PLType::Struct(s) = &*res.clone().borrow() {
                             if s.fields.len() == st.fields.len() {
                                 return Ok(res.into());
@@ -430,7 +421,7 @@ impl Mod {
                     }
                 }
                 PLType::Union(st) => {
-                    if let Some(res) = ctx.get_infer_result(st, name) {
+                    if let Some(res) = ctx.get_infer_result(st, *name) {
                         return Ok(res.into());
                     }
                 }
@@ -443,32 +434,32 @@ impl Mod {
     /// 获取llvm名称
     ///
     /// module路径+类型名
-    pub fn get_full_name(&self, name: &str) -> String {
+    pub fn get_full_name(&self, name: Ustr) -> Ustr {
         if name == "main" {
-            return name.to_string();
+            return name;
         }
-        format!("{}..{}", self.path, name)
+        format!("{}..{}", self.path, name).into()
     }
-    pub fn get_short_name(&self, name: &str) -> String {
-        if name == "main" {
-            return name.to_string();
+    pub fn get_short_name(&self, name: &Ustr) -> Ustr {
+        if *name == "main" {
+            return *name;
         }
         let re = name.split_once("..");
         if let Some((_, v)) = re {
-            return v.to_string();
+            return v.into();
         }
-        name.to_string()
+        *name
     }
     pub fn get_pltp_completions_list(&self) -> Vec<CompletionItem> {
-        let mut m = FxHashMap::<String, CompletionItem>::default();
+        let mut m = FxHashMap::<Ustr, CompletionItem>::default();
         self.get_pltp_completions(&mut m, &|_| true, &FxHashMap::default(), false);
         m.into_values().collect()
     }
     pub fn get_pltp_completions(
         &self,
-        vmap: &mut FxHashMap<String, CompletionItem>,
+        vmap: &mut FxHashMap<Ustr, CompletionItem>,
         filter: &impl Fn(&GlobalType) -> bool,
-        generic_tps: &FxHashMap<String, Arc<RefCell<PLType>>>,
+        generic_tps: &FxHashMap<Ustr, Arc<RefCell<PLType>>>,
         need_snippet: bool,
     ) {
         for (k, f) in self
@@ -492,11 +483,11 @@ impl Mod {
                 continue;
             }
             vmap.insert(
-                k.to_string(),
+                *k,
                 CompletionItem {
                     label: k.to_string(),
                     kind: Some(tp),
-                    insert_text,
+                    insert_text: insert_text.map(|x| x.to_string()),
                     insert_text_format: Some(InsertTextFormat::SNIPPET),
                     command,
                     ..Default::default()
@@ -505,10 +496,10 @@ impl Mod {
         }
     }
 
-    pub fn get_ns_completions_pri(&self, vmap: &mut FxHashMap<String, CompletionItem>) {
+    pub fn get_ns_completions_pri(&self, vmap: &mut FxHashMap<Ustr, CompletionItem>) {
         for (k, _) in self.submods.iter() {
             vmap.insert(
-                k.to_string(),
+                *k,
                 CompletionItem {
                     label: k.to_string(),
                     kind: Some(CompletionItemKind::MODULE),
@@ -526,17 +517,17 @@ impl Mod {
 
     pub fn add_impl(
         &self,
-        stname: &str,
-        trait_tp_name: &str,
-        generic_map: IndexMap<String, Arc<RefCell<PLType>>>,
+        stname: &Ustr,
+        trait_tp_name: &Ustr,
+        generic_map: IndexMap<Ustr, Arc<RefCell<PLType>>>,
     ) {
         self.impls
             .borrow_mut()
-            .entry(stname.to_string())
+            .entry(*stname)
             .or_default()
-            .insert(trait_tp_name.to_string(), generic_map);
+            .insert(*trait_tp_name, generic_map);
     }
-    pub fn search_mod<TP: CustomType>(&self, u: &TP, m: &str) -> Option<Arc<Self>> {
+    pub fn search_mod<TP: CustomType>(&self, u: &TP, m: &Ustr) -> Option<Arc<Self>> {
         self.submods
             .get(m)
             .and_then(|x| {
@@ -563,7 +554,7 @@ impl Mod {
 fn completion_kind(
     tp: &PLType,
     need_snippet: bool,
-    insert_text: &mut Option<String>,
+    insert_text: &mut Option<Ustr>,
     command: &mut Option<Command>,
 ) -> Option<CompletionItemKind> {
     let tp = match tp {
@@ -596,12 +587,12 @@ fn completion_kind(
     Some(tp)
 }
 
-fn get_ns_path_completions_pri(path: &str, vmap: &mut FxHashMap<String, CompletionItem>) {
-    let dirs = PathBuf::from(path).read_dir();
+fn get_ns_path_completions_pri(path: &Ustr, vmap: &mut FxHashMap<Ustr, CompletionItem>) {
+    let dirs = PathBuf::from(path.as_str()).read_dir();
     if dirs.is_err() {
         return;
     }
-    for d in PathBuf::from(path).read_dir().unwrap().flatten() {
+    for d in PathBuf::from(path.as_str()).read_dir().unwrap().flatten() {
         let buf = d.path();
         if !buf.is_dir() && buf.extension().is_some() && buf.extension().unwrap() != "pi" {
             continue;
@@ -609,7 +600,7 @@ fn get_ns_path_completions_pri(path: &str, vmap: &mut FxHashMap<String, Completi
         let buf = PathBuf::from(d.path().file_stem().unwrap().to_str().unwrap());
         let x = buf.file_name().unwrap().to_str().unwrap();
         vmap.insert(
-            x.to_string(),
+            x.into(),
             CompletionItem {
                 label: x.to_string(),
                 kind: Some(CompletionItemKind::MODULE),
@@ -619,7 +610,7 @@ fn get_ns_path_completions_pri(path: &str, vmap: &mut FxHashMap<String, Completi
     }
 }
 
-pub fn get_ns_path_completions(path: &str) -> Vec<CompletionItem> {
+pub fn get_ns_path_completions(path: &Ustr) -> Vec<CompletionItem> {
     let mut m = FxHashMap::default();
     get_ns_path_completions_pri(path, &mut m);
     let cm = m.values().cloned().collect();

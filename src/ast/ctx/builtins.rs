@@ -14,6 +14,7 @@ use std::{cell::RefCell, collections::HashMap, sync::Arc};
 use indexmap::IndexMap;
 use lazy_static::lazy_static;
 use rustc_hash::FxHashSet;
+use ustr::Ustr;
 
 use crate::ast::{
     builder::{BuilderEnum, IRBuilder, ValueHandle},
@@ -365,7 +366,7 @@ fn emit_arr_from_raw<'a, 'b>(
     let arr_tp = Arc::new(RefCell::new(PLType::Arr(ARRType {
         element_type: elm.clone(),
         size_handle: lenloaded,
-        generic_map: IndexMap::from([(String::from("T"), elm.clone())]),
+        generic_map: IndexMap::from([(Ustr::from("T"), elm.clone())]),
     })));
     let arr = builder.alloc("array_alloca", &arr_tp.borrow(), ctx, None);
     let arr_raw = builder
@@ -604,7 +605,7 @@ fn emit_arr_slice<'a, 'b>(
         let arr_tp = Arc::new(RefCell::new(PLType::Arr(ARRType {
             element_type: arr.element_type.clone(),
             size_handle: len,
-            generic_map: IndexMap::from([(String::from("T"), arr.element_type.clone())]),
+            generic_map: IndexMap::from([(String::from("T").into(), arr.element_type.clone())]),
         })));
         let arr = builder.alloc("array_alloca", &arr_tp.borrow(), ctx, None);
         let arr_raw = builder
@@ -650,7 +651,7 @@ fn emit_name_of<'a, 'b>(
         let tp = g.get_type(ctx, builder, false)?;
         let s = tp.borrow().get_name();
         let mut sn = StringNode {
-            content: s,
+            content: s.to_string(),
             range: Range::default(),
         };
         sn.emit(ctx, builder)
@@ -691,7 +692,7 @@ fn emit_full_name_of<'a, 'b>(
         let tp = g.get_type(ctx, builder, false)?;
         let s = tp.borrow().get_full_elm_name();
         let mut sn = StringNode {
-            content: s,
+            content: s.to_string(),
             range: Range::default(),
         };
         sn.emit(ctx, builder)
@@ -748,9 +749,9 @@ fn emit_for_fields<'a, 'b>(
             builder = &noop;
             ctx.run_in_origin_mod(|ctx| {
                 let field_tp = Arc::new(RefCell::new(PLType::PlaceHolder(PlaceHolderType {
-                    name: "@field_T".to_owned(),
+                    name: "@field_T".into(),
                     range: Default::default(),
-                    path: "".to_owned(),
+                    path: "".into(),
                     methods: Default::default(),
                 })));
                 let gep = builder.alloc("placeholder", &field_tp.borrow(), ctx, None);
@@ -761,8 +762,8 @@ fn emit_for_fields<'a, 'b>(
                 let re = sn.emit(ctx, builder)?.get_value().unwrap();
                 let sv = re.get_value();
                 let ctx = &mut ctx.new_child(f.range().start, builder);
-                ctx.add_symbol_raw("_field".to_string(), gep, field_tp, f.range);
-                ctx.add_symbol_raw("_field_name".to_string(), sv, re.get_ty(), f.range);
+                ctx.add_symbol_raw("_field".into(), gep, field_tp, f.range);
+                ctx.add_symbol_raw("_field_name".into(), sv, re.get_ty(), f.range);
                 if let NodeEnum::Sts(p) = &mut *f.paralist[1] {
                     p.emit(ctx, builder)?;
                 }
@@ -782,14 +783,14 @@ fn emit_for_fields<'a, 'b>(
                     ctx.run_in_origin_mod(|ctx| {
                         ctx.run_in_type_mod(sttp, |ctx, _| {
                             let field_tp = field.typenode.get_type(ctx, builder, true)?;
-                            ctx.add_symbol_raw("_field".to_string(), gep, field_tp, f.range);
+                            ctx.add_symbol_raw("_field".into(), gep, field_tp, f.range);
                             let mut sn = StringNode {
-                                content: name.clone(),
+                                content: name.to_string(),
                                 range: Range::default(),
                             };
                             let re = sn.emit(ctx, builder)?.get_value().unwrap();
                             let sv = re.get_value();
-                            ctx.add_symbol_raw("_field_name".to_string(), sv, re.get_ty(), f.range);
+                            ctx.add_symbol_raw("_field_name".into(), sv, re.get_ty(), f.range);
                             Ok(())
                         })?;
                         let ctx = &mut ctx.new_child(f.range().start, builder);
@@ -860,18 +861,18 @@ fn emit_if_arr<'a, 'b>(
             builder = &noop;
             ctx.run_in_origin_mod(|ctx| {
                 let t = Arc::new(RefCell::new(PLType::PlaceHolder(PlaceHolderType {
-                    name: "@elm_T".to_owned(),
+                    name: "@elm_T".into(),
                     range: Default::default(),
-                    path: "".to_owned(),
+                    path: "".into(),
                     methods: Default::default(),
                 })));
                 let elm_tp = Arc::new(RefCell::new(PLType::Arr(ARRType {
                     element_type: t.clone(),
                     size_handle: 0,
-                    generic_map: IndexMap::from([(String::from("T"), t.clone())]),
+                    generic_map: IndexMap::from([(Ustr::from("T"), t.clone())]),
                 })));
                 let gep = builder.alloc("placeholder", &elm_tp.borrow(), ctx, None);
-                ctx.add_symbol_raw("_arr".to_string(), gep, elm_tp, f.range);
+                ctx.add_symbol_raw("_arr".into(), gep, elm_tp, f.range);
                 let ctx = &mut ctx.new_child(f.range().start, builder);
                 if let NodeEnum::Sts(p) = &mut *f.paralist[1] {
                     p.emit(ctx, builder)?;
@@ -885,7 +886,7 @@ fn emit_if_arr<'a, 'b>(
 
         if let Some(s) = stp {
             if let PLType::Arr(_) = &*s.borrow() {
-                ctx.add_symbol_raw("_arr".to_string(), v, s.clone(), f.range);
+                ctx.add_symbol_raw("_arr".into(), v, s.clone(), f.range);
 
                 let b = builder.int_value(&PriType::BOOL, 1, false);
                 let ctx = &mut ctx.new_child(f.range().start, builder);
@@ -953,14 +954,14 @@ fn emit_if_union<'a, 'b>(
             ctx.run_in_origin_mod(|ctx| {
                 let elm_tp = Arc::new(RefCell::new(PLType::Pointer(Arc::new(RefCell::new(
                     PLType::PlaceHolder(PlaceHolderType {
-                        name: "@inner_T".to_owned(),
+                        name: "@inner_T".into(),
                         range: Default::default(),
-                        path: "".to_owned(),
+                        path: "".into(),
                         methods: Default::default(),
                     }),
                 )))));
                 let gep = builder.alloc("placeholder", &elm_tp.borrow(), ctx, None);
-                ctx.add_symbol_raw("_inner".to_string(), gep, elm_tp, f.range);
+                ctx.add_symbol_raw("_inner".into(), gep, elm_tp, f.range);
                 let ctx = &mut ctx.new_child(f.range().start, builder);
                 if let NodeEnum::Sts(p) = &mut *f.paralist[1] {
                     p.emit(ctx, builder)?;
@@ -1008,7 +1009,7 @@ fn emit_if_union<'a, 'b>(
                     let new_v =
                         builder.bitcast(ctx, ptr, &PLType::Pointer(new_tp.clone()), "inner");
 
-                    ctx.add_symbol_raw("_inner".to_string(), new_v, new_tp.clone(), f.range);
+                    ctx.add_symbol_raw("_inner".into(), new_v, new_tp.clone(), f.range);
                     let ctx = &mut ctx.new_child(f.range().start, builder);
                     if let NodeEnum::Sts(p) = &mut *f.paralist[1] {
                         p.emit(ctx, builder)?;
@@ -1090,7 +1091,7 @@ fn emit_match_type<'a, 'b>(
         }
         let ctx = &mut ctx.new_child(f.paralist[1].range().start, builder);
 
-        ctx.add_symbol_raw("_value".to_string(), v, generic.clone(), f.range);
+        ctx.add_symbol_raw("_value".into(), v, generic.clone(), f.range);
         if let NodeEnum::Sts(p) = &mut *f.paralist[1] {
             p.emit(ctx, builder)?;
         }
