@@ -11,6 +11,7 @@ use crate::lsp::mem_docs::{EmitParams, MemDocsInput};
 use rustc_hash::FxHashMap;
 use std::cell::RefCell;
 use std::sync::Arc;
+use ustr::Ustr;
 
 use super::UnsafeWrapper;
 
@@ -36,7 +37,7 @@ pub struct ProgramEmitParam {
     pub lsp_params: LspParams,
 
     /// sub-modules analyzed according to the use statements inside the entry node
-    pub submods: FxHashMap<String, Arc<Mod>>,
+    pub submods: FxHashMap<Ustr, Arc<Mod>>,
 
     /// file_content is the content of the current active file
     /// it might differ from the file above
@@ -45,7 +46,7 @@ pub struct ProgramEmitParam {
 
     /// types is all types in the global scope
     #[return_ref]
-    pub types: UnsafeWrapper<FxHashMap<String, GlobalType>>,
+    pub types: UnsafeWrapper<FxHashMap<Ustr, GlobalType>>,
 
     // method table, which holds all available methods across all modules
     #[return_ref]
@@ -53,7 +54,7 @@ pub struct ProgramEmitParam {
 
     /// macro table holds all avaiable macros across all modules
     #[return_ref]
-    pub macro_table: UnsafeWrapper<FxHashMap<String, Arc<MacroNode>>>,
+    pub macro_table: UnsafeWrapper<FxHashMap<Ustr, Arc<MacroNode>>>,
 
     /// whether the current [file] is active
     pub is_active_file: bool,
@@ -62,8 +63,7 @@ pub struct ProgramEmitParam {
     pub print_escaped: bool,
 }
 
-pub type MthdTableWrapper =
-    UnsafeWrapper<FxHashMap<String, FxHashMap<String, Arc<RefCell<FNValue>>>>>;
+pub type MthdTableWrapper = UnsafeWrapper<FxHashMap<Ustr, FxHashMap<Ustr, Arc<RefCell<FNValue>>>>>;
 
 #[salsa::tracked]
 pub struct LspParams {

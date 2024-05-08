@@ -2,6 +2,7 @@ use std::{cell::RefCell, sync::Arc};
 
 use super::super::builder::IntPredicate;
 use internal_macro::node;
+use ustr::ustr;
 
 use crate::{
     ast::{
@@ -100,7 +101,7 @@ impl<'a, 'ctx> Ctx<'a> {
                         end: pos,
                     };
                     return Err(node.range.new_err(ErrorCode::INVALID_DIRECT_UNION_CAST)
-                        .add_label(node.expr.range(), self.get_file(), format_label!("type of the expression is `{}`", &union.name))
+                        .add_label(node.expr.range(), self.get_file(), format_label!("type of the expression is `{}`", union.name))
                         .add_label(node.target_type.range(), self.get_file(), format_label!("target type is `{}`", target_ty.get_name()))
                         .add_label(end_range, self.get_file(), format_label!("add `{}` or `{}` to make it legal", "?", "!"))
                         .add_help("cast a union to its member type directly is not allowed, use `?` or `!` after the cast expression")
@@ -127,7 +128,7 @@ impl<'a, 'ctx> Ctx<'a> {
                         .add_label(
                             node.expr.range(),
                             self.get_file(),
-                            format_label!("type of the expression is `{}`", &union.name),
+                            format_label!("type of the expression is `{}`", union.name),
                         )
                         .add_label(
                             node.target_type.range(),
@@ -149,7 +150,7 @@ impl<'a, 'ctx> Ctx<'a> {
                         end: pos,
                     };
                     return Err(node.range.new_err(ErrorCode::INVALID_DIRECT_TRAIT_CAST)
-                        .add_label(node.expr.range(), self.get_file(), format_label!("type of the expression is `{}`", &t.name))
+                        .add_label(node.expr.range(), self.get_file(), format_label!("type of the expression is `{}`", t.name))
                         .add_label(node.target_type.range(), self.get_file(), format_label!("target type is `{}`", target_ty.get_name()))
                         .add_label(end_range, self.get_file(), format_label!("add `{}` or `{}` to make it legal", "?", "!"))
                         .add_help("cast a trait to specific type directly is not allowed, use `?` or `!` after the cast expression")
@@ -472,10 +473,10 @@ pub fn get_option_type<'a, 'b>(
     builder: &'b BuilderEnum<'a, '_>,
     target_ty: Arc<RefCell<PLType>>,
 ) -> TypeNodeResult {
-    let pltype = ctx.get_type("Option", Default::default()).unwrap();
+    let pltype = ctx.get_type(&"Option".into(), Default::default()).unwrap();
     if let PLType::Union(union) = &*pltype.borrow() {
         let mut union = union.clone();
-        if let PLType::Generic(g) = &mut *union.generic_map.get("T").unwrap().borrow_mut() {
+        if let PLType::Generic(g) = &mut *union.generic_map.get(&ustr("T")).unwrap().borrow_mut() {
             g.set_type(target_ty);
         }
         if union.need_gen_code() {
@@ -531,9 +532,13 @@ impl Node for IsNode {
                         )
                         .unwrap();
                     let cond = builder.build_int_truncate(cond, &PriType::BOOL, "trunctemp");
-                    cond.new_output(ctx.get_type("bool", Default::default()).unwrap().typ)
-                        .set_const()
-                        .to_result()
+                    cond.new_output(
+                        ctx.get_type(&"bool".into(), Default::default())
+                            .unwrap()
+                            .typ,
+                    )
+                    .set_const()
+                    .to_result()
                 } else {
                     Err(self
                         .target_type
@@ -560,9 +565,13 @@ impl Node for IsNode {
                     )
                     .unwrap();
                 let cond = builder.build_int_truncate(cond, &PriType::BOOL, "trunctemp");
-                cond.new_output(ctx.get_type("bool", Default::default()).unwrap().typ)
-                    .set_const()
-                    .to_result()
+                cond.new_output(
+                    ctx.get_type(&"bool".into(), Default::default())
+                        .unwrap()
+                        .typ,
+                )
+                .set_const()
+                .to_result()
             }
             _ => Err(self
                 .range()

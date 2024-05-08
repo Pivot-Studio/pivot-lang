@@ -7,6 +7,7 @@ use nom::{
     sequence::{pair, tuple},
     IResult, InputTake,
 };
+use ustr::Ustr;
 
 use crate::nomparser::Span;
 use crate::{
@@ -81,7 +82,7 @@ pub fn identifier(input: Span) -> IResult<Span, Box<VarNode>> {
                 return Err(());
             }
             Ok(Box::new(VarNode {
-                name: out.to_string(),
+                name: Ustr::from(&out),
                 range: Range::new(&out, &out.take_split(out.len()).0),
                 id: None,
             }))
@@ -94,7 +95,7 @@ pub fn tuple_field_identifier(input: Span) -> IResult<Span, Box<VarNode>> {
         recognize(many1(one_of("0123456789"))),
         |out: Span| {
             Ok::<_, ()>(Box::new(VarNode {
-                name: out.to_string(),
+                name: Ustr::from(&out),
                 range: Range::new(&out, &out.take_split(out.len()).0),
                 id: None,
             }))

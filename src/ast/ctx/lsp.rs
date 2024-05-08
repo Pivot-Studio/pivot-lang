@@ -9,6 +9,7 @@ use lsp_types::InlayHintKind;
 use lsp_types::InlayHint;
 use lsp_types::InlayHintLabelPart;
 use lsp_types::MarkupContent;
+use ustr::Ustr;
 
 use super::super::pltype::PLType;
 
@@ -86,7 +87,7 @@ impl Ctx<'_> {
         );
     }
 
-    pub fn send_if_go_to_def(&self, range: Range, destrange: Range, file: String) {
+    pub fn send_if_go_to_def(&self, range: Range, destrange: Range, file: Ustr) {
         if self.need_highlight.borrow().ne(&0) {
             return;
         }
@@ -127,7 +128,7 @@ impl Ctx<'_> {
             ..Default::default()
         };
         let type_label = InlayHintLabelPart {
-            value: pltype.borrow().get_name(),
+            value: pltype.borrow().get_name().to_string(),
             tooltip: Some(lsp_types::InlayHintLabelPartTooltip::MarkupContent(
                 MarkupContent {
                     kind: lsp_types::MarkupKind::Markdown,
@@ -149,13 +150,13 @@ impl Ctx<'_> {
         };
         self.plmod.hints.borrow_mut().push(hint);
     }
-    pub fn push_param_hint(&self, range: Range, name: String) {
+    pub fn push_param_hint(&self, range: Range, name: Ustr) {
         if self.need_highlight.borrow().ne(&0) || self.in_macro {
             return;
         }
         let hint = InlayHint {
             position: range.to_diag_range().start,
-            label: lsp_types::InlayHintLabel::String(name + ":"),
+            label: lsp_types::InlayHintLabel::String(name.to_string() + ":"),
             kind: Some(InlayHintKind::TYPE),
             text_edits: None,
             tooltip: None,

@@ -49,6 +49,8 @@ use std::hash::{Hash, Hasher};
 use std::io::prelude::*;
 use std::ops::Bound::*;
 use std::path::{Path, PathBuf};
+use ustr::ustr;
+use ustr::Ustr;
 
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -123,20 +125,13 @@ impl Node for ProgramNode {
             // eprintln!("eq");
             for (k, v) in REPL_VARIABLES.lock().unwrap().iter() {
                 let handle = builder.get_or_add_global(
-                    &ctx.plmod.get_full_name(k),
+                    &ctx.plmod.get_full_name(*k),
                     v.tp.clone(),
                     ctx,
                     false,
                 );
-                ctx.add_symbol(
-                    k.to_owned(),
-                    handle,
-                    v.tp.clone(),
-                    Default::default(),
-                    true,
-                    false,
-                )
-                .unwrap();
+                ctx.add_symbol(*k, handle, v.tp.clone(), Default::default(), true, false)
+                    .unwrap();
                 // eprintln!("add symbol: {}", k);
             }
         }
@@ -161,7 +156,7 @@ impl Node for ProgramNode {
 
 fn new_var(name: &str) -> Box<VarNode> {
     Box::new(VarNode {
-        name: name.to_string(),
+        name: ustr(name),
         range: Default::default(),
         id: None,
     })
@@ -200,15 +195,15 @@ mod cycle;
 pub use cycle::*;
 
 fn import_symbol(
-    s: &str,
+    s: Ustr,
     x: &GlobalType,
     re_export: bool,
-    global_tp_map: &mut FxHashMap<String, GlobalType>,
-    global_mthd_map: &mut FxHashMap<String, FxHashMap<String, Arc<RefCell<FNValue>>>>,
+    global_tp_map: &mut FxHashMap<Ustr, GlobalType>,
+    global_mthd_map: &mut FxHashMap<Ustr, FxHashMap<Ustr, Arc<RefCell<FNValue>>>>,
 ) {
     if x.visibal_outside() {
         global_tp_map.insert(
-            s.to_owned(),
+            s,
             GlobalType {
                 is_extern: true,
                 re_export,
@@ -219,7 +214,7 @@ fn import_symbol(
     if let PLType::Trait(t) = &*x.borrow() {
         for (k, v) in t.trait_methods_impl.borrow().clone() {
             for (k2, v) in v {
-                global_mthd_map.entry(k.clone()).or_default().insert(k2, v);
+                global_mthd_map.entry(k).or_default().insert(k2, v);
             }
         }
     }
@@ -279,8 +274,8 @@ impl Program {
     /// load_used_modules loads each dependent module used by the entry_node, parses them into modules by [compile_dry_file],
     /// loads all the symbols into the entry_node and returns ProgramEmitParam for the further processing.
     pub fn load_used_modules(self, db: &dyn Db, entry_node: ProgramNode) -> ProgramEmitParam {
-        let mut modmap = FxHashMap::<String, Arc<Mod>>::default();
-        let mut global_mthd_map: FxHashMap<String, FxHashMap<String, Arc<RefCell<FNValue>>>> =
+        let mut modmap = FxHashMap::<Ustr, Arc<Mod>>::default();
+        let mut global_mthd_map: FxHashMap<Ustr, FxHashMap<Ustr, Arc<RefCell<FNValue>>>> =
             FxHashMap::default();
         let mut global_tp_map = FxHashMap::default();
         let mut global_macro_map = FxHashMap::default();
@@ -344,7 +339,7 @@ impl Program {
             let mut symbol_opt = None;
             if dep_parser_entry.is_none() {
                 if let Some(p) = dep_path.parent() {
-                    mod_id = Some(p.file_name().unwrap().to_str().unwrap().to_string());
+                    mod_id = Some(p.file_name().unwrap().to_str().unwrap().to_string().into());
                     let file = p.with_extension("pi").to_str().unwrap().to_string();
                     dep_parser_entry = self.docs(db).finalize_parser_input(db, file, false);
                     symbol_opt = Some(
@@ -354,7 +349,8 @@ impl Program {
                             .unwrap()
                             .to_str()
                             .unwrap()
-                            .to_string(),
+                            .to_string()
+                            .into(),
                     );
                     if dep_parser_entry.is_none() {
                         continue;
@@ -375,7 +371,7 @@ impl Program {
             if let Some(s) = symbol_opt {
                 let symbol = dep_module.types.get(&s);
                 if let Some(x) = symbol {
-                    import_symbol(&s, x, re_export, &mut global_tp_map, &mut global_mthd_map);
+                    import_symbol(s, x, re_export, &mut global_tp_map, &mut global_mthd_map);
                 }
                 let mac = dep_module.macros.get(&s);
                 if let Some(x) = mac {
@@ -384,7 +380,7 @@ impl Program {
             }
             if wrapper.use_node(db).all_import {
                 for (s, x) in dep_module.types.iter() {
-                    import_symbol(s, x, re_export, &mut global_tp_map, &mut global_mthd_map);
+                    import_symbol(*s, x, re_export, &mut global_tp_map, &mut global_mthd_map);
                 }
             }
 
@@ -581,7 +577,7 @@ impl Program {
                     let re = res.range((Unbounded, Included(&range))).last();
                     if let Some((range, res)) = re {
                         if pos.is_in(*range) {
-                            db.set_ref_str(Some(res.clone()));
+                            db.set_ref_str(Some(*res));
                         }
                     }
                 }
@@ -652,10 +648,10 @@ pub fn prepare_module_ctx<'a>(
     ctx.plmod.submods = program_emit_params.submods(db);
 
     // imports all builtin symbols
-    if let Some(builtin_mod) = ctx.plmod.submods.get("builtin").cloned() {
+    if let Some(builtin_mod) = ctx.plmod.submods.get(&"builtin".into()).cloned() {
         ctx.plmod.import_all_symbols_from(&builtin_mod);
     }
-    if let Some(builtin_mod) = ctx.plmod.submods.get("stdbuiltin").cloned() {
+    if let Some(builtin_mod) = ctx.plmod.submods.get(&"stdbuiltin".into()).cloned() {
         ctx.plmod.import_all_symbols_from(&builtin_mod);
     }
     ctx.import_all_infer_maps_from_sub_mods();

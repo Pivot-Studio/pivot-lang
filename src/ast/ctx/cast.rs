@@ -1,5 +1,6 @@
 #![allow(clippy::too_many_arguments)]
 use rustc_hash::FxHashMap;
+use ustr::Ustr;
 
 use super::super::pltype::Field;
 
@@ -97,11 +98,11 @@ pub(crate) fn set_trait_impl_mthd_fields<'a, T: TraitImplAble>(
     trait_handle: usize,
 ) -> Result<(), PLDiag> {
     for f in t.list_trait_fields().iter() {
-        let mthd = find_trait_impl_mthd(st, &f.name, t).unwrap_or_else(|| {
+        let mthd = find_trait_impl_mthd(st, f.name, t).unwrap_or_else(|| {
             for t in &t.derives {
                 match &*t.borrow() {
                     PLType::Trait(t) => {
-                        if let Some(mthd) = find_trait_impl_mthd(st, &f.name, t) {
+                        if let Some(mthd) = find_trait_impl_mthd(st, f.name, t) {
                             return mthd;
                         }
                     }
@@ -182,13 +183,13 @@ pub(crate) fn find_mthd<T: ImplAble>(
     f: &Field,
     t: &STType,
 ) -> Option<Arc<RefCell<FNValue>>> {
-    st.get_method(&f.name)
-        .or(find_trait_impl_mthd(st, &f.name, t))
+    st.get_method(f.name)
+        .or(find_trait_impl_mthd(st, f.name, t))
 }
 
 pub(crate) fn find_trait_impl_mthd<T: TraitImplAble>(
     st: &T,
-    name: &str,
+    name: Ustr,
     t: &STType,
 ) -> Option<Arc<RefCell<FNValue>>> {
     t.trait_methods_impl
@@ -198,7 +199,7 @@ pub(crate) fn find_trait_impl_mthd<T: TraitImplAble>(
             .trait_methods_impl
             .borrow()
             .get(&st.get_full_name_except_generic()))
-        .and_then(|v| v.get(name))
+        .and_then(|v| v.get(&name))
         .cloned()
 }
 
@@ -345,7 +346,7 @@ impl<'a, 'ctx> Ctx<'a> {
                         .add_label(
                             f.range,
                             t.get_path(),
-                            format_label!("the method `{}` of trait `{}` has generic params, which makes it uninstantiatable",&f.name, t.get_name()),
+                            format_label!("the method `{}` of trait `{}` has generic params, which makes it uninstantiatable",f.name, t.get_name()),
                         ).add_to_ctx(self));
                     }
                 }
@@ -417,8 +418,8 @@ impl<'a, 'ctx> Ctx<'a> {
                         for f in t.list_trait_fields().iter() {
                             let fs = t2.get_all_field();
                             // convert to hash table
-                            let fs: FxHashMap<String, Field> =
-                                fs.into_iter().map(|f| (f.name.clone(), f)).collect();
+                            let fs: FxHashMap<Ustr, Field> =
+                                fs.into_iter().map(|f| (f.name, f)).collect();
 
                             let field = fs.get(&f.name).unwrap();
 

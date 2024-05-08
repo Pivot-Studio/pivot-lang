@@ -459,7 +459,7 @@ impl Node for TakeOpNode {
                         _ = s.expect_field_pub(ctx, &field, id_range);
                         ctx.push_semantic_token(id_range, SemanticTokenType::METHOD, 0);
                         ctx.set_field_refs(head_pltype.clone(), &field, id_range);
-                        ctx.send_if_go_to_def(id_range, field.range, s.path.clone());
+                        ctx.send_if_go_to_def(id_range, field.range, s.path);
 
                         let re = field.typenode.get_type(ctx, builder, true)?;
                         let fnv = builder
@@ -498,7 +498,7 @@ impl Node for TakeOpNode {
                     ctx.set_field_refs(head_pltype.clone(), field, id_range);
                     if field.range != Default::default() {
                         // walkaround for tuple types
-                        ctx.send_if_go_to_def(id_range, field.range, s.path.clone());
+                        ctx.send_if_go_to_def(id_range, field.range, s.path);
                     }
                     return ctx.run_in_type_mod(s, |ctx, _| {
                         Ok(NodeOutput::new_value(NodeValue::new(
@@ -538,7 +538,7 @@ fn handle_mthd<T: ImplAble>(
     head_pltype: Arc<RefCell<PLType>>,
     id_range: Range,
 ) -> NodeResult {
-    if let Some(mthd) = t.get_method(&id.name) {
+    if let Some(mthd) = t.get_method(id.name) {
         pack_mthd(ctx, mthd, headptr, head_pltype, id_range)
     } else {
         handle_glob_mthd(t, ctx, id, headptr, head_pltype, id_range)
@@ -576,7 +576,7 @@ fn pack_mthd(
     let mthd = mthd.borrow();
     _ = mthd.expect_pub(ctx, id_range);
     ctx.push_semantic_token(id_range, SemanticTokenType::METHOD, 0);
-    ctx.send_if_go_to_def(id_range, mthd.range, mthd.path.clone());
+    ctx.send_if_go_to_def(id_range, mthd.range, mthd.path);
     usize::MAX
         .new_output(Arc::new(RefCell::new(PLType::Fn(mthd.clone()))))
         .with_receiver(

@@ -6,6 +6,7 @@ use crate::ast::builder::BuilderEnum;
 use crate::ast::traits::CustomType;
 
 use indexmap::IndexMap;
+use ustr::Ustr;
 
 use super::GenericCacheMap;
 
@@ -23,7 +24,7 @@ impl<'a> Ctx<'a> {
     pub fn add_infer_result(
         &self,
         tp: &impl TraitImplAble,
-        name: &str,
+        name: Ustr,
         pltp: Arc<RefCell<PLType>>,
     ) {
         self.generic_cache
@@ -31,27 +32,25 @@ impl<'a> Ctx<'a> {
             .entry(tp.get_full_name_except_generic())
             .or_default()
             .borrow_mut()
-            .insert(name.to_string(), pltp);
+            .insert(name, pltp);
     }
 
     pub fn get_infer_result(
         &self,
         tp: &impl TraitImplAble,
-        name: &str,
+        name: Ustr,
     ) -> Option<Arc<RefCell<PLType>>> {
         let infer_map = self.generic_cache.borrow();
         let infer_map = infer_map.get(&tp.get_full_name_except_generic())?;
-        let x = infer_map.borrow().get(name).cloned();
+        let x = infer_map.borrow().get(&name).cloned();
         x
     }
 
     pub(crate) fn import_all_infer_maps_from(&self, other: &GenericCacheMap) {
         for (k, v) in other.iter() {
             if !self.generic_cache.borrow().contains_key(k) {
-                let map: Arc<RefCell<IndexMap<String, Arc<RefCell<PLType>>>>> = Default::default();
-                self.generic_cache
-                    .borrow_mut()
-                    .insert(k.clone(), map.clone());
+                let map: Arc<RefCell<IndexMap<Ustr, Arc<RefCell<PLType>>>>> = Default::default();
+                self.generic_cache.borrow_mut().insert(*k, map.clone());
                 map.borrow_mut().extend(v.borrow().clone());
             } else {
                 let infer_map = self.generic_cache.borrow();
@@ -135,7 +134,7 @@ impl<'a> Ctx<'a> {
                             eq: false,
                             need_up_cast: false,
                             reason: Some(
-                                "cannot cast a type to a trait it never implements".to_string(),
+                                "cannot cast a type to a trait it never implements".into(),
                             ),
                         };
                     }
@@ -165,11 +164,14 @@ impl<'a> Ctx<'a> {
                 return EqRes {
                     eq,
                     need_up_cast: true,
-                    reason: Some(format!(
-                        "trait `{}` is not implemented for `{}`",
-                        t.get_name(),
-                        st_pltype.borrow().get_name()
-                    )),
+                    reason: Some(
+                        format!(
+                            "trait `{}` is not implemented for `{}`",
+                            t.get_name(),
+                            st_pltype.borrow().get_name()
+                        )
+                        .into(),
+                    ),
                 };
             }
             if get_type_deep(trait_pltype) == get_type_deep(r) {
@@ -196,7 +198,7 @@ impl<'a> Ctx<'a> {
 pub struct EqRes {
     pub eq: bool,
     pub need_up_cast: bool,
-    pub reason: Option<String>,
+    pub reason: Option<Ustr>,
 }
 
 impl EqRes {

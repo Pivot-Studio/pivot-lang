@@ -3,6 +3,7 @@ use std::{borrow::Cow, cell::RefCell, sync::Arc};
 use indexmap::IndexMap;
 use lsp_types::{Command, CompletionItem, CompletionItemKind, InsertTextFormat};
 use rustc_hash::FxHashMap;
+use ustr::Ustr;
 
 use crate::{
     ast::{
@@ -21,41 +22,41 @@ use crate::{
 use super::{append_name_with_generic, impl_in_mod, ARRType, FNValue, PLType, STType, UnionType};
 
 pub trait ImplAble: RangeTrait + CustomType + TraitImplAble {
-    fn get_method_table(&self) -> Arc<RefCell<FxHashMap<String, Arc<RefCell<FNValue>>>>>;
-    fn get_method(&self, name: &str) -> Option<Arc<RefCell<FNValue>>> {
+    fn get_method_table(&self) -> Arc<RefCell<FxHashMap<Ustr, Arc<RefCell<FNValue>>>>>;
+    fn get_method(&self, name: Ustr) -> Option<Arc<RefCell<FNValue>>> {
         let binding = self.get_method_table();
         let table = binding.borrow();
-        table.get(name).cloned()
+        table.get(&name).cloned()
     }
-    fn add_method(&self, name: &str, value: Arc<RefCell<FNValue>>) -> Result<(), PLDiag> {
+    fn add_method(&self, name: Ustr, value: Arc<RefCell<FNValue>>) -> Result<(), PLDiag> {
         let range = self.range();
         let binding = self.get_method_table();
         let mut table = binding.borrow_mut();
-        if let Some(v) = table.get(name) {
+        if let Some(v) = table.get(&name) {
             return Err(range
                 .new_err(ErrorCode::DUPLICATE_METHOD)
                 .add_label(
                     v.borrow().range,
-                    v.borrow().path.clone(),
+                    v.borrow().path,
                     format_label!("Previously defined here"),
                 )
                 .clone());
         }
-        table.insert(name.to_owned(), value);
+        table.insert(name, value);
         Ok(())
     }
     fn get_mthd_completions(&self, ctx: &Ctx) -> Vec<CompletionItem> {
         let pub_only = self.get_path() != ctx.plmod.path;
         let mut completions = Vec::new();
-        let mut f = |name: &String, v: &FNValue| {
+        let mut f = |name: Ustr, v: &FNValue| {
             if pub_only && !v.is_modified_by(TokenType::PUB) {
                 return;
             }
             completions.push(CompletionItem {
                 kind: Some(CompletionItemKind::METHOD),
-                label: name.clone(),
+                label: name.to_string(),
                 detail: Some("method".to_string()),
-                insert_text: Some(v.gen_snippet()),
+                insert_text: Some(v.gen_snippet().to_string()),
                 insert_text_format: Some(InsertTextFormat::SNIPPET),
                 command: Some(Command::new(
                     "trigger help".to_string(),
@@ -66,15 +67,15 @@ pub trait ImplAble: RangeTrait + CustomType + TraitImplAble {
             });
         };
         for (name, v) in self.get_method_table().borrow().iter() {
-            f(name, &v.clone().borrow());
+            f(*name, &v.clone().borrow());
         }
         completions
     }
 }
 
 pub trait TraitImplAble {
-    fn get_full_name_except_generic(&self) -> String;
-    fn get_full_name(&self) -> String;
+    fn get_full_name_except_generic(&self) -> Ustr;
+    fn get_full_name(&self) -> Ustr;
     fn get_type_code(&self) -> u64 {
         let full_name = self.get_full_name();
         get_hash_code(full_name)
@@ -92,16 +93,16 @@ pub trait TraitImplAble {
         }
         false
     }
-    fn get_mod_path(&self) -> Option<Cow<String>>;
+    fn get_mod_path(&self) -> Option<Cow<Ustr>>;
 }
 
 /// # Generic
 ///
 /// Describe a type that has generic parameters.
 pub trait Generic {
-    fn get_generic_map(&self) -> &IndexMap<String, Arc<RefCell<PLType>>>;
-    fn get_generic_map_mut(&mut self) -> &mut IndexMap<String, Arc<RefCell<PLType>>>;
-    fn get_generic_infer_map(&self) -> Option<&IndexMap<String, Arc<RefCell<PLType>>>>;
+    fn get_generic_map(&self) -> &IndexMap<Ustr, Arc<RefCell<PLType>>>;
+    fn get_generic_map_mut(&mut self) -> &mut IndexMap<Ustr, Arc<RefCell<PLType>>>;
+    fn get_generic_infer_map(&self) -> Option<&IndexMap<Ustr, Arc<RefCell<PLType>>>>;
     /// return the size of generics that can be annotated explicitly
     /// by the user. For more details, see [get_generic_size].
     fn get_user_generic_size(&self) -> usize;
@@ -117,14 +118,14 @@ pub trait Generic {
 }
 
 impl Generic for ARRType {
-    fn get_generic_map(&self) -> &IndexMap<String, Arc<RefCell<PLType>>> {
+    fn get_generic_map(&self) -> &IndexMap<Ustr, Arc<RefCell<PLType>>> {
         &self.generic_map
     }
-    fn get_generic_map_mut(&mut self) -> &mut IndexMap<String, Arc<RefCell<PLType>>> {
+    fn get_generic_map_mut(&mut self) -> &mut IndexMap<Ustr, Arc<RefCell<PLType>>> {
         &mut self.generic_map
     }
 
-    fn get_generic_infer_map(&self) -> Option<&IndexMap<String, Arc<RefCell<PLType>>>> {
+    fn get_generic_infer_map(&self) -> Option<&IndexMap<Ustr, Arc<RefCell<PLType>>>> {
         None
     }
 
@@ -134,14 +135,14 @@ impl Generic for ARRType {
 }
 
 impl Generic for STType {
-    fn get_generic_map(&self) -> &IndexMap<String, Arc<RefCell<PLType>>> {
+    fn get_generic_map(&self) -> &IndexMap<Ustr, Arc<RefCell<PLType>>> {
         &self.generic_map
     }
-    fn get_generic_map_mut(&mut self) -> &mut IndexMap<String, Arc<RefCell<PLType>>> {
+    fn get_generic_map_mut(&mut self) -> &mut IndexMap<Ustr, Arc<RefCell<PLType>>> {
         &mut self.generic_map
     }
 
-    fn get_generic_infer_map(&self) -> Option<&IndexMap<String, Arc<RefCell<PLType>>>> {
+    fn get_generic_infer_map(&self) -> Option<&IndexMap<Ustr, Arc<RefCell<PLType>>>> {
         Some(&self.generic_infer_types)
     }
 
@@ -151,14 +152,14 @@ impl Generic for STType {
 }
 
 impl Generic for FNValue {
-    fn get_generic_map(&self) -> &IndexMap<String, Arc<RefCell<PLType>>> {
+    fn get_generic_map(&self) -> &IndexMap<Ustr, Arc<RefCell<PLType>>> {
         &self.fntype.generic_map
     }
-    fn get_generic_map_mut(&mut self) -> &mut IndexMap<String, Arc<RefCell<PLType>>> {
+    fn get_generic_map_mut(&mut self) -> &mut IndexMap<Ustr, Arc<RefCell<PLType>>> {
         &mut self.fntype.generic_map
     }
 
-    fn get_generic_infer_map(&self) -> Option<&IndexMap<String, Arc<RefCell<PLType>>>> {
+    fn get_generic_infer_map(&self) -> Option<&IndexMap<Ustr, Arc<RefCell<PLType>>>> {
         None
     }
 
@@ -168,14 +169,14 @@ impl Generic for FNValue {
 }
 
 impl Generic for UnionType {
-    fn get_generic_map(&self) -> &IndexMap<String, Arc<RefCell<PLType>>> {
+    fn get_generic_map(&self) -> &IndexMap<Ustr, Arc<RefCell<PLType>>> {
         &self.generic_map
     }
-    fn get_generic_map_mut(&mut self) -> &mut IndexMap<String, Arc<RefCell<PLType>>> {
+    fn get_generic_map_mut(&mut self) -> &mut IndexMap<Ustr, Arc<RefCell<PLType>>> {
         &mut self.generic_map
     }
 
-    fn get_generic_infer_map(&self) -> Option<&IndexMap<String, Arc<RefCell<PLType>>>> {
+    fn get_generic_infer_map(&self) -> Option<&IndexMap<Ustr, Arc<RefCell<PLType>>>> {
         None
     }
 
@@ -201,10 +202,10 @@ pub trait TraitImplAbleWithGeneric: Generic + TraitImplAble {
                         let mut gm = gm.clone();
                         for (k, _) in &gm.clone() {
                             if let Some(vv) = self.get_generic_map().get(k) {
-                                gm.insert(k.clone(), vv.clone());
+                                gm.insert(*k, vv.clone());
                             }
                             if let Some(vv) = self.get_generic_infer_map().and_then(|v| v.get(k)) {
-                                gm.insert(k.clone(), vv.clone());
+                                gm.insert(*k, vv.clone());
                             }
                         }
                         tp.get_full_name()
@@ -271,7 +272,7 @@ pub trait TraitImplAbleWithGeneric: Generic + TraitImplAble {
             }
             return false;
         }
-        let plmod = &ctx.db.get_module(&tp.path).unwrap();
+        let plmod = &ctx.db.get_module(tp.path).unwrap();
         if self.implements_trait_curr_mod(tp, plmod) {
             return true;
         }
@@ -284,7 +285,7 @@ pub trait TraitImplAbleWithGeneric: Generic + TraitImplAble {
             return false;
         }
         ctx.db
-            .get_module(p.unwrap_or_default().as_str())
+            .get_module(p.unwrap_or_default().into_owned())
             .map(|plmod| self.implements_trait_curr_mod(tp, &plmod))
             .unwrap_or_default()
     }

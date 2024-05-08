@@ -3,6 +3,7 @@ use std::{env, fs::read_to_string, path::PathBuf};
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use ustr::Ustr;
 
 use crate::{
     ast::{compiler::COMPILE_PROGRESS, node::pkg::UseNode},
@@ -77,7 +78,7 @@ pub struct Config {
     /// deps stands for the dependencies used in the project
     /// the key is the name of a library
     /// the dependency is the concrete information to access the library
-    pub deps: Option<BTreeMap<String, Dependency>>,
+    pub deps: Option<BTreeMap<Ustr, Dependency>>,
 
     /// root represents the root path of a project,
     /// and it's decided by the position of kagari.toml file
@@ -117,7 +118,7 @@ impl ConfigWrapper {
 
         // skip the length validation as the valid namespaces always contains more than one element
         for p in u.namespace[1..].iter() {
-            path = path.join(p.name.clone());
+            path = path.join(p.name.as_str());
         }
 
         // because the namespace is classified based on each file, hence we need to append the pi file extension
@@ -212,7 +213,7 @@ pub fn prepare_build_envs(db: &dyn Db, kagari_source: SourceProgram) -> Result<C
     }
 
     // load all built-in libraries as project depdencies by default
-    let mut deps = BTreeMap::<String, Dependency>::default();
+    let mut deps = BTreeMap::<Ustr, Dependency>::default();
     for path in libroot.unwrap().flatten() {
         if path.path().is_dir() && !path.file_name().eq("thirdparty") {
             let dep = Dependency {
@@ -223,7 +224,7 @@ pub fn prepare_build_envs(db: &dyn Db, kagari_source: SourceProgram) -> Result<C
                     .to_string(),
                 ..Default::default()
             };
-            deps.insert(path.file_name().to_str().unwrap().to_string(), dep);
+            deps.insert(path.file_name().to_str().unwrap().to_string().into(), dep);
         }
     }
 
@@ -277,16 +278,16 @@ pub fn prepare_build_envs(db: &dyn Db, kagari_source: SourceProgram) -> Result<C
                             if let Some(child) = child {
                                 child.unwrap();
                             }
-                            if let Some(sum) = sums.get(k) {
+                            if let Some(sum) = sums.get(k.as_str()) {
                                 b = sum.git.clone().unwrap().commit;
                             } else {
                                 sum_changed = true;
                             }
                             let target = kagari::cp_to_hash_dir(target.to_str().unwrap(), &b);
                             sums.insert(
-                                k.clone(),
+                                k.to_string(),
                                 ModSum {
-                                    name: k.clone(),
+                                    name: k.to_string(),
                                     git: Some(GitInfo {
                                         url: git,
                                         commit: target
@@ -302,7 +303,7 @@ pub fn prepare_build_envs(db: &dyn Db, kagari_source: SourceProgram) -> Result<C
                                 path: target.to_string_lossy().to_string(),
                                 ..Default::default()
                             };
-                            deps.insert(k.clone(), dep);
+                            deps.insert(*k, dep);
                         })
                 })
                 .or_else(|| {
@@ -332,7 +333,7 @@ pub fn prepare_build_envs(db: &dyn Db, kagari_source: SourceProgram) -> Result<C
                                 format!("error: {:?}", e)
                             });
                     }
-                    deps.insert(k.clone(), v.clone());
+                    deps.insert(*k, v.clone());
                     None
                 });
             pb.inc(1);

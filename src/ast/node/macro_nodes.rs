@@ -1,6 +1,7 @@
 use internal_macro::node;
 use nom::multi::many0;
 use nom::IResult;
+use ustr::Ustr;
 
 use super::*;
 use super::{primary::VarNode, NodeEnum};
@@ -17,7 +18,7 @@ use nom::bytes::complete::tag;
 pub struct MacroNode {
     pub id: VarNode,
     pub rules: Vec<MacroRuleNode>,
-    pub file: String,
+    pub file: Ustr,
 }
 
 impl PrintTrait for MacroNode {
@@ -38,9 +39,9 @@ impl Node for MacroNode {
         _builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
         ctx.send_if_go_to_def(self.range, self.range, ctx.get_file());
-        ctx.set_glob_refs(&ctx.plmod.get_full_name(&self.id.name), self.id.range);
+        ctx.set_glob_refs(ctx.plmod.get_full_name(self.id.name), self.id.range);
         ctx.push_semantic_token(self.id.range, SemanticTokenType::MACRO, 0);
-        self.file = ctx.plmod.path.clone();
+        self.file = ctx.plmod.path;
         ctx.plmod.add_macro(self);
         Ok(Default::default())
     }
@@ -179,13 +180,13 @@ impl MacroMatchParameter {
             if let MacroReplaceNode::LoopNodeEnum(v) = n {
                 v.push(node);
                 if v.len() == 1 {
-                    ctx.macro_vars.insert(self.id.name.clone(), default);
+                    ctx.macro_vars.insert(self.id.name, default);
                 }
             }
             return;
         }
         ctx.macro_vars
-            .insert(self.id.name.clone(), MacroReplaceNode::NodeEnum(node));
+            .insert(self.id.name, MacroReplaceNode::NodeEnum(node));
     }
 }
 
@@ -252,9 +253,9 @@ impl Node for MacroCallNode {
                 }
                 ctx.push_semantic_token(ex_node.id.range(), SemanticTokenType::MACRO, 0);
                 let m = ex_node.get_macro(ctx)?;
-                ctx.send_if_go_to_def(self.range, m.range, m.file.clone());
-                ctx.set_glob_refs(&format!("{}..{}", &m.file, &m.id.name), self.range);
-                let src = m.file.clone();
+                ctx.send_if_go_to_def(self.range, m.range, m.file);
+                ctx.set_glob_refs((format!("{}..{}", &m.file, &m.id.name)).into(), self.range);
+                let src = m.file;
                 // create a string of length at least self.range.end.offset
                 // otherwise Span::new_from_raw_offset may cause error -1073741819
                 // when executing avx2 instruction on windows

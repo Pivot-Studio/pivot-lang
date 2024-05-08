@@ -30,6 +30,7 @@ use ena::unify::{InPlace, UnificationTable, UnifyKey, UnifyValue};
 use indexmap::IndexMap;
 use linked_hash_map::LinkedHashMap;
 use rustc_hash::FxHashMap;
+use ustr::Ustr;
 
 use crate::ast::{
     builder::{BuilderEnum, IRBuilder},
@@ -210,11 +211,11 @@ impl TyInfer {
                                     .probe_value(*arg)
                                     .get_type(ctx, builder, unify_table);
                             fields.insert(
-                                i.to_string(),
+                                i.to_string().into(),
                                 new_tuple_field(
                                     i,
                                     &ty.borrow(),
-                                    &ty.borrow().get_path().unwrap_or("".to_string()),
+                                    &ty.borrow().get_path().unwrap_or("".into()),
                                 ),
                             );
                             if !ty.borrow().is_atomic() {
@@ -224,7 +225,7 @@ impl TyInfer {
                         }
                         name = format!("({})", name);
 
-                        let mut st = new_tuple_type(name, fields, Default::default());
+                        let mut st = new_tuple_type(name.into(), fields, Default::default());
                         st.atomic = is_atomic;
                         st.fields.iter_mut().for_each(|(_, f)| {
                             f.index -= 1;
@@ -242,7 +243,7 @@ impl TyInfer {
                                 RefCell::new(PLType::Arr(ARRType {
                                     element_type: ty.clone(),
                                     size_handle: 0,
-                                    generic_map: IndexMap::from([(String::from("T"), ty)]),
+                                    generic_map: IndexMap::from([(Ustr::from("T"), ty)]),
                                 })),
                             )));
                         }
@@ -257,14 +258,14 @@ impl TyInfer {
                                 RefCell::new(PLType::Arr(ARRType {
                                     element_type: ty.clone(),
                                     size_handle: 0,
-                                    generic_map: IndexMap::from([(String::from("T"), ty)]),
+                                    generic_map: IndexMap::from([(Ustr::from("T"), ty)]),
                                 })),
                             )));
                         }
                         Arc::new(RefCell::new(PLType::Arr(ARRType {
                             element_type: ty.clone(),
                             size_handle: 0,
-                            generic_map: IndexMap::from([(String::from("T"), ty)]),
+                            generic_map: IndexMap::from([(Ustr::from("T"), ty)]),
                         })))
                     }
                 }
@@ -309,7 +310,7 @@ fn get_generic_ty_inner<'a, 'b, T: CanGenCode + Generic + CustomType + Clone>(
 
 pub struct InferenceCtx<'ctx> {
     unify_table: Arc<RefCell<UnificationTable<InPlace<TyVariable>>>>,
-    symbol_table: FxHashMap<String, TyVariable>,
+    symbol_table: FxHashMap<Ustr, TyVariable>,
     father: Option<&'ctx InferenceCtx<'ctx>>,
 }
 
@@ -343,14 +344,12 @@ impl<'ctx> InferenceCtx<'ctx> {
         }
     }
 
-    pub fn add_symbol(&mut self, name: &str, ty: TyVariable) {
-        if !self.symbol_table.contains_key(name) {
-            self.symbol_table.insert(name.to_string(), ty);
-        }
+    pub fn add_symbol(&mut self, name: Ustr, ty: TyVariable) {
+        self.symbol_table.entry(name).or_insert(ty);
     }
 
-    pub fn get_symbol(&self, name: &str) -> Option<TyVariable> {
-        if let Some(ty) = self.symbol_table.get(name) {
+    pub fn get_symbol(&self, name: Ustr) -> Option<TyVariable> {
+        if let Some(ty) = self.symbol_table.get(&name) {
             return Some(*ty);
         }
         if let Some(father) = self.father {
@@ -485,7 +484,7 @@ impl<'ctx> InferenceCtx<'ctx> {
                 .unify_table
                 .borrow_mut()
                 .unify_var_value(key, TyInfer::Term(ty.pltype.clone()));
-            self.add_symbol(name, key);
+            self.add_symbol(*name, key);
         }
     }
 
@@ -497,11 +496,11 @@ impl<'ctx> InferenceCtx<'ctx> {
     ) {
         let new_id = self.new_key();
         self.unify_var_tp(new_id, tp, ctx, builder);
-        self.add_symbol("@ret", new_id);
+        self.add_symbol("@ret".into(), new_id);
     }
 
     #[allow(dead_code)]
-    pub fn add_unknown_variable(&mut self, name: &str) {
+    pub fn add_unknown_variable(&mut self, name: Ustr) {
         let key = self.new_key();
         self.add_symbol(name, key);
     }
@@ -515,7 +514,7 @@ impl<'ctx> InferenceCtx<'ctx> {
                 .borrow_mut()
                 .unify_var_value(key, TyInfer::Term(ty.tp.clone()))
                 .unwrap();
-            self.add_symbol(name, key);
+            self.add_symbol(*name, key);
         }
     }
 
@@ -608,7 +607,7 @@ impl<'ctx> InferenceCtx<'ctx> {
             },
             NodeEnum::ExternIdNode(ex) => {
                 if ex.namespace.is_empty() {
-                    if let Some(t) = self.get_symbol(&ex.id.name) {
+                    if let Some(t) = self.get_symbol(ex.id.name) {
                         let id = self.new_key();
                         ex.id.id = Some(id);
                         self.unify_two_symbol(
@@ -677,7 +676,7 @@ impl<'ctx> InferenceCtx<'ctx> {
                         None => {}
                     }
                     argtys.push(key_id);
-                    child.add_symbol(&var.name, key_id);
+                    child.add_symbol(var.name, key_id);
                     var.id = Some(key_id);
                 }
                 let ret_ty = child.new_key();
@@ -699,7 +698,7 @@ impl<'ctx> InferenceCtx<'ctx> {
                     .borrow_mut()
                     .unify_var_value(id, TyInfer::Generic((argtys, GenericTy::Closure)))
                     .unwrap();
-                child.add_symbol("@ret", ret_ty);
+                child.add_symbol("@ret".into(), ret_ty);
                 c.ret_id = Some(ret_ty);
                 child.inference_statements(&mut c.body, ctx, builder);
                 return SymbolType::Var(id);
@@ -726,7 +725,7 @@ impl<'ctx> InferenceCtx<'ctx> {
                                         if let Some(f) = self.symbol_field_symbol(
                                             sym.clone(),
                                             ctx,
-                                            &in_f.id.name,
+                                            in_f.id.name,
                                             builder,
                                         ) {
                                             let ty = self.inference(&mut in_f.exp, ctx, builder);
@@ -770,7 +769,7 @@ impl<'ctx> InferenceCtx<'ctx> {
                                         if let Some(f) = self.symbol_field_symbol(
                                             sym.clone(),
                                             ctx,
-                                            &in_f.id.name,
+                                            in_f.id.name,
                                             builder,
                                         ) {
                                             let ty = self.inference(&mut in_f.exp, ctx, builder);
@@ -875,7 +874,7 @@ impl<'ctx> InferenceCtx<'ctx> {
                 child.inference_statements(sts, ctx, builder);
             }
             NodeEnum::Ret(r) => {
-                let ret = self.get_symbol("@ret");
+                let ret = self.get_symbol("@ret".into());
                 if r.yield_identifier.is_some() {
                     return unknown();
                 }
@@ -932,7 +931,7 @@ impl<'ctx> InferenceCtx<'ctx> {
                     return head;
                 }
                 let f = &tk.field.as_ref().unwrap().name;
-                if let Some(value) = self.symbol_field_symbol(head, ctx, f, builder) {
+                if let Some(value) = self.symbol_field_symbol(head, ctx, *f, builder) {
                     return value;
                 }
             }
@@ -1077,9 +1076,9 @@ impl<'ctx> InferenceCtx<'ctx> {
                 let tp = ctx
                     .plmod
                     .submods
-                    .get("gc")
-                    .map(|m| m.types.get("string").unwrap().clone())
-                    .unwrap_or_else(|| ctx.plmod.types.get("string").unwrap().clone());
+                    .get(&"gc".into())
+                    .map(|m| m.types.get(&"string".into()).unwrap().clone())
+                    .unwrap_or_else(|| ctx.plmod.types.get(&"string".into()).unwrap().clone());
                 return SymbolType::PLType(tp.typ.clone());
             }
             NodeEnum::MatchNode(m) => {
@@ -1107,7 +1106,7 @@ impl<'ctx> InferenceCtx<'ctx> {
             MatchArmCondition::Var(a) => {
                 let id = self.new_key();
                 self.unify(id, vty, ctx, builder);
-                self.add_symbol(&a.name, id);
+                self.add_symbol(a.name, id);
             }
             MatchArmCondition::Literal(_) => (),
             MatchArmCondition::TypedVar(ty, c) => {
@@ -1123,7 +1122,7 @@ impl<'ctx> InferenceCtx<'ctx> {
                             if let PLType::Struct(_) = &*t.borrow() {
                                 for (f, c) in fields {
                                     let sym = self
-                                        .symbol_field_symbol(vty.clone(), ctx, &f.name, builder)
+                                        .symbol_field_symbol(vty.clone(), ctx, f.name, builder)
                                         .unwrap();
                                     self.inference_match_arm(c, sym, ctx, builder);
                                 }
@@ -1136,7 +1135,7 @@ impl<'ctx> InferenceCtx<'ctx> {
                     if let PLType::Struct(_) = &*t.borrow() {
                         for (f, c) in fields {
                             let sym = self
-                                .symbol_field_symbol(vty.clone(), ctx, &f.name, builder)
+                                .symbol_field_symbol(vty.clone(), ctx, f.name, builder)
                                 .unwrap();
                             self.inference_match_arm(c, sym, ctx, builder);
                         }
@@ -1150,9 +1149,9 @@ impl<'ctx> InferenceCtx<'ctx> {
                         TyInfer::Term(t) => {
                             if let PLType::Struct(t) = &*t.borrow() {
                                 for (i, c) in fields.iter().enumerate() {
-                                    t.fields.get(&format!("{}", i)).map(|f| {
+                                    t.fields.get(&format!("{}", i).into()).map(|f| {
                                         let sym = self
-                                            .symbol_field_symbol(vty.clone(), ctx, &f.name, builder)
+                                            .symbol_field_symbol(vty.clone(), ctx, f.name, builder)
                                             .unwrap();
                                         self.inference_match_arm(c, sym, ctx, builder);
                                     });
@@ -1165,9 +1164,9 @@ impl<'ctx> InferenceCtx<'ctx> {
                 SymbolType::PLType(t) => {
                     if let PLType::Struct(t) = &*t.borrow() {
                         for (i, c) in fields.iter().enumerate() {
-                            t.fields.get(&format!("{}", i)).map(|f| {
+                            t.fields.get(&format!("{}", i).into()).map(|f| {
                                 let sym = self
-                                    .symbol_field_symbol(vty.clone(), ctx, &f.name, builder)
+                                    .symbol_field_symbol(vty.clone(), ctx, f.name, builder)
                                     .unwrap();
                                 self.inference_match_arm(c, sym, ctx, builder);
                             });
@@ -1230,7 +1229,7 @@ impl<'ctx> InferenceCtx<'ctx> {
         }
         let mut generic_map = FxHashMap::default();
         for (i, (arg, _)) in f.fntype.generic_map.iter().enumerate() {
-            generic_map.insert(arg.clone(), tys[i]);
+            generic_map.insert(*arg, tys[i]);
         }
         for (i, arg) in f.fntype.param_pltypes.iter().enumerate() {
             if i < offset {
@@ -1312,7 +1311,8 @@ impl<'ctx> InferenceCtx<'ctx> {
             }
             DefVar::TupleDeconstruct(t) => {
                 for (i, var) in t.var.iter_mut().enumerate() {
-                    let ty = self.symbol_field_symbol(ty.clone(), ctx, &i.to_string(), builder);
+                    let ty =
+                        self.symbol_field_symbol(ty.clone(), ctx, i.to_string().into(), builder);
                     if let Some(ty) = ty {
                         self.def_inference(&mut *var, ty, ctx, builder)
                     }
@@ -1322,13 +1322,13 @@ impl<'ctx> InferenceCtx<'ctx> {
                 for dec in t.var.iter_mut() {
                     match dec {
                         crate::ast::node::statement::StructFieldDeconstructEnum::Var(v) => {
-                            let ty = self.symbol_field_symbol(ty.clone(), ctx, &v.name, builder);
+                            let ty = self.symbol_field_symbol(ty.clone(), ctx, v.name, builder);
                             if let Some(ty) = ty {
                                 self.id_inference(&ty, ctx, builder, v);
                             }
                         }
                         crate::ast::node::statement::StructFieldDeconstructEnum::Taged(k, var) => {
-                            let ty = self.symbol_field_symbol(ty.clone(), ctx, &k.name, builder);
+                            let ty = self.symbol_field_symbol(ty.clone(), ctx, k.name, builder);
                             if let Some(ty) = ty {
                                 self.def_inference(&mut *var, ty, ctx, builder)
                             }
@@ -1349,14 +1349,14 @@ impl<'ctx> InferenceCtx<'ctx> {
         let id = self.new_key();
         self.unify(id, ty.clone(), ctx, builder);
         v.id = Some(id);
-        self.add_symbol(&v.name, id);
+        self.add_symbol(v.name, id);
     }
 
     fn symbol_field_symbol<'a, 'b>(
         &mut self,
         head: SymbolType,
         ctx: &'b mut Ctx<'a>,
-        f: &str,
+        f: Ustr,
         builder: &'b BuilderEnum<'a, '_>,
     ) -> Option<SymbolType> {
         match head {
@@ -1381,11 +1381,11 @@ impl<'ctx> InferenceCtx<'ctx> {
                         // }
                         let mut generic_map = FxHashMap::default();
                         st.generic_map.iter().enumerate().for_each(|(i, (k, _))| {
-                            generic_map.insert(k.clone(), tys[i]);
+                            generic_map.insert(*k, tys[i]);
                         });
                         return ctx.run_in_type_mod(&st, |ctx, st| {
                             let field = f;
-                            let f = st.fields.get(field);
+                            let f = st.fields.get(&field);
                             if let Some(f) = f {
                                 return f.typenode.solve_in_infer_generic_ctx(
                                     ctx,
@@ -1397,8 +1397,8 @@ impl<'ctx> InferenceCtx<'ctx> {
                             let a = st;
                             if let Some(mthd) = a
                                 .get_method(field)
-                                .or(ctx.find_global_method(&a.get_full_name(), field).or(ctx
-                                    .find_global_method(&a.get_full_name_except_generic(), field)))
+                                .or(ctx.find_global_method(&a.get_full_name(), &field).or(ctx
+                                    .find_global_method(&a.get_full_name_except_generic(), &field)))
                             {
                                 return Some(SymbolType::PLType(new_arc_refcell(PLType::Fn(
                                     mthd.borrow().clone(),
@@ -1411,15 +1411,15 @@ impl<'ctx> InferenceCtx<'ctx> {
                     TyInfer::Generic((tys, GenericTy::Un(st))) => {
                         let mut generic_map = FxHashMap::default();
                         st.generic_map.iter().enumerate().for_each(|(i, (k, _))| {
-                            generic_map.insert(k.clone(), tys[i]);
+                            generic_map.insert(*k, tys[i]);
                         });
                         return ctx.run_in_type_mod(&st, |ctx, st| {
                             let field = f;
                             let a = st;
                             if let Some(mthd) = a
                                 .get_method(field)
-                                .or(ctx.find_global_method(&a.get_full_name(), field).or(ctx
-                                    .find_global_method(&a.get_full_name_except_generic(), field)))
+                                .or(ctx.find_global_method(&a.get_full_name(), &field).or(ctx
+                                    .find_global_method(&a.get_full_name_except_generic(), &field)))
                             {
                                 return Some(SymbolType::PLType(new_arc_refcell(PLType::Fn(
                                     mthd.borrow().clone(),
@@ -1448,7 +1448,7 @@ trait Inferable {
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, '_>,
         infer_ctx: &mut InferenceCtx<'_>,
-        generic_map: &FxHashMap<String, TyVariable>,
+        generic_map: &FxHashMap<Ustr, TyVariable>,
     ) -> Option<SymbolType>;
 }
 
@@ -1458,7 +1458,7 @@ impl Inferable for TypeNodeEnum {
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, '_>,
         infer_ctx: &mut InferenceCtx<'_>,
-        generic_map: &FxHashMap<String, TyVariable>,
+        generic_map: &FxHashMap<Ustr, TyVariable>,
     ) -> Option<SymbolType> {
         match self {
             TypeNodeEnum::Basic(ty) => match ty {
@@ -1588,7 +1588,7 @@ impl Inferable for TypeNodeEnum {
 
 fn tp_field_symbol<'a, 'b>(
     tp: Arc<RefCell<PLType>>,
-    field: &str,
+    field: Ustr,
     ctx: &'b mut Ctx<'a>,
     builder: &'b BuilderEnum<'a, '_>,
 ) -> Option<SymbolType> {
@@ -1596,7 +1596,7 @@ fn tp_field_symbol<'a, 'b>(
         PLType::Struct(a) | PLType::Trait(a) => {
             return ctx.run_in_type_mod(a, |ctx, a| {
                 ctx.protect_generic_context(&a.generic_map, |ctx| {
-                    let f = a.fields.get(field);
+                    let f = a.fields.get(&field);
                     if let Some(f) = f {
                         return Some(SymbolType::PLType(
                             f.typenode
@@ -1636,12 +1636,12 @@ fn tp_field_symbol<'a, 'b>(
 
 fn get_global_mthd<T: TraitImplAble>(
     a: &T,
-    field: &str,
+    field: Ustr,
     ctx: &mut Ctx,
 ) -> Option<Arc<RefCell<FNValue>>> {
     if let Some(mthd) = ctx
-        .find_global_method(&a.get_full_name(), field)
-        .or(ctx.find_global_method(&a.get_full_name_except_generic(), field))
+        .find_global_method(&a.get_full_name(), &field)
+        .or(ctx.find_global_method(&a.get_full_name_except_generic(), &field))
     {
         return Some(mthd);
     }
