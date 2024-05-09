@@ -19,7 +19,7 @@ use crate::{
             PLSignatureHelp,
         },
         compiler::{compile_dry, ActionType},
-        diag::PLDiag,
+        diag::{ensure_no_error, PLDiag},
         node::program::ASSET_PATH,
         range::Pos,
     },
@@ -501,6 +501,7 @@ fn test_compile() {
             ..Default::default()
         },
     );
+    ensure_no_error(&db, input);
     let exe = crate::utils::canonicalize(&exe)
         .unwrap_or_else(|_| panic!("static compiled file not found {:?}", exe));
     eprintln!("exec: {:?}", exe);

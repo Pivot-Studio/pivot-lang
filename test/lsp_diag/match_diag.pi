@@ -12,8 +12,18 @@ fn test_match() void {
             return;
         }
         {a:0} => {}
+        true => {}
+        1.0 => {}
         _ => {
             return;
+        }
+    }
+
+    match true {
+        false => {
+            
+        }
+        _ => {
         }
     }
 
@@ -22,11 +32,37 @@ fn test_match() void {
         i64(x) => {
             return;
         }
+        1 => {
+            return;
+        }
         f64(_) => {
             return;
         }
         None(_) => {
             return;
+        }
+    }
+
+    match 'a' {
+        'b' => {
+            
+        }
+        "s" => {
+            return;
+        }
+        _ => {
+        }
+    }
+
+    match 1.0 {
+        1.1 => {
+            
+        }
+        1 => {}
+        TestTrait(a) => {
+            
+        }
+        _ => {
         }
     }
 
@@ -46,5 +82,42 @@ fn test_match() void {
         }
     }
 
+
+    let aa: TestTrait;
+    match aa {
+        pattern => {
+            
+        }
+        _ => {
+        }
+    }
+
+    match (1,2,3) {
+        TestTrait(a) => {
+            
+        }
+        _ => {
+        }
+    }
+    let aaa = TestST{a:1};
+    match aaa {
+        {b:a} => {
+            
+        }
+        _ => {
+        }
+    }
+
+
+
     return;
+}
+
+
+trait TestTrait {
+}
+
+struct TestST {
+    a:i64;
+    
 }
