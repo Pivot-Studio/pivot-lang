@@ -51,12 +51,12 @@
             help: None,
             labels: [
                 PLLabel {
-                    file: "",
+                    file: u!(""),
                     txt: Some(
                         (
-                            "type `{}`",
+                            u!("type `{}`"),
                             [
-                                "A",
+                                u!("A"),
                             ],
                         ),
                     ),
@@ -74,12 +74,12 @@
                     },
                 },
                 PLLabel {
-                    file: "",
+                    file: u!(""),
                     txt: Some(
                         (
-                            "type `{}`",
+                            u!("type `{}`"),
                             [
-                                "generic_trait3<f32>",
+                                u!("generic_trait3<f32>"),
                             ],
                         ),
                     ),
@@ -120,12 +120,12 @@
             help: None,
             labels: [
                 PLLabel {
-                    file: "",
+                    file: u!(""),
                     txt: Some(
                         (
-                            "type `{}`",
+                            u!("type `{}`"),
                             [
-                                "B<i64>",
+                                u!("B<i64>"),
                             ],
                         ),
                     ),
@@ -143,12 +143,12 @@
                     },
                 },
                 PLLabel {
-                    file: "",
+                    file: u!(""),
                     txt: Some(
                         (
-                            "type `{}`",
+                            u!("type `{}`"),
                             [
-                                "generic_trait1<f32>",
+                                u!("generic_trait1<f32>"),
                             ],
                         ),
                     ),
@@ -189,12 +189,12 @@
             help: None,
             labels: [
                 PLLabel {
-                    file: "",
+                    file: u!(""),
                     txt: Some(
                         (
-                            "type {}",
+                            u!("type {}"),
                             [
-                                "struct",
+                                u!("struct"),
                             ],
                         ),
                     ),
@@ -237,13 +237,13 @@
             ),
             labels: [
                 PLLabel {
-                    file: "",
+                    file: u!(""),
                     txt: Some(
                         (
-                            "method {} not in impl block, which is required in trait {}",
+                            u!("method {} not in impl block, which is required in trait {}"),
                             [
-                                "name1",
-                                "generic_trait1<T>",
+                                u!("name1"),
+                                u!("generic_trait1<T>"),
                             ],
                         ),
                     ),
@@ -261,12 +261,12 @@
                     },
                 },
                 PLLabel {
-                    file: "",
+                    file: u!(""),
                     txt: Some(
                         (
-                            "trait {} def here",
+                            u!("trait {} def here"),
                             [
-                                "generic_trait1<T>",
+                                u!("generic_trait1<T>"),
                             ],
                         ),
                     ),
@@ -309,13 +309,13 @@
             ),
             labels: [
                 PLLabel {
-                    file: "",
+                    file: u!(""),
                     txt: Some(
                         (
-                            "add `{}` or `{}` to make it legal",
+                            u!("add `{}` or `{}` to make it legal"),
                             [
-                                "?",
-                                "!",
+                                u!("?"),
+                                u!("!"),
                             ],
                         ),
                     ),
@@ -333,12 +333,12 @@
                     },
                 },
                 PLLabel {
-                    file: "",
+                    file: u!(""),
                     txt: Some(
                         (
-                            "target type is `{}`",
+                            u!("target type is `{}`"),
                             [
-                                "A",
+                                u!("A"),
                             ],
                         ),
                     ),
@@ -356,12 +356,12 @@
                     },
                 },
                 PLLabel {
-                    file: "",
+                    file: u!(""),
                     txt: Some(
                         (
-                            "type of the expression is `{}`",
+                            u!("type of the expression is `{}`"),
                             [
-                                "TestTrait",
+                                u!("TestTrait"),
                             ],
                         ),
                     ),
@@ -402,12 +402,12 @@
             help: None,
             labels: [
                 PLLabel {
-                    file: "",
+                    file: u!(""),
                     txt: Some(
                         (
-                            "the derive trait {} not impl",
+                            u!("the derive trait {} not impl"),
                             [
-                                "generic_trait1<T>",
+                                u!("generic_trait1<T>"),
                             ],
                         ),
                     ),
@@ -448,13 +448,13 @@
             help: None,
             labels: [
                 PLLabel {
-                    file: "",
+                    file: u!(""),
                     txt: Some(
                         (
-                            "the method `{}` of trait `{}` has generic params, which makes it uninstantiatable",
+                            u!("the method `{}` of trait `{}` has generic params, which makes it uninstantiatable"),
                             [
-                                "hash",
-                                "Hash",
+                                u!("hash"),
+                                u!("Hash"),
                             ],
                         ),
                     ),
@@ -472,12 +472,12 @@
                     },
                 },
                 PLLabel {
-                    file: "",
+                    file: u!(""),
                     txt: Some(
                         (
-                            "trait type `{}`",
+                            u!("trait type `{}`"),
                             [
-                                "Hash",
+                                u!("Hash"),
                             ],
                         ),
                     ),
@@ -518,12 +518,12 @@
             help: None,
             labels: [
                 PLLabel {
-                    file: "",
+                    file: u!(""),
                     txt: Some(
                         (
-                            "Unused variable `{}`",
+                            u!("Unused variable `{}`"),
                             [
-                                "hashtest",
+                                u!("hashtest"),
                             ],
                         ),
                     ),
@@ -564,12 +564,12 @@
             help: None,
             labels: [
                 PLLabel {
-                    file: "",
+                    file: u!(""),
                     txt: Some(
                         (
-                            "Unused variable `{}`",
+                            u!("Unused variable `{}`"),
                             [
-                                "t",
+                                u!("t"),
                             ],
                         ),
                     ),
@@ -610,12 +610,12 @@
             help: None,
             labels: [
                 PLLabel {
-                    file: "",
+                    file: u!(""),
                     txt: Some(
                         (
-                            "Unused variable `{}`",
+                            u!("Unused variable `{}`"),
                             [
-                                "t",
+                                u!("t"),
                             ],
                         ),
                     ),
@@ -656,12 +656,12 @@
             help: None,
             labels: [
                 PLLabel {
-                    file: "",
+                    file: u!(""),
                     txt: Some(
                         (
-                            "Unused variable `{}`",
+                            u!("Unused variable `{}`"),
                             [
-                                "t",
+                                u!("t"),
                             ],
                         ),
                     ),
@@ -702,12 +702,12 @@
             help: None,
             labels: [
                 PLLabel {
-                    file: "",
+                    file: u!(""),
                     txt: Some(
                         (
-                            "Unused variable `{}`",
+                            u!("Unused variable `{}`"),
                             [
-                                "t",
+                                u!("t"),
                             ],
                         ),
                     ),
@@ -748,12 +748,12 @@
             help: None,
             labels: [
                 PLLabel {
-                    file: "",
+                    file: u!(""),
                     txt: Some(
                         (
-                            "Unused variable `{}`",
+                            u!("Unused variable `{}`"),
                             [
-                                "t",
+                                u!("t"),
                             ],
                         ),
                     ),
@@ -794,12 +794,12 @@
             help: None,
             labels: [
                 PLLabel {
-                    file: "",
+                    file: u!(""),
                     txt: Some(
                         (
-                            "Unused variable `{}`",
+                            u!("Unused variable `{}`"),
                             [
-                                "yy",
+                                u!("yy"),
                             ],
                         ),
                     ),
