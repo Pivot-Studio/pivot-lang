@@ -2,23 +2,45 @@
     PLDiag {
         raw: PLDiagRaw {
             code: Err(
-                SYNTAX_ERROR_UNEXPECTED_TOKEN,
+                STRUCT_FIELD_NOT_FOUND,
             ),
-            help: Some(
-                "",
-            ),
-            labels: [],
+            help: None,
+            labels: [
+                PLLabel {
+                    file: u!(""),
+                    txt: Some(
+                        (
+                            u!("struct `{}` is defined here"),
+                            [
+                                u!("TestST"),
+                            ],
+                        ),
+                    ),
+                    range: Range {
+                        start: Pos {
+                            line: 120,
+                            column: 8,
+                            offset: 1550,
+                        },
+                        end: Pos {
+                            line: 120,
+                            column: 14,
+                            offset: 1556,
+                        },
+                    },
+                },
+            ],
             source: None,
             range: Range {
                 start: Pos {
-                    line: 34,
-                    column: 12,
-                    offset: 488,
+                    line: 104,
+                    column: 10,
+                    offset: 1439,
                 },
                 end: Pos {
-                    line: 34,
-                    column: 12,
-                    offset: 488,
+                    line: 104,
+                    column: 11,
+                    offset: 1440,
                 },
             },
         },
@@ -35,14 +57,38 @@
             source: None,
             range: Range {
                 start: Pos {
-                    line: 41,
-                    column: 9,
-                    offset: 604,
+                    line: 70,
+                    column: 12,
+                    offset: 949,
                 },
                 end: Pos {
-                    line: 41,
+                    line: 70,
+                    column: 12,
+                    offset: 949,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
+                SYNTAX_ERROR_UNEXPECTED_TOKEN,
+            ),
+            help: Some(
+                "",
+            ),
+            labels: [],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 77,
+                    column: 9,
+                    offset: 1065,
+                },
+                end: Pos {
+                    line: 77,
                     column: 25,
-                    offset: 620,
+                    offset: 1081,
                 },
             },
         },
@@ -57,14 +103,14 @@
             source: None,
             range: Range {
                 start: Pos {
-                    line: 37,
+                    line: 73,
                     column: 14,
-                    offset: 541,
+                    offset: 1002,
                 },
                 end: Pos {
-                    line: 37,
+                    line: 73,
                     column: 15,
-                    offset: 542,
+                    offset: 1003,
                 },
             },
         },
@@ -89,14 +135,14 @@
                     ),
                     range: Range {
                         start: Pos {
-                            line: 40,
+                            line: 76,
                             column: 9,
-                            offset: 587,
+                            offset: 1048,
                         },
                         end: Pos {
-                            line: 40,
+                            line: 76,
                             column: 11,
-                            offset: 589,
+                            offset: 1050,
                         },
                     },
                 },
@@ -104,14 +150,14 @@
             source: None,
             range: Range {
                 start: Pos {
-                    line: 40,
+                    line: 76,
                     column: 9,
-                    offset: 587,
+                    offset: 1048,
                 },
                 end: Pos {
-                    line: 40,
+                    line: 76,
                     column: 11,
-                    offset: 589,
+                    offset: 1050,
                 },
             },
         },
@@ -136,14 +182,14 @@
                     ),
                     range: Range {
                         start: Pos {
-                            line: 37,
+                            line: 73,
                             column: 9,
-                            offset: 536,
+                            offset: 997,
                         },
                         end: Pos {
-                            line: 37,
+                            line: 73,
                             column: 16,
-                            offset: 543,
+                            offset: 1004,
                         },
                     },
                 },
@@ -151,14 +197,61 @@
             source: None,
             range: Range {
                 start: Pos {
-                    line: 37,
+                    line: 73,
                     column: 9,
-                    offset: 536,
+                    offset: 997,
                 },
                 end: Pos {
-                    line: 37,
+                    line: 73,
                     column: 16,
-                    offset: 543,
+                    offset: 1004,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
+                ILLEGAL_MATCH_VALUE,
+            ),
+            help: None,
+            labels: [
+                PLLabel {
+                    file: u!(""),
+                    txt: Some(
+                        (
+                            u!("type `{}` of kind `{}` is not allowed to be matched"),
+                            [
+                                u!("TestTrait"),
+                                u!("trait"),
+                            ],
+                        ),
+                    ),
+                    range: Range {
+                        start: Pos {
+                            line: 87,
+                            column: 11,
+                            offset: 1206,
+                        },
+                        end: Pos {
+                            line: 87,
+                            column: 13,
+                            offset: 1208,
+                        },
+                    },
+                },
+            ],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 87,
+                    column: 11,
+                    offset: 1206,
+                },
+                end: Pos {
+                    line: 87,
+                    column: 13,
+                    offset: 1208,
                 },
             },
         },
@@ -183,14 +276,14 @@
                     ),
                     range: Range {
                         start: Pos {
-                            line: 25,
+                            line: 38,
                             column: 9,
-                            offset: 359,
+                            offset: 532,
                         },
                         end: Pos {
-                            line: 25,
+                            line: 38,
                             column: 12,
-                            offset: 362,
+                            offset: 535,
                         },
                     },
                 },
@@ -198,14 +291,249 @@
             source: None,
             range: Range {
                 start: Pos {
-                    line: 25,
+                    line: 38,
                     column: 9,
-                    offset: 359,
+                    offset: 532,
                 },
                 end: Pos {
-                    line: 25,
+                    line: 38,
                     column: 12,
-                    offset: 362,
+                    offset: 535,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
+                ILLEGAL_MATCH_ARM_CONDITION,
+            ),
+            help: None,
+            labels: [
+                PLLabel {
+                    file: u!(""),
+                    txt: Some(
+                        (
+                            u!("match condition is of type `{}`, imcompatible with type `{}`"),
+                            [
+                                u!("bool"),
+                                u!("i64"),
+                            ],
+                        ),
+                    ),
+                    range: Range {
+                        start: Pos {
+                            line: 15,
+                            column: 9,
+                            offset: 213,
+                        },
+                        end: Pos {
+                            line: 15,
+                            column: 13,
+                            offset: 217,
+                        },
+                    },
+                },
+            ],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 15,
+                    column: 9,
+                    offset: 213,
+                },
+                end: Pos {
+                    line: 15,
+                    column: 13,
+                    offset: 217,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
+                ILLEGAL_MATCH_ARM_CONDITION,
+            ),
+            help: None,
+            labels: [
+                PLLabel {
+                    file: u!(""),
+                    txt: Some(
+                        (
+                            u!("match condition is of type `{}`, imcompatible with type `{}`"),
+                            [
+                                u!("float"),
+                                u!("int"),
+                            ],
+                        ),
+                    ),
+                    range: Range {
+                        start: Pos {
+                            line: 16,
+                            column: 9,
+                            offset: 232,
+                        },
+                        end: Pos {
+                            line: 16,
+                            column: 12,
+                            offset: 235,
+                        },
+                    },
+                },
+            ],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 16,
+                    column: 9,
+                    offset: 232,
+                },
+                end: Pos {
+                    line: 16,
+                    column: 12,
+                    offset: 235,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
+                ILLEGAL_MATCH_ARM_CONDITION,
+            ),
+            help: None,
+            labels: [
+                PLLabel {
+                    file: u!(""),
+                    txt: Some(
+                        (
+                            u!("match condition is of type `{}`, imcompatible with type `{}`"),
+                            [
+                                u!("int"),
+                                u!("Option<i64>"),
+                            ],
+                        ),
+                    ),
+                    range: Range {
+                        start: Pos {
+                            line: 35,
+                            column: 9,
+                            offset: 487,
+                        },
+                        end: Pos {
+                            line: 35,
+                            column: 10,
+                            offset: 488,
+                        },
+                    },
+                },
+            ],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 35,
+                    column: 9,
+                    offset: 487,
+                },
+                end: Pos {
+                    line: 35,
+                    column: 10,
+                    offset: 488,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
+                ILLEGAL_MATCH_ARM_CONDITION,
+            ),
+            help: None,
+            labels: [
+                PLLabel {
+                    file: u!(""),
+                    txt: Some(
+                        (
+                            u!("match condition is of type `{}`, imcompatible with type `{}`"),
+                            [
+                                u!("int"),
+                                u!("float"),
+                            ],
+                        ),
+                    ),
+                    range: Range {
+                        start: Pos {
+                            line: 61,
+                            column: 9,
+                            offset: 831,
+                        },
+                        end: Pos {
+                            line: 61,
+                            column: 10,
+                            offset: 832,
+                        },
+                    },
+                },
+            ],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 61,
+                    column: 9,
+                    offset: 831,
+                },
+                end: Pos {
+                    line: 61,
+                    column: 10,
+                    offset: 832,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
+                ILLEGAL_MATCH_ARM_CONDITION,
+            ),
+            help: None,
+            labels: [
+                PLLabel {
+                    file: u!(""),
+                    txt: Some(
+                        (
+                            u!("match condition is of type `{}`, imcompatible with type `{}`"),
+                            [
+                                u!("string"),
+                                u!("char"),
+                            ],
+                        ),
+                    ),
+                    range: Range {
+                        start: Pos {
+                            line: 50,
+                            column: 9,
+                            offset: 696,
+                        },
+                        end: Pos {
+                            line: 50,
+                            column: 12,
+                            offset: 699,
+                        },
+                    },
+                },
+            ],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 50,
+                    column: 9,
+                    offset: 696,
+                },
+                end: Pos {
+                    line: 50,
+                    column: 12,
+                    offset: 699,
                 },
             },
         },
@@ -319,6 +647,102 @@
                             u!("match condition like `{}` can only be used while maching through union types. Here `{}` is of type `{}`"),
                             [
                                 u!("type(cond)"),
+                                u!("(i64, i64, i64)"),
+                                u!("struct"),
+                            ],
+                        ),
+                    ),
+                    range: Range {
+                        start: Pos {
+                            line: 96,
+                            column: 9,
+                            offset: 1315,
+                        },
+                        end: Pos {
+                            line: 96,
+                            column: 18,
+                            offset: 1324,
+                        },
+                    },
+                },
+            ],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 96,
+                    column: 9,
+                    offset: 1315,
+                },
+                end: Pos {
+                    line: 96,
+                    column: 18,
+                    offset: 1324,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
+                ILLEGAL_MATCH_ARM_CONDITION,
+            ),
+            help: None,
+            labels: [
+                PLLabel {
+                    file: u!(""),
+                    txt: Some(
+                        (
+                            u!("match condition like `{}` can only be used while maching through union types. Here `{}` is of type `{}`"),
+                            [
+                                u!("type(cond)"),
+                                u!("f64"),
+                                u!("primitive"),
+                            ],
+                        ),
+                    ),
+                    range: Range {
+                        start: Pos {
+                            line: 62,
+                            column: 9,
+                            offset: 847,
+                        },
+                        end: Pos {
+                            line: 62,
+                            column: 18,
+                            offset: 856,
+                        },
+                    },
+                },
+            ],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 62,
+                    column: 9,
+                    offset: 847,
+                },
+                end: Pos {
+                    line: 62,
+                    column: 18,
+                    offset: 856,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
+                ILLEGAL_MATCH_ARM_CONDITION,
+            ),
+            help: None,
+            labels: [
+                PLLabel {
+                    file: u!(""),
+                    txt: Some(
+                        (
+                            u!("match condition like `{}` can only be used while maching through union types. Here `{}` is of type `{}`"),
+                            [
+                                u!("type(cond)"),
                                 u!("i64"),
                                 u!("primitive"),
                             ],
@@ -365,14 +789,14 @@
             source: None,
             range: Range {
                 start: Pos {
-                    line: 34,
+                    line: 70,
                     column: 14,
-                    offset: 490,
+                    offset: 951,
                 },
                 end: Pos {
-                    line: 34,
+                    line: 70,
                     column: 15,
-                    offset: 491,
+                    offset: 952,
                 },
             },
         },

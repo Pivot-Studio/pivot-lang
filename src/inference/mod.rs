@@ -1123,7 +1123,7 @@ impl<'ctx> InferenceCtx<'ctx> {
                                 for (f, c) in fields {
                                     let sym = self
                                         .symbol_field_symbol(vty.clone(), ctx, f.name, builder)
-                                        .unwrap();
+                                        .unwrap_or(unknown());
                                     self.inference_match_arm(c, sym, ctx, builder);
                                 }
                             }
