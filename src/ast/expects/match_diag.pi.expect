@@ -77,13 +77,13 @@
             help: None,
             labels: [
                 PLLabel {
-                    file: "",
+                    file: u!(""),
                     txt: Some(
                         (
-                            "found {} elements here, expect {} elements",
+                            u!("found {} elements here, expect {} elements"),
                             [
-                                "0",
-                                "2",
+                                u!("0"),
+                                u!("2"),
                             ],
                         ),
                     ),
@@ -124,13 +124,13 @@
             help: None,
             labels: [
                 PLLabel {
-                    file: "",
+                    file: u!(""),
                     txt: Some(
                         (
-                            "found {} elements here, expect {} elements",
+                            u!("found {} elements here, expect {} elements"),
                             [
-                                "3",
-                                "2",
+                                u!("3"),
+                                u!("2"),
                             ],
                         ),
                     ),
@@ -171,13 +171,13 @@
             help: None,
             labels: [
                 PLLabel {
-                    file: "",
+                    file: u!(""),
                     txt: Some(
                         (
-                            "match condition is of type `{}`, expected to be one of: `{}`",
+                            u!("match condition is of type `{}`, expected to be one of: `{}`"),
                             [
-                                "f64",
-                                "i64, None",
+                                u!("f64"),
+                                u!("i64, None"),
                             ],
                         ),
                     ),
@@ -218,13 +218,13 @@
             help: None,
             labels: [
                 PLLabel {
-                    file: "",
+                    file: u!(""),
                     txt: Some(
                         (
-                            "match condition is of type `{}`, imcompatible with type `{}`",
+                            u!("match condition is of type `{}`, imcompatible with type `{}`"),
                             [
-                                "string",
-                                "i64",
+                                u!("string"),
+                                u!("i64"),
                             ],
                         ),
                     ),
@@ -265,14 +265,14 @@
             help: None,
             labels: [
                 PLLabel {
-                    file: "",
+                    file: u!(""),
                     txt: Some(
                         (
-                            "match condition like `{}` can only be used while maching through struct types. Here `{}` is of type `{}`",
+                            u!("match condition like `{}` can only be used while maching through struct types. Here `{}` is of type `{}`"),
                             [
-                                "{field:cond ...}",
-                                "i64",
-                                "primitive",
+                                u!("{field:cond ...}"),
+                                u!("i64"),
+                                u!("primitive"),
                             ],
                         ),
                     ),
@@ -313,14 +313,14 @@
             help: None,
             labels: [
                 PLLabel {
-                    file: "",
+                    file: u!(""),
                     txt: Some(
                         (
-                            "match condition like `{}` can only be used while maching through union types. Here `{}` is of type `{}`",
+                            u!("match condition like `{}` can only be used while maching through union types. Here `{}` is of type `{}`"),
                             [
-                                "type(cond)",
-                                "i64",
-                                "primitive",
+                                u!("type(cond)"),
+                                u!("i64"),
+                                u!("primitive"),
                             ],
                         ),
                     ),

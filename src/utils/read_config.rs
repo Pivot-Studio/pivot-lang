@@ -163,7 +163,7 @@ pub fn prepare_build_envs(db: &dyn Db, entry: SourceProgram) -> Result<Config, S
     }
     let mut config: Config = re.unwrap();
     // let d = crate::lsp::wasm::PLLIB_DIR;
-    let mut deps = BTreeMap::<String, Dependency>::default();
+    let mut deps = BTreeMap::<Ustr, Dependency>::default();
     for path in crate::lsp::wasm::PLLIB_DIR.dirs() {
         if !path.contains("thirdparty") {
             let dep = Dependency {
