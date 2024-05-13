@@ -14,7 +14,6 @@ use nom::combinator::{eof, map};
 use nom::sequence::terminated;
 use notify::{Event, EventKind, RecursiveMode, Watcher};
 use rustc_hash::{FxHashMap, FxHashSet};
-use rustyline::config::Configurer;
 use rustyline::error::ReadlineError;
 use ustr::{ustr, Ustr};
 
@@ -50,7 +49,64 @@ lazy_static::lazy_static! {
     pub static ref LOADED_SET:Arc<Mutex<FxHashSet<PathBuf>>> = Arc::new(Mutex::new(FxHashSet::default()));
 }
 
-pub fn start_repl() {
+pub trait TermEditor {
+    fn set_helper(&mut self, helper: Option<REPLCompleter>);
+    fn readline(&mut self, prompt: &str) -> Result<String, ReadlineError>;
+    /// Load the history from the specified file.
+    fn load_history<P: AsRef<Path> + ?Sized>(&mut self, path: &P) -> Result<(), ReadlineError>;
+
+    /// Save the history in the specified file.
+    fn save_history<P: AsRef<Path> + ?Sized>(&mut self, path: &P) -> Result<(), ReadlineError>;
+
+    /// Append new entries in the specified file.
+    fn append_history<P: AsRef<Path> + ?Sized>(&mut self, path: &P) -> Result<(), ReadlineError>;
+
+    /// Add a new entry in the history.
+    fn add_history_entry<S: AsRef<str> + Into<String>>(
+        &mut self,
+        line: S,
+    ) -> Result<bool, ReadlineError>;
+
+    #[cfg(test)]
+    fn assert_err(&mut self, _err: bool) {
+        // noop
+    }
+}
+
+pub fn default_editor() -> rustyline::Editor<REPLCompleter, rustyline::history::FileHistory> {
+    rustyline::Editor::<REPLCompleter, rustyline::history::FileHistory>::new().unwrap()
+}
+
+impl TermEditor for rustyline::Editor<REPLCompleter, rustyline::history::FileHistory> {
+    fn set_helper(&mut self, helper: Option<REPLCompleter>) {
+        self.set_helper(helper);
+    }
+
+    fn readline(&mut self, prompt: &str) -> Result<String, ReadlineError> {
+        self.readline(prompt)
+    }
+
+    fn load_history<P: AsRef<Path> + ?Sized>(&mut self, path: &P) -> Result<(), ReadlineError> {
+        self.load_history(path)
+    }
+
+    fn save_history<P: AsRef<Path> + ?Sized>(&mut self, path: &P) -> Result<(), ReadlineError> {
+        self.save_history(path)
+    }
+
+    fn append_history<P: AsRef<Path> + ?Sized>(&mut self, path: &P) -> Result<(), ReadlineError> {
+        self.append_history(path)
+    }
+
+    fn add_history_entry<S: AsRef<str> + Into<String>>(
+        &mut self,
+        line: S,
+    ) -> Result<bool, ReadlineError> {
+        self.add_history_entry(line)
+    }
+}
+
+pub fn start_repl<E: TermEditor>(mut rl: E) {
     let mut db = Database::default();
     let mut db2 = Database::default();
 
@@ -130,10 +186,9 @@ project = "repl"
 
     // `()` can be used when no completer is required
     let completer = REPLCompleter::new(&mut db2 as _, mem_check);
-    let mut rl =
-        rustyline::Editor::<REPLCompleter, rustyline::history::FileHistory>::new().unwrap();
+    // let mut rl =
+    //     rustyline::Editor::<REPLCompleter, rustyline::history::FileHistory>::new().unwrap();
     rl.set_helper(Some(completer));
-    rl.set_completion_type(rustyline::CompletionType::Circular);
     let _ = rl.load_history(&PathBuf::from(&root).join("history.txt"));
 
     loop {
@@ -151,6 +206,13 @@ project = "repl"
                     if try_parse_commands(&line)
                         .map(|repl| match repl.command {
                             repl_cmd::Commands::Load { proj_path, _as } => {
+                                let proj_path = match crate::utils::canonicalize(proj_path) {
+                                    Ok(p) => p,
+                                    Err(e) => {
+                                        eprintln!("Error: {:?}", e);
+                                        return;
+                                    }
+                                };
                                 if let ControlFlow::Break(_) =
                                     validate_proj_cfg(&proj_path, &db2, &docs2)
                                 {
@@ -170,6 +232,13 @@ project = "repl"
                                 );
                             }
                             repl_cmd::Commands::LoadDeps { proj_path } => {
+                                let proj_path = match crate::utils::canonicalize(proj_path) {
+                                    Ok(p) => p,
+                                    Err(e) => {
+                                        eprintln!("Error: {:?}", e);
+                                        return;
+                                    }
+                                };
                                 match validate_proj_cfg(&proj_path, &db2, &docs2) {
                                     ControlFlow::Continue(cfg) => {
                                         for (as_name, path) in &cfg.deps.unwrap_or_default() {
@@ -181,13 +250,56 @@ project = "repl"
                             }
                             repl_cmd::Commands::Reload { file_path } => {
                                 let file_path = file_path.to_str().unwrap();
-                                docs2.lock().unwrap().remove(file_path);
-                                docs.lock().unwrap().remove(file_path);
+                                let file_path = match crate::utils::canonicalize(file_path) {
+                                    Ok(p) => p.to_str().unwrap().to_owned(),
+                                    Err(e) => {
+                                        eprintln!("Error: {:?}", e);
+                                        return;
+                                    }
+                                };
+                                docs2.lock().unwrap().remove(&file_path);
+                                docs.lock().unwrap().remove(&file_path);
                             }
                             repl_cmd::Commands::Watch { dir } => {
+                                let dir = match crate::utils::canonicalize(dir) {
+                                    Ok(p) => p.to_str().unwrap().to_owned(),
+                                    Err(e) => {
+                                        eprintln!("Error: {:?}", e);
+                                        return;
+                                    }
+                                };
                                 watcher
                                     .watch(Path::new(&dir), RecursiveMode::Recursive)
                                     .expect("watch failed");
+                            }
+                            repl_cmd::Commands::Config => {
+                                let src = docs2.lock().unwrap();
+                                let conf = src.get(REPL_VIRTUAL_CONF).unwrap();
+                                println!("{}", conf.text(&db2));
+                            }
+                            repl_cmd::Commands::Symbol => {
+                                let vars = REPL_VARIABLES.lock().unwrap();
+                                let mut src = "".to_string();
+                                for (k, _) in vars.iter() {
+                                    src.push_str(&format!("println!(\"{}: \", {});\n", k, k));
+                                }
+                                drop(vars);
+                                let id =
+                                    REPL_COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                                let anon_fn = format!(
+                                    "{}\n pub fn __anon__{}() void {{ \n{};\nreturn; }}",
+                                    used_headers, id, src
+                                );
+                                docs.lock()
+                                    .unwrap()
+                                    .get(REPL_VIRTUAL_ENTRY)
+                                    .unwrap()
+                                    .set_text(&mut db)
+                                    .to(anon_fn.clone());
+                                mem.set_docs(&mut db)
+                                    .to(Arc::new(Mutex::new(docs.lock().unwrap().clone())));
+                                let _ = compiler::compile_dry(&db, mem).unwrap();
+                                load_mod_and_evaluate(&db, mem, &ctx);
                             }
                         })
                         .is_some()
@@ -268,6 +380,10 @@ project = "repl"
                 let mut errs_num = 0;
                 let mut warn_num = 0;
                 print_diags(diags, mem_check, &db2, &mut errs_num, &mut warn_num, true);
+                #[cfg(test)]
+                {
+                    rl.assert_err(errs_num > 0);
+                }
                 if errs_num > 0 {
                     REPL_COUNTER.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
                     continue;
@@ -300,55 +416,7 @@ project = "repl"
                     .unwrap()
                     .extend(plmodule.global_table.clone());
 
-                let mods = compiler::compile_dry::accumulated::<ModBuffer>(&db, mem);
-
-                for m in &mods {
-                    if !m.name.starts_with("__anon__") {
-                        if LOADED_SET.lock().unwrap().contains(&m.path) {
-                            continue;
-                        }
-                        unsafe {
-                            let mo = Module::parse_bitcode_from_buffer(
-                                &MemoryBuffer::create_from_memory_range(
-                                    &m.buf,
-                                    m.path.file_name().unwrap().to_str().unwrap(),
-                                ),
-                                &ctx,
-                            )
-                            .unwrap();
-                            let p = mo.as_mut_ptr();
-                            mo.strip_debug_info();
-                            log::trace!("Loaded module, content:\n{}", mo.to_string());
-                            LOADED_SET.lock().unwrap().insert(m.path.clone());
-                            immix::AddModuleToOrcJIT(p as _);
-                            // Owned by the JIT now
-                            std::mem::forget(mo);
-
-                            log::info!("Loaded module: {:?}", m.name);
-                        };
-                    }
-                }
-                for m in &mods {
-                    if m.name.starts_with("__anon__") {
-                        unsafe {
-                            let m = Module::parse_bitcode_from_buffer(
-                                &MemoryBuffer::create_from_memory_range(
-                                    &m.buf,
-                                    m.path.file_name().unwrap().to_str().unwrap(),
-                                ),
-                                &ctx,
-                            )
-                            .unwrap();
-
-                            let p = m.as_mut_ptr();
-                            m.strip_debug_info();
-                            log::trace!("Evaluate module, content:\n{}", m.to_string());
-                            immix::RunExpr(p as _);
-                            // Owned by the JIT now
-                            std::mem::forget(m);
-                        }
-                    }
-                }
+                load_mod_and_evaluate(&db, mem, &ctx);
             }
             Err(ReadlineError::Interrupted) => {
                 println!("CTRL-C");
@@ -366,6 +434,58 @@ project = "repl"
     }
     let _ = rl.save_history(&PathBuf::from(&root).join("history.txt"));
     // exit(0);
+}
+
+fn load_mod_and_evaluate(db: &Database, mem: MemDocsInput, ctx: &Context) {
+    let mods = compiler::compile_dry::accumulated::<ModBuffer>(db, mem);
+
+    for m in &mods {
+        if !m.name.starts_with("__anon__") {
+            if LOADED_SET.lock().unwrap().contains(&m.path) {
+                continue;
+            }
+            unsafe {
+                let mo = Module::parse_bitcode_from_buffer(
+                    &MemoryBuffer::create_from_memory_range(
+                        &m.buf,
+                        m.path.file_name().unwrap().to_str().unwrap(),
+                    ),
+                    ctx,
+                )
+                .unwrap();
+                let p = mo.as_mut_ptr();
+                mo.strip_debug_info();
+                log::trace!("Loaded module, content:\n{}", mo.to_string());
+                LOADED_SET.lock().unwrap().insert(m.path.clone());
+                immix::AddModuleToOrcJIT(p as _);
+                // Owned by the JIT now
+                std::mem::forget(mo);
+
+                log::info!("Loaded module: {:?}", m.name);
+            };
+        }
+    }
+    for m in &mods {
+        if m.name.starts_with("__anon__") {
+            unsafe {
+                let m = Module::parse_bitcode_from_buffer(
+                    &MemoryBuffer::create_from_memory_range(
+                        &m.buf,
+                        m.path.file_name().unwrap().to_str().unwrap(),
+                    ),
+                    ctx,
+                )
+                .unwrap();
+
+                let p = m.as_mut_ptr();
+                m.strip_debug_info();
+                log::trace!("Evaluate module, content:\n{}", m.to_string());
+                immix::RunExpr(p as _);
+                // Owned by the JIT now
+                std::mem::forget(m);
+            }
+        }
+    }
 }
 
 fn validate_proj_cfg(
@@ -476,4 +596,96 @@ fn new_watcher(sender: Sender<PathBuf>) -> notify::RecommendedWatcher {
         }
     })
     .expect("create watcher failed")
+}
+
+#[cfg(test)]
+mod test {
+    use std::collections::VecDeque;
+
+    struct TestEditor {
+        input: VecDeque<String>,
+        err_expects: VecDeque<bool>,
+    }
+
+    impl TestEditor {
+        fn new(input: VecDeque<String>, err_expects: VecDeque<bool>) -> Self {
+            Self { input, err_expects }
+        }
+    }
+
+    impl super::TermEditor for TestEditor {
+        fn readline(&mut self, _prompt: &str) -> Result<String, rustyline::error::ReadlineError> {
+            self.input
+                .pop_front()
+                .ok_or(rustyline::error::ReadlineError::Eof)
+        }
+
+        fn set_helper(&mut self, _helper: Option<super::REPLCompleter>) {}
+
+        fn load_history<P: AsRef<std::path::Path> + ?Sized>(
+            &mut self,
+            _path: &P,
+        ) -> Result<(), rustyline::error::ReadlineError> {
+            Ok(())
+        }
+
+        fn save_history<P: AsRef<std::path::Path> + ?Sized>(
+            &mut self,
+            _path: &P,
+        ) -> Result<(), rustyline::error::ReadlineError> {
+            Ok(())
+        }
+
+        fn append_history<P: AsRef<std::path::Path> + ?Sized>(
+            &mut self,
+            _path: &P,
+        ) -> Result<(), rustyline::error::ReadlineError> {
+            Ok(())
+        }
+
+        fn add_history_entry<S: AsRef<str> + Into<String>>(
+            &mut self,
+            _line: S,
+        ) -> Result<bool, rustyline::error::ReadlineError> {
+            Ok(true)
+        }
+        fn assert_err(&mut self, err: bool) {
+            let expect = self.err_expects.pop_front().unwrap();
+            assert_eq!(
+                err, expect,
+                "expect err: {}, got: {}. buffer remains: {:#?}",
+                expect, err, self.input
+            );
+        }
+    }
+
+    #[test]
+    fn test_repl() {
+        let rl = TestEditor::new(
+            VecDeque::from(vec![
+                "let a = 1".to_owned(),
+                "a".to_owned(),
+                "b".to_owned(),
+                "let a = 2;".to_owned(),
+                "use std::cols::hashtable;".to_owned(),
+                "@repl load test --as test".to_owned(),
+                "use test::main".to_owned(),
+                "main::main()".to_owned(),
+                "@repl load-deps test".to_owned(),
+                "use project2::main::test".to_owned(),
+                "test::test()".to_owned(),
+                "@repl reload test/main.pi".to_owned(),
+                "main::main()".to_owned(),
+                "@repl watch test".to_owned(),
+                "main::main()".to_owned(),
+                "@repl config".to_owned(),
+                "@repl symbol".to_owned(),
+            ]),
+            VecDeque::from(vec![
+                false, false, true, true, false, false, false, false, false, false, false, false,
+                false, false, false, false, false,
+            ]),
+        );
+        super::start_repl(rl);
+    }
 }

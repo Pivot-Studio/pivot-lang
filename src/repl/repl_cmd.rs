@@ -35,6 +35,10 @@ pub enum Commands {
         /// directory
         dir: String,
     },
+    /// Print current config
+    Config,
+    /// Print symbol table
+    Symbol,
 }
 
 #[cfg(test)]
