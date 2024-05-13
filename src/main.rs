@@ -76,7 +76,7 @@ fn main() {
             RunCommand::Version => cli.version(),
             RunCommand::Repl => {
                 #[cfg(feature = "repl")]
-                repl::start_repl();
+                repl::start_repl(repl::editor::default_editor());
                 #[cfg(not(feature = "repl"))]
                 eprintln!("feature repl is not enabled, cannot use repl command");
             }
