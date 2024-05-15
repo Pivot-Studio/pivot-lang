@@ -227,9 +227,11 @@ impl TyInfer {
 
                         let mut st = new_tuple_type(name.into(), fields, Default::default());
                         st.atomic = is_atomic;
-                        st.fields.iter_mut().for_each(|(_, f)| {
-                            f.index -= 1;
-                        });
+                        if is_atomic {
+                            st.fields.iter_mut().for_each(|(_, f)| {
+                                f.index -= 1;
+                            });
+                        }
                         Arc::new(RefCell::new(PLType::Struct(st)))
                     }
                     GenericTy::St(st) => get_generic_ty_inner(st, unify_table, gen, ctx, builder),

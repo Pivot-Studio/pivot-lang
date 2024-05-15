@@ -17,7 +17,7 @@ use crate::STACK_MAP;
 use crate::{
     allocator::{GlobalAllocator, ThreadLocalAllocator},
     block::{Block, LineHeaderExt, ObjectType},
-    gc_is_auto_collect_enabled, spin_until, HeaderExt, ENABLE_EVA, FREE_SPACE_DIVISOR,
+    gc_is_auto_collect_enabled, spin_until, Function, HeaderExt, ENABLE_EVA, FREE_SPACE_DIVISOR,
     GC_COLLECTOR_COUNT, GC_ID, GC_MARKING, GC_MARK_COND, GC_RUNNING, GC_STW_COUNT, GC_SWEEPING,
     GC_SWEEPPING_NUM, GLOBAL_ALLOCATOR, LINE_SIZE, NUM_LINES_PER_BLOCK, REMAIN_MULTIPLIER,
     SHRINK_PROPORTION, THRESHOLD_PROPORTION, USED_SPACE_DIVISOR, USE_SHADOW_STACK,
@@ -36,28 +36,18 @@ fn get_ip_from_sp(sp: *mut u8) -> *mut u8 {
     }
 }
 
-fn walk_gc_frames(sp: *mut u8, mut walker: impl FnMut(*mut u8, i32, ObjectType)) {
+fn walk_gc_frames(sp: *mut u8, mut walker: impl FnMut(*mut u8, *mut u8, &'static Function)) {
     let mut sp = sp;
     loop {
         let ip = get_ip_from_sp(sp);
         let frame = unsafe { STACK_MAP.map.as_ref().unwrap().get(&ip.cast_const()) };
         if let Some(frame) = frame {
-            #[cfg(not(feature = "conservative_stack_scan"))]
-            for o in frame.iter_roots() {
-                walker(sp, o, ObjectType::Pointer);
-            }
             #[cfg(target_arch = "aarch64")]
             let frame_size = frame.frame_size;
             #[cfg(target_arch = "x86_64")]
             let frame_size = frame.frame_size + 8;
 
-            // conservative stack scanning
-            // treat all 8 bytes aligned data as a pointer
-            #[cfg(feature = "conservative_stack_scan")]
-            for i in 0..=frame_size / 8 {
-                walker(sp, i * 8, ObjectType::Pointer);
-            }
-
+            walker(sp, ip, frame);
             sp = unsafe {
                 #[cfg(target_arch = "aarch64")]
                 {
@@ -96,11 +86,11 @@ pub struct Collector {
     id: usize,
     mark_histogram: *mut FxHashMap<usize, usize>,
     status: RefCell<CollectorStatus>,
-    frames_list: AtomicPtr<Vec<(*mut libc::c_void, *mut libc::c_void)>>,
+    frames_list: AtomicPtr<Vec<(*mut libc::c_void, &'static Function)>>,
     shadow_thread_running: AtomicBool,
     shadow_thread_should_stop: AtomicBool,
     live_set: RefCell<FxHashMap<u64, *mut u8>>,
-    coro_stacks: FxHashMap<*mut u8, Box<Vec<(*mut libc::c_void, *mut libc::c_void)>>>,
+    coro_stacks: FxHashMap<*mut u8, Box<Vec<(*mut libc::c_void, &'static Function)>>>,
     live: bool,
 }
 
@@ -269,6 +259,7 @@ impl Collector {
             >= status.collect_threshold
         {
             drop(status);
+
             self.collect_fast_unwind(sp);
         } else {
             drop(status);
@@ -683,19 +674,21 @@ impl Collector {
                 let fl = self.frames_list.load(Ordering::SeqCst);
                 if !fl.is_null() {
                     log::trace!("gc {}: tracing stucked frames", self.id);
-                    self.mark_gc_frames(unsafe { fl.as_mut().unwrap().clone() });
+                    self.mark_gc_frames(unsafe { fl.as_ref().unwrap() });
                 } else if sp.is_null() {
                     // use backtrace.rs or stored frames
-                    let mut frames: Vec<(*mut libc::c_void, *mut libc::c_void)> = vec![];
+                    let mut frames: Vec<(*mut libc::c_void, &'static Function)> = vec![];
                     backtrace::trace(|frame| {
-                        frames.push((frame.ip(), frame.sp()));
+                        if let Some(f) = get_fn_from_frame(frame) {
+                            frames.push((frame.sp(), f));
+                        }
                         true
                     });
 
-                    self.mark_gc_frames(frames);
+                    self.mark_gc_frames(&frames);
                 } else {
-                    walk_gc_frames(sp, |sp, offset, obj_type| {
-                        self.mark_stack_offset(sp, offset, obj_type);
+                    walk_gc_frames(sp, |sp, _, f| {
+                        self.mark_frame(&(sp as _), &f);
                     });
                 }
                 log::debug!("gc {} global roots", self.id);
@@ -755,18 +748,24 @@ impl Collector {
     /// ## Parameters
     ///
     /// * `frames` - gc frames, each frame is a tuple of (ip, sp)
-    fn mark_gc_frames(&self, frames: Vec<(*mut libc::c_void, *mut libc::c_void)>) {
-        frames.iter().for_each(|(ip, sp)| unsafe {
-            let addr = *ip as *mut u8;
-            let const_addr = addr as *const u8;
-            let map = STACK_MAP.map.as_ref().unwrap();
-            let f = map.get(&const_addr);
-            if let Some(f) = f {
-                f.iter_roots().for_each(|offset| {
-                    self.mark_stack_offset(*sp as _, offset, ObjectType::Pointer)
-                });
-            }
+    fn mark_gc_frames(&self, frames: &[(*mut libc::c_void, &'static Function)]) {
+        frames.iter().for_each(|(sp, f)| {
+            self.mark_frame(sp, f);
         });
+    }
+
+    fn mark_frame(&self, sp: &*mut libc::c_void, f: &&Function) {
+        #[cfg(not(feature = "conservative_stack_scan"))]
+        f.iter_roots()
+            .for_each(|offset| self.mark_stack_offset(*sp as _, offset, ObjectType::Pointer));
+        #[cfg(target_arch = "aarch64")]
+        let frame_size = f.frame_size;
+        #[cfg(target_arch = "x86_64")]
+        let frame_size = f.frame_size + 8;
+        #[cfg(feature = "conservative_stack_scan")]
+        for i in 0..=frame_size / 8 {
+            self.mark_stack_offset(*sp as _, i * 8, ObjectType::Pointer);
+        }
     }
 
     #[cfg(feature = "llvm_stackmap")]
@@ -1045,17 +1044,8 @@ impl Collector {
 
     fn mark_coro_stacks(&self) {
         for (_k, frames) in self.coro_stacks.iter() {
-            for (ip, sp) in frames.iter() {
-                let addr = *ip as *mut u8;
-                let const_addr = addr as *const u8;
-                let map = unsafe { STACK_MAP.map.as_ref() }.unwrap();
-                let f = map.get(&const_addr);
-                if let Some(f) = f {
-                    log::debug!("marking coro stack {:p} {:p}, key: {:p}", *ip, *sp, *_k);
-                    f.iter_roots().for_each(|offset| {
-                        self.mark_stack_offset(*sp as _, offset, ObjectType::Pointer)
-                    });
-                }
+            for (sp, f) in frames.iter() {
+                self.mark_frame(sp, f);
             }
         }
     }
@@ -1090,21 +1080,26 @@ impl Collector {
         self.shadow_thread_should_stop
             .store(false, Ordering::SeqCst);
     }
-    fn get_frames(&self, sp: *mut u8) -> Box<Vec<(*mut libc::c_void, *mut libc::c_void)>> {
-        let mut frames: Box<Vec<(*mut libc::c_void, *mut libc::c_void)>> = Box::default();
+    fn get_frames(&self, sp: *mut u8) -> Box<Vec<(*mut libc::c_void, &'static Function)>> {
+        let mut frames: Box<Vec<(*mut libc::c_void, &'static Function)>> = Box::default();
         if sp.is_null() {
             backtrace::trace(|frame| {
-                frames.push((frame.ip(), frame.sp()));
+                let f = get_fn_from_frame(frame);
+                if let Some(f) = f {
+                    frames.push((frame.sp(), f));
+                }
                 true
             });
         } else {
-            walk_gc_frames(sp, |sp, _, _| {
-                let ip = get_ip_from_sp(sp);
-                frames.push((ip as _, sp as _))
-            });
+            walk_gc_frames(sp, |sp, _, f| frames.push((sp as _, f)));
         }
         frames
     }
+}
+
+fn get_fn_from_frame(frame: &backtrace::Frame) -> Option<&'static Function> {
+    let map = unsafe { STACK_MAP.map.as_ref() }.unwrap();
+    map.get(&(frame.ip().cast_const() as _))
 }
 
 #[cfg(test)]
