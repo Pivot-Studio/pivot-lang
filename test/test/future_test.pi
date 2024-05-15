@@ -1,0 +1,28 @@
+use std::future;
+use std::future::FutureExt;
+use std::thread;
+
+
+pub fn test_future() void {
+    let exe = future::new_executor();
+    thread::spawn(|| => {
+        exe.start_exec_loop();
+        return;
+    });
+    let f:future::Future<()> = future::delay(1 as u64);
+    let ff1 = f.continue_with(|r:()| => {
+        println!("Hello from future");
+        return future::nothing_future();
+    });
+    
+    let f2:future::Future<()> = future::delay(1 as u64);
+    let ff2 = f2.continue_with(|r:()| => {
+        println!("Hello from future2");
+        return future::nothing_future();
+    });
+    exe.spawn(ff1);
+    exe.spawn(ff2);
+
+    thread::sleep(2 as u64);
+    return;
+}

@@ -33,6 +33,7 @@ use project1::test::inference;
 use project1::test::rand;
 use project1::test::_hashtable;
 use project1::test::_io;
+use project1::test::future_test;
 // use std::cols::hashtable::new_hash_table;
 
 pub fn main() i64 {
@@ -68,6 +69,7 @@ pub fn main() i64 {
     arr::test_arr();
     _hashtable::test_hashtable();
     _io::test_io();
+    future_test::test_future();
     
     return 0;
 }
