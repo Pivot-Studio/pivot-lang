@@ -4,6 +4,7 @@ use std::{
     cmp::min,
     sync::{
         atomic::{AtomicBool, AtomicPtr, Ordering},
+        mpsc::{channel, Receiver, Sender},
         Arc,
     },
 };
@@ -87,11 +88,11 @@ pub struct Collector {
     mark_histogram: *mut FxHashMap<usize, usize>,
     status: RefCell<CollectorStatus>,
     frames_list: AtomicPtr<Vec<(*mut libc::c_void, &'static Function)>>,
-    shadow_thread_running: AtomicBool,
-    shadow_thread_should_stop: AtomicBool,
     live_set: RefCell<FxHashMap<u64, *mut u8>>,
     coro_stacks: FxHashMap<*mut u8, Box<Vec<(*mut libc::c_void, &'static Function)>>>,
     live: bool,
+    stuck_stop_notify_chan: (Sender<()>, Receiver<()>),
+    stuck_stopped_notify_chan: (Sender<()>, Receiver<()>),
 }
 
 struct CollectorStatus {
@@ -166,11 +167,11 @@ impl Collector {
                     last_gc_remaining: 0,
                 }),
                 frames_list: AtomicPtr::default(),
-                shadow_thread_running: AtomicBool::new(false),
                 live_set: RefCell::new(FxHashMap::default()),
                 coro_stacks: FxHashMap::default(),
                 live: true,
-                shadow_thread_should_stop: AtomicBool::new(false),
+                stuck_stop_notify_chan: channel(),
+                stuck_stopped_notify_chan: channel(),
             }
         }
     }
@@ -1017,15 +1018,15 @@ impl Collector {
             self.frames_list.store(ptr, Ordering::SeqCst);
             let c: *mut Collector = self as *mut _;
             let c = c.as_mut().unwrap();
-            c.shadow_thread_running.store(true, Ordering::SeqCst);
+            let sender = c.stuck_stopped_notify_chan.0.clone();
             GLOBAL_ALLOCATOR.0.as_ref().unwrap().pool.execute(move || {
                 log::info!("gc {}: stucked, waiting for unstuck...", c.id);
                 loop {
                     let mut mutex = STUCK_MUTEX.lock();
-                    if c.shadow_thread_should_stop.load(Ordering::SeqCst) {
+                    if c.stuck_stop_notify_chan.1.try_recv().is_ok() {
                         log::trace!("gc {}: unstucking break...", c.id);
-                        c.shadow_thread_running.store(false, Ordering::SeqCst);
                         drop(mutex);
+                        sender.send(()).unwrap();
                         break;
                     } else if GC_RUNNING.load(Ordering::Acquire) {
                         drop(mutex);
@@ -1063,12 +1064,13 @@ impl Collector {
 
     pub fn unstuck(&mut self) {
         log::trace!("gc {}: unstucking...", self.id);
-        self.shadow_thread_should_stop.store(true, Ordering::SeqCst);
+        self.stuck_stop_notify_chan.0.send(()).unwrap();
         let mutex = STUCK_MUTEX.lock();
         STUCK_COND.notify_all();
         drop(mutex);
         // wait until the shadow thread exit
-        spin_until!(!self.shadow_thread_running.load(Ordering::SeqCst));
+        self.stuck_stopped_notify_chan.1.recv().unwrap();
+
         let old = self
             .frames_list
             .swap(std::ptr::null_mut(), Ordering::SeqCst);
@@ -1077,8 +1079,6 @@ impl Collector {
                 drop(Box::from_raw(old));
             }
         }
-        self.shadow_thread_should_stop
-            .store(false, Ordering::SeqCst);
     }
     fn get_frames(&self, sp: *mut u8) -> Box<Vec<(*mut libc::c_void, &'static Function)>> {
         let mut frames: Box<Vec<(*mut libc::c_void, &'static Function)>> = Box::default();
