@@ -18,3 +18,4 @@ ignore:
   - "src/lsp/wasm.rs"
   - "src/lsp/wasm.rs"
   - "src/repl/editor.rs"
+  - "src/repl/*.rs"

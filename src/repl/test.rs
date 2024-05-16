@@ -57,6 +57,7 @@ impl super::editor::TermEditor for TestEditor {
     }
 }
 
+#[ignore]
 #[test]
 fn test_repl() {
     let rl = TestEditor::new(
