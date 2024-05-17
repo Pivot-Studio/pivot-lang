@@ -26,7 +26,7 @@ env:
   RUSTFLAGS: -Dwarnings
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
-  PL_IMMIX_HEAP_SIZE: 100000000
+  PL_IMMIX_HEAP_SIZE: 10000000
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
