@@ -7,6 +7,7 @@ use std::{
         mpsc::{channel, Receiver, Sender},
         Arc,
     },
+    time::{Duration, Instant},
 };
 
 use libc::malloc;
@@ -1013,6 +1014,7 @@ impl Collector {
     pub fn stuck_fast_unwind(&mut self, sp: *mut u8) {
         log::trace!("gc {}: stucking...", self.id);
         let frames = self.get_frames(sp);
+        let (startsender, startrecv) = channel::<()>();
         unsafe {
             let ptr = Box::leak(frames) as *mut _;
             self.frames_list.store(ptr, Ordering::SeqCst);
@@ -1020,25 +1022,27 @@ impl Collector {
             let c = c.as_mut().unwrap();
             let sender = c.stuck_stopped_notify_chan.0.clone();
             GLOBAL_ALLOCATOR.0.as_ref().unwrap().pool.execute(move || {
-                log::info!("gc {}: stucked, waiting for unstuck...", c.id);
+                let mut first = true;
                 loop {
                     let mut mutex = STUCK_MUTEX.lock();
+                    if first {
+                        first = false;
+                        startsender.send(()).unwrap();
+                    }
                     if c.stuck_stop_notify_chan.1.try_recv().is_ok() {
-                        log::trace!("gc {}: unstucking break...", c.id);
                         drop(mutex);
                         sender.send(()).unwrap();
                         break;
-                    } else if GC_RUNNING.load(Ordering::Acquire) {
-                        drop(mutex);
-                        c.collect();
                     } else {
-                        STUCK_COND.wait(&mut mutex);
+                        STUCK_COND
+                            .wait_until(&mut mutex, Instant::now() + Duration::from_millis(100));
                         drop(mutex);
                         c.safepoint();
                     }
                 }
             });
         }
+        startrecv.recv().unwrap();
         STUCK_COND.notify_all();
         // FRAMES_LIST.0.lock().borrow_mut().insert( self as _,frames);
     }
@@ -1063,11 +1067,8 @@ impl Collector {
     }
 
     pub fn unstuck(&mut self) {
-        log::trace!("gc {}: unstucking...", self.id);
         self.stuck_stop_notify_chan.0.send(()).unwrap();
-        let mutex = STUCK_MUTEX.lock();
         STUCK_COND.notify_all();
-        drop(mutex);
         // wait until the shadow thread exit
         self.stuck_stopped_notify_chan.1.recv().unwrap();
 

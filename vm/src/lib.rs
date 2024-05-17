@@ -124,10 +124,8 @@ fn new_thread(f: *mut i128) {
 #[is_runtime]
 fn sleep(secs: u64) {
     // gc::DioGC__stuck_begin(sp);
-    println!("sleeping for {} secs", secs);
     thread::sleep(std::time::Duration::from_secs(secs));
     // gc::DioGC__stuck_end();
-    println!("sleeping done");
 }
 
 #[is_runtime]
