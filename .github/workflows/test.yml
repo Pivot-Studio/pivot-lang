@@ -133,7 +133,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: llvm-cov
-          args: nextest --workspace --all-features --lcov --output-path lcov.info --profile ci -vv --no-capture
+          args: nextest --workspace --all-features --lcov --output-path lcov.info --profile ci -vv
           
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4.0.1

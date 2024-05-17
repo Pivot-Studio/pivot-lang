@@ -293,7 +293,6 @@ pub fn thread_stuck_start_fast(sp: *mut u8) {
 /// will block until the gc is finished
 pub fn thread_stuck_end() {
     log::trace!("unstucking...");
-    spin_until!(!GC_RUNNING.load(Ordering::SeqCst));
     // v.0 += 1;
     SPACE.with(|gc| {
         // println!("start add_root");

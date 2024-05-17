@@ -11,6 +11,7 @@ use lsp_types::{
 };
 use rustc_hash::FxHashMap;
 use salsa::{accumulator::Accumulator, storage::HasJar};
+use wait_timeout::ChildExt;
 
 use crate::{
     ast::{
@@ -505,15 +506,22 @@ fn test_compile() {
     let exe = crate::utils::canonicalize(&exe)
         .unwrap_or_else(|_| panic!("static compiled file not found {:?}", exe));
     eprintln!("exec: {:?}", exe);
-    let o = Command::new(exe.to_str().unwrap())
-        .output()
+    let mut child = Command::new(exe.to_str().unwrap())
+        .spawn()
         .expect("failed to execute compiled program");
+
+    let o = child
+        .wait_timeout(std::time::Duration::from_secs(50))
+        .expect("failed to wait on child");
+    if o.is_none() {
+        child.kill().expect("failed to kill child");
+        panic!("compiled program timed out");
+    }
+    let o = o.unwrap();
     assert!(
-        o.status.success(),
-        "static compiled program failed with status {:?} and output {:?} and error {:?}",
-        o.status,
-        String::from_utf8_lossy(&o.stdout),
-        String::from_utf8_lossy(&o.stderr)
+        o.success(),
+        "static compiled program failed with status {:?}",
+        o,
     );
     drop(l);
 }

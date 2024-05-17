@@ -81,7 +81,6 @@ fn condvar_wait(cond: *mut Condvar, mutex: *mut OpaqueMutex) -> u64 {
     let cond = unsafe { &*cond };
     let lock = cond.wait::<()>(lock).unwrap();
     container.guard.set(Some(lock));
-
     0
 }
 
