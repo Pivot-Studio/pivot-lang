@@ -88,7 +88,7 @@ jobs:
       CARGO_TARGET_DIR: ${{ matrix.CARGO_TARGET_DIR }}
       KAGARI_LIB_ROOT: ${{ github.workspace }}${{ matrix.KAGARI_LIB_ROOT }}
       PL_ROOT: ${{ github.workspace }}${{ matrix.PL_ROOT }}
-      GC_LOG: info
+      GC_LOG: warn
     steps:
       - uses: actions/checkout@v4
         with:
@@ -133,7 +133,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: llvm-cov
-          args: nextest --workspace --all-features --lcov --output-path lcov.info --profile ci -vv
+          args: nextest --workspace --all-features --lcov --output-path lcov.info --profile ci -vv --no-capture
           
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4.0.1
