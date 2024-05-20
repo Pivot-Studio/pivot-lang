@@ -20,9 +20,10 @@ use crate::{
     allocator::{GlobalAllocator, ThreadLocalAllocator},
     block::{Block, LineHeaderExt, ObjectType},
     gc_is_auto_collect_enabled, spin_until, Function, HeaderExt, ENABLE_EVA, FREE_SPACE_DIVISOR,
-    GC_COLLECTOR_COUNT, GC_ID, GC_MARKING, GC_MARK_COND, GC_RUNNING, GC_STW_COUNT, GC_SWEEPING,
-    GC_SWEEPPING_NUM, GLOBAL_ALLOCATOR, LINE_SIZE, NUM_LINES_PER_BLOCK, REMAIN_MULTIPLIER,
-    SHRINK_PROPORTION, THRESHOLD_PROPORTION, USED_SPACE_DIVISOR, USE_SHADOW_STACK,
+    GC_AUTOCOLLECT_ENABLE, GC_COLLECTOR_COUNT, GC_ID, GC_MARKING, GC_MARK_COND, GC_RUNNING,
+    GC_STW_COUNT, GC_SWEEPING, GC_SWEEPPING_NUM, GLOBAL_ALLOCATOR, LINE_SIZE, NUM_LINES_PER_BLOCK,
+    REMAIN_MULTIPLIER, SHRINK_PROPORTION, THRESHOLD_PROPORTION, USED_SPACE_DIVISOR,
+    USE_SHADOW_STACK,
 };
 
 fn get_ip_from_sp(sp: *mut u8) -> *mut u8 {
@@ -227,7 +228,7 @@ impl Collector {
             panic!("alloc size can not be zero");
         }
         if gc_is_auto_collect_enabled() {
-            self.safepoint_fast_unwind(sp);
+            self.collect_if_needed_fast_unwind(sp);
             let mut status = self.status.borrow_mut();
             status.bytes_allocated_since_last_gc += ((size - 1) / LINE_SIZE + 1) * LINE_SIZE;
         }
@@ -244,27 +245,36 @@ impl Collector {
         ptr
     }
 
-    /// # safepoint_fast_unwind
-    ///
-    /// Safepoint, if it trigger a GC, it will use stack pointer to walk gc frames.
-    ///
-    /// For more information, see [mark_fast_unwind](Collector::mark_fast_unwind)
-    pub fn safepoint_fast_unwind(&self, sp: *mut u8) {
-        if GC_RUNNING.load(Ordering::Acquire)
-            || (unsafe { self.thread_local_allocator.as_mut().unwrap().should_gc() })
-        {
+    fn collect_if_needed_fast_unwind(&self, sp: *mut u8) {
+        if GC_RUNNING.load(Ordering::Acquire) {
             self.collect_fast_unwind(sp);
             return;
         }
         let status = self.status.borrow();
-        if status.bytes_allocated_since_last_gc + status.last_gc_remaining * REMAIN_MULTIPLIER
+        if (status.bytes_allocated_since_last_gc + status.last_gc_remaining * REMAIN_MULTIPLIER
             >= status.collect_threshold
+            && GC_AUTOCOLLECT_ENABLE.load(Ordering::Relaxed))
+            || (unsafe { self.thread_local_allocator.as_mut().unwrap().should_gc() })
         {
             drop(status);
 
             self.collect_fast_unwind(sp);
         } else {
             drop(status);
+        }
+    }
+
+    /// # safepoint_fast_unwind
+    ///
+    /// Safepoint, if will start a GC in current thread if needed,
+    /// using stack pointer to walk gc frames.
+    ///
+    /// This function only starts GC if a GC session is already running.
+    ///
+    /// For more information, see [mark_fast_unwind](Collector::mark_fast_unwind)
+    pub fn safepoint_fast_unwind(&self, sp: *mut u8) {
+        if GC_RUNNING.load(Ordering::Acquire) {
+            self.collect_fast_unwind(sp);
         }
     }
 
@@ -1022,6 +1032,8 @@ impl Collector {
             let c = c.as_mut().unwrap();
             let sender = c.stuck_stopped_notify_chan.0.clone();
             GLOBAL_ALLOCATOR.0.as_ref().unwrap().pool.execute(move || {
+                // NOTE: **VERY ESSENCIAL** to make sure the function here will not
+                // voluntarily start a new gc
                 let mut first = true;
                 loop {
                     let mut mutex = STUCK_MUTEX.lock();
