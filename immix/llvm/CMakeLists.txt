@@ -26,6 +26,7 @@ endif()
 
 set(SOURCES
   memory_manager.cpp
+  pljit.cpp
   plimmix_pass.cpp
   plimmix.cpp
   plimmixprinter.cpp
@@ -33,6 +34,7 @@ set(SOURCES
 set(CMAKE_INSTALL_PREFIX .)
 
 add_library(plimmix_plugin_shared SHARED ${SOURCES})
+
 install(TARGETS plimmix_plugin_shared
     DESTINATION ${CMAKE_INSTALL_PREFIX}
 )

@@ -8,16 +8,104 @@
 #include "llvm/Transforms/Utils/ModuleUtils.h"
 #include "llvm/Pass.h"
 #include "llvm/IR/Function.h"
+#include "llvm/IR/InlineAsm.h"
 #include "llvm/IR/IntrinsicInst.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/Analysis/CaptureTracking.h"
 
-
+#include <iostream>
 using namespace llvm;
 namespace
 {
   void immixPassLogic(Module &M);
+
+  class ReplaceMallocPass : public PassInfoMixin<ReplaceMallocPass>
+  {
+
+  public:
+    PreservedAnalyses run(Function &F, FunctionAnalysisManager &FAM);
+  };
+  PreservedAnalyses ReplaceMallocPass::run(Function &F, FunctionAnalysisManager &FAM)
+  {
+    // add function declare DioGC__malloc
+    auto M = F.getParent();
+    if (!M->getFunction("DioGC__malloc"))
+    {
+      // Generate DioGC__malloc function declaration
+      FunctionType *DioGC__mallocType = FunctionType::get(
+          PointerType::get(IntegerType::get(M->getContext(), 8), 1),
+          {IntegerType::get(M->getContext(), 64), IntegerType::get(M->getContext(), 8), IntegerType::get(M->getContext(), 64)},
+          false);
+      Function *DioGC__mallocFunc = Function::Create(
+          DioGC__mallocType,
+          GlobalValue::LinkageTypes::ExternalLinkage,
+          "DioGC__malloc",
+          M);
+    }
+
+    /*
+      replace all
+      %2 = call ptr @malloc(i64 noundef %size)
+      to
+      %rsp = call ptr asm alignstack "mov $0, sp", "=r"() #0
+      %rspi = ptrtoint ptr %rsp to i64
+      %2 = call ptr @DioGC__malloc(i64 noundef %size, i8 4, i64 %rspi)
+    */
+
+    auto CIS = std::vector<Instruction *>();
+    for (BasicBlock &BB : F)
+    {
+      for (Instruction &I : BB)
+      { 
+        if (CallInst *CI = dyn_cast<CallInst>(&I))
+        {
+          Function *Callee = CI->getCalledFunction();
+          if (Callee && Callee->getName() == "malloc")
+          {
+            // Create the new function call
+            Function *NewCallee = M->getFunction("DioGC__malloc");
+
+            // Create the new arguments
+            std::vector<Value *> NewArgs;
+            NewArgs.push_back(CI->getArgOperand(0));                                  // size
+            NewArgs.push_back(ConstantInt::get(Type::getInt8Ty(M->getContext()), 4)); // i8 4
+            // Add the stack pointer
+            InlineAsm *SPAsm;
+#if defined(__aarch64__)
+            SPAsm = InlineAsm::get(FunctionType::get(PointerType::get(M->getContext(), 0), false),
+                                   "mov $0, sp", "=r", true, InlineAsm::AsmDialect::AD_ATT);
+#elif defined(__x86_64__)
+            SPAsm = InlineAsm::get(FunctionType::get(PointerType::get(M->getContext(), 0), false),
+                                   "mov %rsp, $0", "=r", true, InlineAsm::AsmDialect::AD_ATT);
+#else
+#error "Unsupported architecture"
+#endif
+            // asm add attr: "gc-leaf-function"
+            CallInst *SP = CallInst::Create(SPAsm, "", CI);
+            SP->addAttributeAtIndex(AttributeList::FunctionIndex, Attribute::get(M->getContext(), "gc-leaf-function"));
+            // convert to i64
+            auto *RSPInt = new PtrToIntInst(SP, IntegerType::get(M->getContext(), 64), "", CI);
+            NewArgs.push_back(RSPInt);
+
+            // Create the new call instruction
+            CallInst *NewCI = CallInst::Create(NewCallee, NewArgs, "", CI);
+
+            // Replace the old call instruction with the new one
+            CI->replaceAllUsesWith(NewCI);
+            // CI->eraseFromParent();
+            CIS.push_back(CI);
+          }
+        }
+      }
+    }
+    for (auto *CI : CIS)
+    {
+      CI->eraseFromParent();
+    }
+    return PreservedAnalyses::none();
+  }
+
   // The new pass manager plugin
   class ImmixPass : public PassInfoMixin<ImmixPass>
   {
@@ -36,13 +124,12 @@ namespace
   /*
     # An escape analysis pass
 
-    This pass would find any gc heap allocation of `Atomic` type that's
+    This pass would find any gc heap allocation of `Ordinary` type that's
     not necessary and replace them with stack allocation.
 
-    ## About `Atomic` type
+    ## About `Ordinary` type
 
-    A type that don't contain any gc pointers is an `Atomic` type.
-    All primitives are `Atomic`.
+    In most cases, types that size can be known at compile time are `Ordinary`. For example, a struct
   */
   class EscapePass : public PassInfoMixin<EscapePass>
   {
@@ -54,11 +141,10 @@ namespace
     /*
       Regenerate the gep instructions with new address space
     */
-    void replace_geps(llvm::iterator_range<llvm::Value::user_iterator> &users, llvm::IRBuilder<> &builder, llvm::Value * alloca, std::vector<llvm::GetElementPtrInst *> &geps);
+    void replace_geps(llvm::iterator_range<llvm::Value::user_iterator> &users, llvm::IRBuilder<> &builder, llvm::Value *alloca, std::vector<llvm::GetElementPtrInst *> &geps);
     EscapePass() : escaped(false) {}
     EscapePass(bool escaped) : escaped(escaped) {}
   };
-
 
   PreservedAnalyses EscapePass::run(Module &M, ModuleAnalysisManager &AM)
   {
@@ -69,7 +155,6 @@ namespace
     std::vector<AllocaInst *> allocas;
     std::vector<GetElementPtrInst *> geps;
     std::vector<MemSetInst *> memsets;
-
 
     // find all gc atomic type allocations, analysis to get non-escaped set.
     for (auto FB = M.functions().begin(), FE = M.functions().end(); FB != FE; ++FB)
@@ -96,7 +181,7 @@ namespace
                 {
                   continue;
                 }
-                
+
                 if (!PointerMayBeCaptured(call, true, true))
                 {
 
@@ -106,19 +191,18 @@ namespace
                     printf("variable moved to stack: %s\n", info.str().c_str());
                   }
 
-                  
                   // if the pointer may be captured, then we change this gc malloc
                   // to stack alloca
-                  
+
                   // the first argument of gc malloc is the size
                   auto *size = call->getArgOperand(0);
-                  
+
                   if (!isa<ConstantInt>(size) || !detail::isPresent(size))
                   {
                     // if the size is not a constant, we can't replace it with alloca
                     continue;
                   }
-                  
+
                   // size is a number, get it's value
                   auto *sizeValue = dyn_cast<ConstantInt>(size);
                   auto sizeInt = sizeValue->getZExtValue();
@@ -132,11 +216,10 @@ namespace
                   auto users = call->users();
                   replace_geps(users, builder, &alloca, geps);
 
-
                   // find all memset, regenrate memset
                   auto users1 = call->users();
                   for (auto *U : users1)
-                  { 
+                  {
                     if (auto *memset = dyn_cast<MemSetInst>(U))
                     {
                       auto *dest = memset->getDest();
@@ -148,23 +231,17 @@ namespace
                       memsets.push_back(memset);
                     }
                   }
-                  
-
 
                   call->replaceAllUsesWith(&alloca);
                   allocas.push_back(&alloca);
-                  
-                  
-                  mallocs.push_back(call);
 
+                  mallocs.push_back(call);
                 }
-                
               }
             }
           }
         }
       }
-      
     }
 
     // There's a special case where `replaceAllUsesWith` won't cover:
@@ -183,7 +260,7 @@ namespace
         auto noMorePhi = true;
         for (auto &U : uses)
         {
-          
+
           auto *user = U.getUser();
           // if it's phi
           if (auto *phi = dyn_cast<PHINode>(user))
@@ -202,9 +279,7 @@ namespace
             phis.push_back(phi);
             // printf("replaced phi\n");
             uses = newphi->uses();
-
           }
-
         }
         if (noMorePhi)
         {
@@ -241,7 +316,7 @@ namespace
     return PreservedAnalyses::none();
   }
 
-  void EscapePass::replace_geps(llvm::iterator_range<llvm::Value::user_iterator> &users, llvm::IRBuilder<> &builder, llvm::Value * ptr, std::vector<llvm::GetElementPtrInst *> &geps)
+  void EscapePass::replace_geps(llvm::iterator_range<llvm::Value::user_iterator> &users, llvm::IRBuilder<> &builder, llvm::Value *ptr, std::vector<llvm::GetElementPtrInst *> &geps)
   {
     for (auto *U : users)
     {
@@ -274,7 +349,7 @@ namespace
     This pass helps integrate immix with LLVM.
 
     It does the following:
-    - Sets the GC name to "plimmix" for all functions. 
+    - Sets the GC name to "plimmix" for all functions.
     - Adds a call to immix_gc_init in the global constructor
     - Adds a global variable declaration for the module stack map if the main function is present.
 
@@ -301,7 +376,6 @@ namespace
       {
         FV->setGC("plimmix");
       }
-      
     }
     if (isMain)
     {
@@ -312,16 +386,16 @@ namespace
       SmallVector<Type *, 1> argTypes;
       argTypes.push_back(PointerType::get(IntegerType::get(M.getContext(), 8), 0));
       std::string symbol;
-      // mac's symbol name has only one underscore
-      #ifdef __APPLE__ 
+// mac's symbol name has only one underscore
+#ifdef __APPLE__
       symbol += "_LLVM_StackMaps";
-      #else
+#else
       symbol += "__LLVM_StackMaps";
-      #endif
+#endif
       // symbol += M.getSourceFileName();
       auto g = M.getOrInsertGlobal(symbol, Type::getInt8Ty(M.getContext()));
       GlobalVariable *g_c = cast<GlobalVariable>(g);
-      
+
       g_c->setLinkage(GlobalValue::LinkageTypes::ExternalLinkage);
       g_c->setDSOLocal(true);
       g_c->setConstant(true);
@@ -337,7 +411,6 @@ namespace
       // appendToCompilerUsed(M, gc_init_f);
       appendToGlobalCtors(M, gc_init_f, 1000);
     }
-    
   }
 
   // The old pass manager plugin
@@ -360,3 +433,55 @@ char ImmixLegacy::ID = 0;
 static RegisterPass<ImmixLegacy> X("plimmix", "plimmix gc Pass",
                                    false /* Only looks at CFG */,
                                    false /* Analysis Pass */);
+
+#include "llvm/IR/PassManager.h"
+#include "llvm/Passes/PassBuilder.h"
+#include "llvm/Passes/PassPlugin.h"
+// This part is the new way of registering your pass
+extern "C" ::llvm::PassPluginLibraryInfo LLVM_ATTRIBUTE_WEAK
+llvmGetPassPluginInfo()
+{
+  return {
+      LLVM_PLUGIN_API_VERSION, "PLImmix", "v0.1",
+      [](PassBuilder &PB)
+      {
+        printf("registering pass\n");
+        PB.registerPipelineParsingCallback(
+          [](StringRef Name, FunctionPassManager &FPM,
+              ArrayRef<PassBuilder::PipelineElement>)
+          {
+            if (Name == "replace-malloc")
+            {
+              FPM.addPass(ReplaceMallocPass());
+              return true;
+            }
+            return false;
+          }
+        );
+        PB.registerPipelineParsingCallback(
+          [](StringRef Name, ModulePassManager &MPM,
+              ArrayRef<PassBuilder::PipelineElement>)
+          {
+            if (Name == "plimmix")
+            {
+              MPM.addPass(ImmixPass());
+              return true;
+            }
+            return false;
+          }
+        );
+                PB.registerPipelineParsingCallback(
+          [](StringRef Name, ModulePassManager &MPM,
+              ArrayRef<PassBuilder::PipelineElement>)
+          {
+            if (Name == "pl-escape")
+            {
+              MPM.addPass(EscapePass());
+              return true;
+            }
+            return false;
+          }
+        );
+      }
+    };
+}

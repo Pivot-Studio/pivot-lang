@@ -24,6 +24,8 @@ mod shadow_stack;
 #[cfg(feature = "llvm_stackmap")]
 pub use llvm_stackmap::*;
 mod bigobj;
+#[cfg(feature = "c-api")]
+mod c_api;
 
 pub use allocator::*;
 pub use block::*;

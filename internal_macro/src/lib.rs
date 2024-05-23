@@ -88,5 +88,3 @@ pub use node_macro::node;
 pub use range_macro::range;
 pub use test_parser_macro::test_parser;
 pub use test_parser_macro::test_parser_error;
-#[doc(hidden)]
-pub extern crate ctor;

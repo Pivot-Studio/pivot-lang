@@ -50,41 +50,11 @@ pub fn is_runtime(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     // Build the trait implementation
     match input.input {
-        AcceptInput::ItemFn(input) => {
-            let mut str1;
-            if let AcceptAttrInput::None = arg.input {
-                str1 = input.sig.ident.to_string();
-            } else if let AcceptAttrInput::Literal(arg) = arg.input {
-                str1 = arg.token().to_string();
-                str1.pop();
-                str1 = str1[1..].to_string();
-            } else {
-                panic!("failed to get annotated func/struct name");
-            }
-
-            let initfnid = format_ident!("add_symbol_{}", str1);
-            let fnid = input.sig.ident.clone();
-            // #[cfg(feature = "jit")]
-
-            // #[cfg(not(feature = "jit"))]
-            quote!(
-                #[cfg(not(feature = "jit"))]
-                #[no_mangle]
-                pub unsafe extern "C" #input
-                #[cfg(feature = "jit")]
-                pub unsafe #input
-                #[cfg(feature = "jit")]
-                #[internal_macro::ctor::ctor]
-                fn #initfnid() {
-                    let ptr = #fnid as * const ();
-                    let name = #str1;
-                    unsafe{
-                        internal_macro::add_symbol(name, ptr);
-                    }
-                }
-            )
-            .into()
-        }
+        AcceptInput::ItemFn(input) => quote!(
+            #[no_mangle]
+            pub unsafe extern "C" #input
+        )
+        .into(),
         AcceptInput::ItemImpl(input) => impl_macro_impl(&arg.input, &input),
     }
 }
@@ -170,7 +140,6 @@ fn impl_macro_impl(arg: &AcceptAttrInput, ast: &ItemImpl) -> TokenStream {
             extern_c_fns.push(findent.clone());
             let cl = clonedsig.inputs.clone();
             let inputs = clonedsig.inputs.clone().into_iter();
-            let inputs2 = clonedsig.inputs.into_iter();
 
             let expr = transform_params(cl);
 
@@ -189,29 +158,17 @@ fn impl_macro_impl(arg: &AcceptAttrInput, ast: &ItemImpl) -> TokenStream {
                 let first = first.unwrap();
                 if let FnArg::Receiver(_) = first {
                     let inputs1 = inputs.clone().skip(1);
-                    let inputs2 = inputs.skip(1);
                     cfn = quote!(
-                        #[cfg(not(feature = "jit"))]
                         #[no_mangle]
                         pub unsafe extern "C" fn #findent(me: * mut #sfty,#(#inputs1,)*) #ret {
-                            let me = &mut *me;
-                            me.#id #expr
-                        }
-                        #[cfg(feature = "jit")]
-                        pub unsafe fn #findent(me: * mut #sfty,#(#inputs2,)*) #ret {
                             let me = &mut *me;
                             me.#id #expr
                         }
                     );
                 } else {
                     cfn = quote!(
-                        #[cfg(not(feature = "jit"))]
                         #[no_mangle]
                         pub unsafe extern "C" fn #findent(#(#inputs,)*) #ret {
-                            #sfty::#id #expr
-                        }
-                        #[cfg(feature = "jit")]
-                        pub unsafe fn #findent(#(#inputs2,)*) #ret {
                             #sfty::#id #expr
                         }
                     );
@@ -222,20 +179,8 @@ fn impl_macro_impl(arg: &AcceptAttrInput, ast: &ItemImpl) -> TokenStream {
             fnids.push(id);
         }
     }
-    let initfnid = format_ident!("add_symbol_impl_{}", tp.to_lowercase());
     let gen = quote! {
         #ast
-        #[cfg(feature = "jit")]
-        #[internal_macro::ctor::ctor]
-        fn #initfnid() {
-            #(
-                let ptr = #extern_c_fns as * const ();
-                let name = #fns;
-                unsafe{
-                    internal_macro::add_symbol(name, ptr);
-                }
-            )*
-        }
         #(
             #sigs
         )*

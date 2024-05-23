@@ -21,7 +21,6 @@ immix = { path = "./immix", optional = true, default-features = false, features 
     "madv_dontneed",
     "conservative_stack_scan",
 ] }
-# vm = { path = "./vm", optional = true, features = ["jit"] }
 indexmap = "1.9"
 linked-hash-map = "0.5.6"
 lazy_static = "1.4"
