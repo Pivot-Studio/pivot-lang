@@ -23,6 +23,8 @@ pub enum ObjectType {
     Complex = 2,
     /// Pointer object, contains one heap pointer.
     Pointer = 3,
+    /// Conservative object
+    Conservative = 4,
 }
 
 type LineHeader = u8;
@@ -55,7 +57,7 @@ pub trait LineHeaderExt {
 pub struct Block {
     /// |                           LINE HEADER(1 byte)                         |
     /// |    7   |    6   |    5   |    4   |    3   |    2   |    1   |    0   |
-    /// | is head|   eva  |  evaed |    -   |    object type  | marked |  used  |
+    /// | is head|   eva  |  evaed |        object type       | marked |  used  |
     line_map: [LineHeader; NUM_LINES_PER_BLOCK],
     /// 第一个hole的起始行号
     cursor: usize,
@@ -78,7 +80,7 @@ impl HeaderExt for u8 {
     }
     #[inline]
     fn get_obj_type(&self) -> ObjectType {
-        ObjectType::from_int((self >> 2) & 0b11).expect("invalid object type")
+        ObjectType::from_int((self >> 2) & 0b111).expect("invalid object type")
     }
     #[inline]
     fn set_used(&mut self, used: bool) {

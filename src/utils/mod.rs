@@ -1,6 +1,5 @@
 pub mod plc_new;
 pub mod read_config;
-pub mod test_symbol;
 
 use std::{
     collections::hash_map::DefaultHasher,

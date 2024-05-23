@@ -396,6 +396,54 @@ impl Collector {
         }
     }
 
+    fn mark_conservative(&self, ptr: *mut u8) {
+        unsafe {
+            if self.thread_local_allocator.as_mut().unwrap().in_heap(ptr) {
+                let block_p: *mut Block = Block::from_obj_ptr(ptr) as *mut _;
+
+                let block = &mut *block_p;
+                block.marked = true;
+                let head = block.get_head_ptr(ptr);
+                if head.is_null() {
+                    return;
+                }
+                let (_, mut idx) = block.get_line_header_from_addr(head);
+                // walk from head to end
+                // let mut line_header = line_header;
+                loop {
+                    let ptr = block.get_nth_line(idx);
+                    for i in 0..LINE_SIZE / 8 {
+                        let p = ptr.add(i * 8);
+                        self.mark_ptr(p);
+                    }
+
+                    idx += 1;
+                    if idx == NUM_LINES_PER_BLOCK {
+                        break;
+                    }
+                    let (line_header, _) = block.get_line_header_from_addr(ptr);
+                    if line_header.get_is_head() {
+                        break;
+                    }
+                }
+            } else if self
+                .thread_local_allocator
+                .as_mut()
+                .unwrap()
+                .in_big_heap(ptr)
+            {
+                let big_obj = self
+                    .thread_local_allocator
+                    .as_mut()
+                    .unwrap()
+                    .big_obj_from_ptr(ptr);
+                if let Some(_big_obj) = big_obj {
+                    todo!("conservative mark big obj")
+                }
+            }
+        }
+    }
+
     /// precise mark a pointer
     unsafe extern "C" fn mark_ptr(&self, ptr: *mut u8) {
         let father = ptr;
@@ -411,7 +459,6 @@ impl Collector {
         // eprintln!("mark ptr {:p} -> {:p}", father, ptr);
         // mark it if it is in heap
         if self.thread_local_allocator.as_mut().unwrap().in_heap(ptr) {
-            // println!("mark ptr succ {:p} -> {:p}", father, ptr);
             let block_p: *mut Block = Block::from_obj_ptr(ptr) as *mut _;
 
             let block = &mut *block_p;
@@ -592,6 +639,7 @@ impl Collector {
                 ObjectType::Trait => self.mark_trait(*(root as *mut *mut u8)),
                 ObjectType::Complex => self.mark_complex(*(root as *mut *mut u8)),
                 ObjectType::Pointer => self.mark_ptr(root),
+                ObjectType::Conservative => self.mark_conservative(*(root as *mut *mut u8)),
             }
         }
     }
@@ -733,6 +781,7 @@ impl Collector {
                     ObjectType::Pointer => {
                         self.mark_ptr(obj);
                     }
+                    ObjectType::Conservative => self.mark_conservative(obj),
                 }
             }
         }
@@ -825,6 +874,7 @@ impl Collector {
                             ObjectType::Pointer => {
                                 self.mark_ptr(*root);
                             }
+                            ObjectType::Conservative => self.mark_conservative(*root),
                         }
                         // self.mark_ptr(*root);
                     });

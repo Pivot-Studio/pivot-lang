@@ -5,7 +5,7 @@ use crate::BIG_OBJ_ALIGN;
 pub struct BigObj {
     /// |                       BIG OBJRCT HEADER(1 byte)                               |
     /// |    7    |    6    |    5    |    4    |    3    |    2    |    1    |    0    |
-    /// |               not used                |    object type    |  marked | not used|
+    /// |               not used      |              object type    |  marked | not used|
     pub header: BigObjHeader,
     pub size: usize,
 }
