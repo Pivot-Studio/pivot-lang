@@ -10,6 +10,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: true
       - name: Release my project to my Homebrew tap
         uses: Pivot-Studio/homebrew-releaser@main
         with:
