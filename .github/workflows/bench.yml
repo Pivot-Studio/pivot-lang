@@ -40,6 +40,7 @@ jobs:
       - uses: boa-dev/criterion-compare-action@v3
         with:
           cwd: "immix"
+          features: "shadow_stack"
           # Optional. Compare only this benchmark target
           # benchName: "immix_bench"
           # Needed. The name of the branch to compare with. This default uses the branch which is being pulled against
