@@ -104,7 +104,7 @@ define_diag!(
     NOT_A_POINTER = "not a pointer",
     ILLEGAL_SELF_RECURSION = "illegal self recursion, please use pointer",
     GENERIC_CANNOT_BE_INFER = "generic can not be infer",
-    RECEIVER_CANNOT_BE_INFER = "receiver can not be infer",
+    RECEIVER_CANNOT_BE_INFER = "receiver can not be inferred",
     DUPLICATE_METHOD = "duplicate method",
     DUPLICATE_TRAIT_BOUND = "duplicate trait bound",
     GENERIC_PARAM_LEN_MISMATCH = "generic param len mismatch",

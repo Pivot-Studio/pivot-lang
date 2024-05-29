@@ -32,6 +32,9 @@ pub fn remove_coro_stack(stack:i64) void {
     return;
 }
 
+/// # string
+/// 
+/// Built-in string type
 pub struct string {
     _len: i64;
     _byte_len: i64;

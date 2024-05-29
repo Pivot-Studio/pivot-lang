@@ -127,8 +127,18 @@ impl Ctx<'_> {
             value: ": ".to_string(),
             ..Default::default()
         };
+        let mut name = pltype.borrow().get_name().to_string();
+        if name.starts_with('@') {
+            // convert `@Tuple{num}<{tys}>` to `(tys)`
+            let re = regex::Regex::new(r"@Tuple\d+<(.*)>").unwrap();
+            if let Some(captures) = re.captures(&name) {
+                if let Some(matched) = captures.get(1) {
+                    name = format!("({})", matched.as_str());
+                }
+            }
+        }
         let type_label = InlayHintLabelPart {
-            value: pltype.borrow().get_name().to_string(),
+            value: name,
             tooltip: Some(lsp_types::InlayHintLabelPartTooltip::MarkupContent(
                 MarkupContent {
                     kind: lsp_types::MarkupKind::Markdown,

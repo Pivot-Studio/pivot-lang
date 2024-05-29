@@ -223,7 +223,7 @@ impl TyInfer {
                             }
                             name += &ty.borrow().get_llvm_name();
                         }
-                        name = format!("({})", name);
+                        name = format!("@Tuple{}<{}>", gen.len(), name);
 
                         let mut st = new_tuple_type(name.into(), fields, Default::default());
                         st.atomic = is_atomic;

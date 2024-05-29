@@ -3,6 +3,31 @@ pub trait ToString {
     fn to_string() gc::string;
 }
 
+
+impl <T:ToString> ToString for (T) {
+    fn to_string() gc::string {
+        let s = self.0.to_string();
+        let ss = "(";
+        ss.append(s);
+        ss.append(")");
+        return ss;
+    }
+}
+
+impl <T:ToString| U:ToString> ToString for (T, U) {
+    fn to_string() gc::string {
+        let s = self.0.to_string();
+        let ss = "(";
+        ss.append(s);
+        ss.append(", ");
+        s = self.1.to_string();
+        ss.append(s);
+        ss.append(")");
+        return ss;
+    }
+}
+
+
 pub struct StringBuilder {
     data: [u8];
     len: i64;
