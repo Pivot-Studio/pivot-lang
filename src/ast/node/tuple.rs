@@ -1,7 +1,7 @@
 use std::{cell::RefCell, sync::Arc};
 
 use crate::ast::builder::{BuilderEnum, IRBuilder};
-use crate::ast::ctx::Ctx;
+use crate::ast::ctx::{Ctx, EqRes};
 use crate::ast::node::node_result::NodeResultBuilder;
 use crate::ast::node::RangeTrait;
 use crate::ast::range::Range;
@@ -59,7 +59,7 @@ impl Node for TupleInitNode {
                 }
             }
         }
-        name = format!("({})", name);
+        name = format!("@Tuple{}<{}>", self.exprs.len(), name);
         if let Some(err) = err {
             return Err(err);
         }
@@ -182,7 +182,7 @@ impl TypeNode for TupleTypeNode {
                 }
             }
         }
-        name = format!("({})", name);
+        name = format!("@Tuple{}<{}>", self.types.len(), name);
         if let Some(err) = err {
             return Err(err);
         }
@@ -212,12 +212,32 @@ impl TypeNode for TupleTypeNode {
         builder: &'b crate::ast::builder::BuilderEnum<'a, '_>,
     ) -> Result<crate::ast::ctx::EqRes, crate::ast::diag::PLDiag> {
         let left = self.get_type(ctx, builder, true)?;
-        let eq = *left.borrow() == *pltype.borrow();
-        Ok(crate::ast::ctx::EqRes {
-            eq,
+        let binding = left.borrow();
+        let failed = Ok(EqRes {
+            eq: false,
             need_up_cast: false,
             reason: None,
-        })
+        });
+        match (&*binding, &*pltype.borrow()) {
+            (PLType::Struct(st1), PLType::Struct(st2)) => {
+                if st1.fields.len() != st2.fields.len() || !st1.is_tuple || !st2.is_tuple {
+                    return failed;
+                }
+                for ((_, f1), (_, f2)) in st1.fields.iter().zip(st2.fields.iter()) {
+                    let ty2 = f2.typenode.get_type(ctx, builder, true)?;
+                    let re = f1.typenode.eq_or_infer(ctx, ty2, builder)?;
+                    if !re.eq {
+                        return failed;
+                    }
+                }
+                Ok(EqRes {
+                    eq: true,
+                    need_up_cast: false,
+                    reason: None,
+                })
+            }
+            _ => failed,
+        }
     }
 }
 

@@ -195,6 +195,7 @@ impl<'a> Ctx<'a> {
     }
 }
 
+#[derive(Debug)]
 pub struct EqRes {
     pub eq: bool,
     pub need_up_cast: bool,

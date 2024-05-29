@@ -10,6 +10,7 @@ pub fn test_tuple() void {
     let e = a.0;
     let f = c.2;
     panic::assert(f.0 == 3);
+    println!((1,2));
     return;
 }
 
