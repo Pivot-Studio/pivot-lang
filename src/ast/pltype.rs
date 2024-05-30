@@ -653,7 +653,22 @@ impl PLType {
     pub fn get_name(&self) -> Ustr {
         match self {
             PLType::Fn(fu) => fu.name,
-            PLType::Struct(st) => st.name,
+            PLType::Struct(st) => {
+                if st.is_tuple {
+                    if st.name.starts_with('@') {
+                        // convert `@Tuple{num}<{tys}>` to `(tys)`
+                        let re = regex::Regex::new(r"@Tuple\d+<(.*)>").unwrap();
+                        if let Some(captures) = re.captures(&st.name) {
+                            if let Some(matched) = captures.get(1) {
+                                return ustr(&format!("({})", matched.as_str()));
+                            }
+                        }
+                    }
+                    st.name
+                } else {
+                    st.name
+                }
+            }
             PLType::Primitive(pri) => pri.get_name(),
             PLType::Arr(arr) => format!("[{}]", arr.element_type.borrow().get_name()).into(),
             PLType::Void => "void".into(),
