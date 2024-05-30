@@ -59,6 +59,7 @@ impl Node for TupleInitNode {
                 }
             }
         }
+        // make global function lookup logic work for tuple types
         name = format!("@Tuple{}<{}>", self.exprs.len(), name);
         if let Some(err) = err {
             return Err(err);

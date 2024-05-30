@@ -414,7 +414,7 @@ fn test_doc_symbol() {
 }
 
 #[test]
-#[cfg(feature = "jit")]
+#[cfg(all(feature = "jit", target_os = "linux"))]
 fn test_orc_jit() {
     use crate::ast::compiler::{compile, Options};
     use std::path::PathBuf;
