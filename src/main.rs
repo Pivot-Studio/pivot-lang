@@ -74,9 +74,15 @@ fn main() {
             RunCommand::Fmt { name } => cli.fmt(name.clone()),
             RunCommand::New { name } => cli.new_project(name.clone()),
             RunCommand::Version => cli.version(),
-            RunCommand::Repl => {
+            RunCommand::Repl { headless } => {
                 #[cfg(feature = "repl")]
-                repl::start_repl(repl::editor::default_editor());
+                {
+                    if *headless {
+                        repl::start_repl(repl::editor::HeadlessEditor);
+                    } else {
+                        repl::start_repl(repl::editor::default_editor());
+                    }
+                }
                 #[cfg(not(feature = "repl"))]
                 eprintln!("feature repl is not enabled, cannot use repl command");
             }
@@ -375,7 +381,11 @@ enum RunCommand {
     /// Get the whole version infomation
     Version,
     /// Start the REPL
-    Repl,
+    Repl {
+        /// headless mode
+        #[clap(long, default_value = "false")]
+        headless: bool,
+    },
 }
 
 pub fn get_styles() -> clap::builder::Styles {

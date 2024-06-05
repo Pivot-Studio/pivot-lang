@@ -303,11 +303,11 @@ project = "repl"
                     eprintln!("Error: unsupport statement in REPL mode");
                     continue;
                 }
-                let (_, (used_headers_line, global, line, check_line)) = re.unwrap();
+                let (_, (used_headers_line, global, line, _)) = re.unwrap();
                 let id = REPL_COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                 let anon_fn = format!(
                     "{}{}{}\n pub fn __anon__{}() void {{ \n{};\nreturn; }}",
-                    used_headers, used_headers_line, global, id, check_line
+                    used_headers, used_headers_line, global, id, line
                 );
                 docs2
                     .lock()
@@ -325,10 +325,7 @@ project = "repl"
                 let mut errs_num = 0;
                 let mut warn_num = 0;
                 print_diags(diags, mem_check, &db2, &mut errs_num, &mut warn_num, true);
-                #[cfg(test)]
-                {
-                    rl.assert_err(errs_num > 0);
-                }
+                rl.assert_err(errs_num > 0);
                 if errs_num > 0 {
                     REPL_COUNTER.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
                     continue;
