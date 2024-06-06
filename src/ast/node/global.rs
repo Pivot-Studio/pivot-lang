@@ -3,10 +3,13 @@ use super::*;
 use crate::ast::builder::BuilderEnum;
 use crate::ast::builder::IRBuilder;
 use crate::ast::diag::ErrorCode;
+use crate::ast::plmod::G_COUNTER;
 use crate::inference::InferenceCtx;
+use crate::repl;
 
 use internal_macro::node;
 use lsp_types::SemanticTokenType;
+use ustr::ustr;
 
 #[node]
 pub struct GlobalConstNode {
@@ -101,7 +104,17 @@ impl GlobalNode {
     ) -> Result<(), PLDiag> {
         let mut infer_ctx = InferenceCtx::new(ctx.unify_table.clone());
         infer_ctx.inference(&mut self.exp, ctx, builder);
-        if ctx.get_symbol(&self.var.name, builder).is_some() {
+        if {
+            #[cfg(feature = "repl")]
+            {
+                ctx.get_file() != repl::REPL_VIRTUAL_ENTRY
+            }
+            #[cfg(not(feature = "repl"))]
+            {
+                true
+            }
+        } && ctx.get_symbol(&self.var.name, builder).is_some()
+        {
             return Err(ctx.add_diag(self.var.range.new_err(ErrorCode::REDEFINE_SYMBOL)));
         }
         *ctx.need_highlight.borrow_mut() += 1;
@@ -113,7 +126,12 @@ impl GlobalNode {
         let v = v.unwrap();
         let pltype = v.get_ty();
         let globalptr = builder.add_global(
-            &ctx.plmod.get_full_name(self.var.name),
+            // &ctx.plmod.get_full_name(self.var.name),
+            &ctx.plmod.get_full_name(ustr(&format!(
+                "{}@{}",
+                self.var.name,
+                G_COUNTER.load(std::sync::atomic::Ordering::SeqCst)
+            ))),
             pltype.clone(),
             ctx,
             self.var.range.start.line as u32,

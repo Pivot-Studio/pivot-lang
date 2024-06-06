@@ -35,6 +35,7 @@ use std::collections::BTreeMap;
 
 use std::path::{Path, PathBuf};
 
+use std::sync::atomic::AtomicI32;
 use std::sync::Arc;
 
 use super::pltype::TraitMthdImpl;
@@ -42,12 +43,15 @@ use super::pltype::TraitMthdImpl;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GlobalVar {
     pub tp: Arc<RefCell<PLType>>,
+    pub mangled_name: Ustr,
     pub range: Range,
     pub is_extern: bool, // pub loc: Arc<RwVec<Location>>,
 }
 
 unsafe impl Sync for GlobalVar {}
 unsafe impl Send for GlobalVar {}
+
+pub static G_COUNTER: AtomicI32 = AtomicI32::new(0);
 
 pub type ImplMap = FxHashMap<Ustr, FxHashMap<Ustr, IndexMap<Ustr, Arc<RefCell<PLType>>>>>;
 
@@ -343,7 +347,7 @@ impl Mod {
         is_extern: bool,
     ) -> Result<(), PLDiag> {
         if self.global_table.contains_key(&name) {
-            return Err(range.new_err(ErrorCode::UNDEFINED_TYPE));
+            return Err(range.new_err(ErrorCode::REDEFINE_SYMBOL));
         }
         self.global_table.insert(
             name,
@@ -351,6 +355,11 @@ impl Mod {
                 tp,
                 range,
                 is_extern, // loc: refs,
+                mangled_name: self.get_full_name(ustr(&format!(
+                    "{}@{}",
+                    name,
+                    G_COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+                ))),
             },
         );
         Ok(())

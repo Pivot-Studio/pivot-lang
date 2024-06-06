@@ -281,7 +281,7 @@ impl Node for ExternIdNode {
             let name = if symbol.is_extern {
                 self.id.get_name(ctx)
             } else {
-                plmod.get_full_name(self.id.get_name(ctx))
+                symbol.mangled_name
             };
             let g = ctx.get_or_add_global(&name, symbol.tp.clone(), builder, false);
             return g.new_output(pltype).set_const().to_result();

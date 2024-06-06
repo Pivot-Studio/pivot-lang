@@ -42,7 +42,7 @@ pub const REPL_VIRTUAL_ENTRY: &str = "@__repl__\\__anon__.pi";
 #[cfg(windows)]
 pub const REPL_VIRTUAL_CONF: &str = "@__repl__\\Kagari.toml";
 
-static REPL_COUNTER: AtomicI32 = AtomicI32::new(0);
+pub static REPL_COUNTER: AtomicI32 = AtomicI32::new(0);
 
 lazy_static::lazy_static! {
     pub static ref REPL_VARIABLES: Arc<Mutex<FxHashMap<Ustr, GlobalVar>>> = Arc::new(Mutex::new(FxHashMap::default()));

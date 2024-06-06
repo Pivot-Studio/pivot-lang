@@ -717,11 +717,14 @@ impl<'a, 'ctx> Ctx<'a> {
             }
         }
         if let Some(GlobalVar {
-            tp: pltype, range, ..
+            tp: pltype,
+            range,
+            mangled_name,
+            ..
         }) = parent.get_root_ctx().plmod.get_global_symbol(name)
         {
             return builder
-                .get_global_var_handle(&parent.plmod.get_full_name(*name))
+                .get_global_var_handle(mangled_name)
                 .or(builder.get_global_var_handle(name))
                 .map(|value| {
                     PLSymbol::Global(PLSymbolData {
@@ -731,6 +734,19 @@ impl<'a, 'ctx> Ctx<'a> {
                         refs: None,
                     })
                 });
+        }
+        #[cfg(feature = "repl")]
+        if parent.get_root_ctx().plmod.path == crate::repl::REPL_VIRTUAL_ENTRY {
+            // eprintln!("eq");
+            if let Some(v) = crate::repl::REPL_VARIABLES.lock().unwrap().get(name) {
+                let handle = builder.get_or_add_global(&v.mangled_name, v.tp.clone(), self, false);
+                return Some(PLSymbol::Global(PLSymbolData {
+                    value: handle,
+                    pltype: v.tp.clone(),
+                    range: Range::default(),
+                    refs: None,
+                }));
+            }
         }
         None
     }
@@ -744,6 +760,24 @@ impl<'a, 'ctx> Ctx<'a> {
         is_glob: bool,
         is_extern: bool,
     ) -> Result<(), PLDiag> {
+        #[cfg(feature = "repl")]
+        if self.get_file() == crate::repl::REPL_VIRTUAL_ENTRY
+            && is_glob
+            && self.parent.is_none()
+            && crate::repl::REPL_VARIABLES
+                .lock()
+                .unwrap()
+                .contains_key(&name)
+        {
+            return self.add_symbol_without_check(
+                name,
+                pv,
+                real_tp(pltype),
+                range,
+                is_glob,
+                is_extern,
+            );
+        }
         if self.table.contains_key(&name) {
             return Err(self.add_diag(range.new_err(ErrorCode::REDECLARATION)));
         }
