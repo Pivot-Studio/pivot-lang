@@ -5,6 +5,7 @@ use crate::ast::builder::IRBuilder;
 use crate::ast::diag::ErrorCode;
 use crate::ast::plmod::G_COUNTER;
 use crate::inference::InferenceCtx;
+#[cfg(feature = "repl")]
 use crate::repl;
 
 use internal_macro::node;
