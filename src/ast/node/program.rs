@@ -142,33 +142,33 @@ fn new_var(name: &str) -> Box<VarNode> {
         id: None,
     })
 }
-fn new_use(ns: &[&str]) -> Box<NodeEnum> {
+fn new_use(ns: &[&str], all: bool) -> Box<NodeEnum> {
     Box::new(NodeEnum::UseNode(UseNode {
         namespace: ns.iter().map(|a| new_var(a)).collect(),
         range: Default::default(),
         complete: true,
         singlecolon: false,
         modifier: None,
-        all_import: false,
+        all_import: all,
     }))
 }
 
 lazy_static::lazy_static! {
     static ref DEFAULT_USE_NODES: Vec<Box<NodeEnum>> = {
         vec![
-            new_use(&["core", "builtin"]),
-            new_use(&["core", "hash"]),
-            new_use(&["core", "eq"]),
-            new_use(&["std", "stdbuiltin"])
+            new_use(&["core", "builtin"], true),
+            new_use(&["core", "hash"], false),
+            new_use(&["core", "eq"], false),
+            new_use(&["std", "stdbuiltin"], true)
         ]
     };
 
     static ref GC_USE_NODES: Vec<Box<NodeEnum>> = {
-        vec![new_use(&["core", "gc"])]
+        vec![new_use(&["core", "gc"], false)]
     };
 
     static ref STD_USE_NODES: Vec<Box<NodeEnum>> = {
-        vec![new_use(&["core", "builtin"])]
+        vec![new_use(&["core", "builtin"], true)]
     };
 }
 

@@ -14,3 +14,5 @@ use std::rand;
 use std::userrand;
 use std::math;
 use std::time;
+use std::string;
+use std::slice;

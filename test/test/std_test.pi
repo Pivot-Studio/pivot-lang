@@ -1,0 +1,27 @@
+use core::panic;
+use std::string;
+pub fn test_std() void {
+    let re = "abcde".index_of("cde");
+    let chars = [1,2,3];
+    let subchars = [3];
+    let re1 =  chars.index_of(subchars);
+    panic::assert(re is i64);
+    panic::assert((re as i64!) == 2);
+
+    panic::assert(re1 is i64);
+    panic::assert((re1 as i64!) == 2);
+    panic::assert("abcde".index_of("dde") is None);
+    panic::assert("今宵又，折长柳。月娥抛落杯中酒".contains("折长柳"));
+    panic::assert(!"今宵又，折长柳。月娥抛落杯中酒".contains("折短柳"));
+    panic::assert("月娥抛落杯中酒".chars().eq(&['月', '娥', '抛', '落', '杯', '中', '酒']));
+    panic::assert(string::from_chars("月娥抛落杯中酒".chars()).eq(&"月娥抛落杯中酒"));
+    panic::assert("今宵又，折长柳。月娥抛落杯中酒".slice(8, 7).eq(&"月娥抛落杯中酒"));
+    panic::assert([1,2,3].slice(2, 1).eq(&[3]));
+    let arr1 = [1,3,5];
+    let arr2 = [3,2,1];
+    arr1.copy(arr2, 2);
+    panic::assert(arr2.eq(&[1,3,1]));
+    arr1.slice(2, 1)[0] = 9;
+    panic::assert(arr1.eq(&[1,3,9]));
+    return;
+}
