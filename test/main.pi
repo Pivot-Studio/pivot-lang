@@ -34,10 +34,10 @@ use project1::test::rand;
 use project1::test::_hashtable;
 use project1::test::_io;
 use project1::test::future_test;
+use project1::test::std_test;
 // use std::cols::hashtable::new_hash_table;
 
 pub fn main() i64 {
-
     macros::test_macros();
     ifel::test_if_else();
     generic::test_generic();
@@ -70,6 +70,7 @@ pub fn main() i64 {
     _hashtable::test_hashtable();
     _io::test_io();
     future_test::test_future();
+    std_test::test_std();
     
     return 0;
 }

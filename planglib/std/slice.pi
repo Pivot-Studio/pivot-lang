@@ -1,0 +1,59 @@
+pub trait SliceExt<T> {
+    fn index_of(sub_arr:[T]) Option<i64>;
+    fn len() i64;
+    fn slice(start: i64, end: i64) [T];
+    fn copy(to:[T], len:i64) Result<()|SliceOutOfIdxErr>;
+}
+
+pub struct SliceOutOfIdxErr {
+    
+}
+
+fn test2<T>() void {
+    
+    return;
+}
+
+use core::eq::Eq;
+impl<T:Eq<T>> SliceExt<T> for [T] {
+    fn index_of(sub_arr:[T])  Option<i64> {
+        let len = self.len();
+        let sub_len = sub_arr.len();
+        if sub_len > len || sub_len == 0{
+            return None{};
+        }
+        let i = 0;
+        while i < len - sub_len + 1 {
+            let j = 0;
+            while j < sub_len {
+                if !(*self)[i+j].eq(&sub_arr[j]) {
+                    break;
+                }
+                j = j + 1;
+            }
+            if j == sub_len {
+                return i;
+            }
+            i = i + 1;
+        }
+        return None{};
+
+    }
+
+    fn len() i64 {
+        return arr_len(*self) ;
+    }
+
+    fn slice(start: i64, len: i64) [T] {
+        return arr_slice(*self, start, len);
+    }
+    fn copy(to:[T], len:i64) Result<()|SliceOutOfIdxErr> {
+        let from = *self;
+        if from.len() < len || to.len() < len {
+            return SliceOutOfIdxErr{} as Result<()|SliceOutOfIdxErr>;
+        }
+        arr_copy(from, to, len);
+        return ();
+    }
+}
+

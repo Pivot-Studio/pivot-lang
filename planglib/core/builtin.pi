@@ -36,6 +36,7 @@ impl <T:ToString>ToString for Option<T> {
 
 pub use core::gc::string;
 pub use core::gc::string_from_bytes;
+pub use core::ord::Ord;
 
 pub type Result<T|E> = T|E;
 
@@ -91,5 +92,5 @@ impl <T:ToString|E:ToString>ToString for Result<T|E> {
     }
 }
 
-pub use core::hash::*;
-pub use core::eq::*;
+pub use core::hash::Hash;
+pub use core::eq::Eq;
