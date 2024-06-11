@@ -2732,7 +2732,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         let divar = self.dibuilder.create_parameter_variable(
             self.discope.get(),
             &fnvalue.param_names[i],
-            i as u32,
+            i as u32 + 1,
             self.get_cur_di_file(),
             pos.line as u32,
             self.get_ditype(
@@ -2779,7 +2779,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         let divar = self.dibuilder.create_parameter_variable(
             self.discope.get(),
             &fnvalue.param_names[i],
-            i as u32,
+            i as u32 + 1,
             self.get_cur_di_file(),
             pos.line as u32,
             self.get_ditype(
