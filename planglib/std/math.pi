@@ -17,13 +17,13 @@ fn set_lo(x: *i64, lx: i64) void {
     return;
 }
 
-var Lg1 = &6.666666666666735130e-01;
-var Lg2 = &3.999999999940941908e-01;
-var Lg3 = &2.857142874366239149e-01;
-var Lg4 = &2.222219843214978396e-01;
-var Lg5 = &1.818357216161805012e-01;
-var Lg6 = &1.531383769920937332e-01;
-var Lg7 = &1.479819860511658591e-01;
+var Lg1 = 6.666666666666735130e-01;
+var Lg2 = 3.999999999940941908e-01;
+var Lg3 = 2.857142874366239149e-01;
+var Lg4 = 2.222219843214978396e-01;
+var Lg5 = 1.818357216161805012e-01;
+var Lg6 = 1.531383769920937332e-01;
+var Lg7 = 1.479819860511658591e-01;
 
 /// 使用泰勒级数实现
 pub fn ln(x: f64) f64 {
@@ -79,8 +79,8 @@ pub fn ln(x: f64) f64 {
     i = hx - 0x6147a;
     w = z*z;
     j = 0x6b851-hx;
-	t1= w*(*Lg2+w*(*Lg4+w**Lg6)); 
-	t2= z*(*Lg1+w*(*Lg3+w*(*Lg5+w**Lg7))); 
+	t1= w*(Lg2+w*(Lg4+w*Lg6)); 
+	t2= z*(Lg1+w*(Lg3+w*(Lg5+w*Lg7))); 
 	i =i | j;
 	R = t2+t1;
     if i>0 {
@@ -96,5 +96,180 @@ pub fn ln(x: f64) f64 {
         } else {
             return kf64*ln2_hi-((s*(f-R)-kf64*ln2_lo)-f);
         }
+    }
+}
+
+pub fn abs(x: f64) f64 {
+    if x < 0.0 {
+        return -x;
+    } else {
+        return x;
+    }
+}
+
+pub fn absi(x: i64) i64 {
+    if x < 0 {
+        return -x;
+    } else {
+        return x;
+    }
+}
+
+pub fn deg2rad(x: f64) f64 {
+    return x * 0.017453292519943295769236907684886;
+}
+
+pub fn cos(x: f64) f64 {
+    let  term = 1.0;  // The current term in the Taylor series
+    let  sum = 1.0;   // The sum of all terms so far
+    let  n = 0;       // The current exponent
+    let  x_squared = x * x;  // The square of x
+
+    while abs(term) > 1e-10 {
+        n = n + 2;
+        term = term* (-x_squared / ((n - 1) as f64 * n as f64));
+        sum = sum + term;
+    }
+
+    return sum;
+}
+
+pub fn sin(x: f64) f64 {
+    let  term = x;  // The current term in the Taylor series
+    let  sum = x;   // The sum of all terms so far
+    let  n = 1;    // The current exponent
+    let  x_squared = x * x;  // The square of x
+
+    while abs(term) > 1e-10 {
+        n = n + 2;
+        term = term* (-x_squared / ((n - 1) as f64 * n as f64));
+        sum = sum + term;
+    }
+
+    return sum;
+}
+
+pub fn tan(x: f64) f64 {
+    return sin(x) / cos(x);
+}
+
+pub fn atan(x: f64) f64 {
+    let  term = x;  // The current term in the Taylor series
+    let  sum = x;   // The sum of all terms so far
+    let  n = 1;    // The current exponent
+    let  x_squared = x * x;  // The square of x
+
+    while abs(term) > 1e-10 {
+        n = n + 2;
+        term = term* (-x_squared / n as f64);
+        sum = sum + term;
+    }
+
+    return sum;
+}
+
+pub fn asin(x: f64) f64 {
+    let  term = x;  // The current term in the Taylor series
+    let  sum = x;   // The sum of all terms so far
+    let  n = 1;    // The current exponent
+    let  x_squared = x * x;  // The square of x
+
+    while abs(term) > 1e-10 {
+        n = n + 2;
+        term = term* (-x_squared * (n - 2) as f64 / n as f64);
+        sum = sum + term;
+    }
+
+    return sum;
+}
+
+var PI = 3.14159265358979323846;
+var E = 2.71828182845904523536;
+
+pub fn acos(x: f64) f64 {
+    return PI / 2.0 - asin(x);
+}
+
+pub trait F64Ext {
+    fn powf(n: f64) f64;
+    fn ln() f64;
+    fn exp() f64;
+    fn powf_int(n: i64) f64;
+    fn floor() f64;
+    fn abs() f64;
+}
+
+pub fn exp(x: f64) f64 {
+    let  term = 1.0;  // The current term in the Taylor series
+    let  sum = 1.0;   // The sum of all terms so far
+    let  n = 0;       // The current exponent
+
+    while abs(term) > 1e-10 {
+        n = n + 1;
+        term = term* (x / n as f64);
+        sum = sum + term;
+    }
+
+    return sum;
+}
+
+
+
+
+impl F64Ext for f64 {
+    fn floor() f64 {
+        return (*self) as i64 as f64;
+    }
+    fn ln() f64 {
+        return ln(*self);
+    }
+    fn exp() f64 {
+        return exp(*self);
+    }
+    fn powf(n: f64) f64 {
+        // if n is integer, use fast powf_int
+        if n.floor() == n {
+            return self.powf_int(n as i64);
+        }
+
+        return exp(n * ln(*self));
+    }
+    fn powf_int(n: i64) f64 {
+        // fast powf_int
+        let res = 1.0;
+        let x = *self;
+        while n > 0 {
+            if n & 1 == 1 {
+                res = res * x;
+            }
+            x = x * x;
+            n = n >> 1;
+        }
+        return res;
+    }
+    fn abs() f64 {
+        return abs(*self);
+    }
+
+
+}
+
+
+
+
+pub fn max<T:Ord<T>>(a: T, b: T) T {
+    if a.cmp(b)>0 {
+        return a;
+    } else {
+        return b;
+    }
+}
+
+
+pub fn min<T:Ord<T>>(a: T, b: T) T {
+    if a.cmp(b)<0 {
+        return a;
+    } else {
+        return b;
     }
 }
