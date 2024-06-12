@@ -9,14 +9,29 @@ pub trait StringExt {
 
 
 impl StringExt for string {
+    /// # index_of
+    ///
+    /// Returns the index of the first occurrence of the
+    /// specified substring in this string, or `None` if there is no such occurrence.
     fn index_of(s:string) Option<i64> {
         let chars = self.chars();
         let subchars = s.chars();
         return chars.index_of(subchars);
     }
+    /// # contains
+    ///
+    /// Returns `true` if the specified substring is a
+    /// substring of this string, and `false` otherwise.
     fn contains(s:string) bool {
         return self.index_of(s) is i64;
     }
+
+    /// # slice
+    ///
+    /// Returns a new string that is a substring of this string.
+    ///
+    /// The substring is a slice of the original string starting from the `start` index and
+    /// having `len` characters.
     fn slice(start:i64, len:i64) string {
         if start + len == 0 {
             return "";
@@ -50,7 +65,7 @@ impl StringExt for string {
         }
 
         if byte_len == 0 && len != 0 {
-             pl_panic();
+            pl_panic();
             return string {
                 _len: 0,
                 _byte_len: 0,
@@ -67,6 +82,10 @@ impl StringExt for string {
 
 }
 
+
+/// # from_chars
+/// 
+/// Converts a list of characters to a string.
 pub fn from_chars(chars:[char]) string {
     let bytes:[u8] = [u8*4*arr_len(chars);];
     let i = 0;

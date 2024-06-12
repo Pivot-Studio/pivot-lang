@@ -1716,7 +1716,7 @@ impl GenericType {
             };
             let ph = Arc::new(RefCell::new(PLType::Struct(place_holder)));
 
-            for it in impls.get_types(ctx, builder).unwrap() {
+            for it in impls.get_types(ctx, builder).unwrap_or_default() {
                 if let PLType::Trait(t) = &*it.clone().borrow() {
                     ctx.get_root_ctx().plmod.add_impl(
                         &ph.borrow().get_full_elm_name_without_generic(),
