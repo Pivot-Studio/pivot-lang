@@ -1213,7 +1213,7 @@ impl<'a, 'ctx> Ctx<'a> {
         let binding = l
             .trait_impl
             .clone()
-            .map(|e| e.get_types(self, builder).unwrap())
+            .map(|e| e.get_types(self, builder).unwrap_or_default())
             .unwrap_or_default();
         let miss = binding
             .iter()
