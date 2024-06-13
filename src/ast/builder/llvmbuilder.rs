@@ -446,7 +446,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 &format!("heapptr_{}", name),
             )
             .unwrap();
-        if tp.is_atomic() || !matches!(tp, PLType::Arr(_)) {
+        if !matches!(tp, PLType::Arr(_)) {
             let pos = match declare {
                 Some(Pos {
                     line: 0,

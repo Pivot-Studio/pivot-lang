@@ -32,7 +32,8 @@ llvm提供了一系列的gc相关api，首先是gc策略，我们可以给每个
 两个C文件一个定义了我们的GC策略，一个定义了我们的stackmap格式和生成方式。
 
 我们的stackmap格式如下：
-```
+
+```Rust
 Header {
   i64  : Stack Map Version (current version is 1)
   i32  : function 数量
@@ -117,22 +118,13 @@ immix gc提供了`gc_init`函数，该函数接受一个stackmap指针，会加�
 
 ### 基于stackmap的精确root定位实现
 
-为了遍历函数调用栈，我们使用`backtrace.rs`包，该包封装了一些平台相关的函数调用栈遍历的实现。
-```admonish warning 
-栈爬取的实现不同平台差异巨大，很容易出现bug。目前我们发现在mac aarch64上如果使用lld进行链接会导致该backtrace包出现
-segment fault，这个问题目前使用ld替代lld进行规避。
-```
+为了遍历函数调用栈，在老版本中我们使用`backtrace.rs`包，该包封装了一些平台相关的函数调用栈遍历的实现。
 
-遍历的时候通过`backtrace.rs`拿到当前ip寄存器的值，然后去我们构建的stackmap中查找到当前函数栈的root进行遍历，遍历完成后继续向上层函数栈遍历。
-注意这里遍历的起点不在mutator代码中，而在gc代码中，所以遍历的开头和结尾查不到对应记录是完全正常的。
-
-```admonish 
-潜在优化点：其实从gc的函数到目标语言最底层函数的调用栈层数在运行时是固定的，所以这里其实可以优化，跳过前几个栈帧，直接从目标语言最底层函数开始遍历。
-```
+在新版本中，由于`libbacktrace`中使用了全居锁，性能不好，我们决定手动进行栈遍历。为了完成这一点，我们需要
+在mutator调用可能触发GC的runtime函数时，传入当前的`sp`寄存器值，之后利用StackMap中记录的各个函数栈的大小来一步一步往上爬取。
 
 ## 参考资料
 
 1. [llvm stackmap 文档](https://llvm.org/docs/StackMaps.html)
 2. [llvm gc 文档](https://llvm.org/docs/GarbageCollection.html)
 3. [读取llvm默认生成的stackmap例子](https://github.com/KavinduZoysa/test-GCs)
-

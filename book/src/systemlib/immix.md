@@ -6,23 +6,22 @@
 此页面仍在编写中，内容可能有疏漏
 ```
 
-
 ## Table of Contents
 
 <!-- toc -->
 
 ## Overview
 
-此gc是我们基于[immix gc论文](https://www.cs.utexas.edu/users/speedway/DaCapo/papers/immix-pldi-2008.pdf)实现的，
-大部分的实现细节都与论文一致，对于一些论文没提到的细节我们自行进行了实现，参考了很多别的gc项目。该gc是一个支持多线程使用的、
-基于shadow stack的，精确mark-region 非并发（Concurrency） 并行（Parallelism） gc。  
-
+此gc是我们基于[immix GC论文](https://www.cs.utexas.edu/users/speedway/DaCapo/papers/immix-pldi-2008.pdf)实现的，
+大部分的实现细节都与论文一致，对于一些论文没提到的细节我们自行进行了实现，参考了很多别的GC项目。该GC是一个支持多线程使用的、
+基于StackMap的，半精确mark-region 非并发（Concurrency） 并行（Parallelism） gc。  
 
 ```admonish tip title="gc的并发（Concurrency）与并行（Parallelism）"
 gc中并发和并行是两个不同的术语，并发gc指的是能够在应用不暂停的基础上进行回收的gc，
 而并行gc指的是gc在回收的时候能够使用多个线程同时进行工作。一个gc可以既是并行的也是并发的，
 我们的immix gc目前只具备并行能力
 ```
+
 这里有一些创建该gc过程中我们主要参考的资料，列表如下：  
 
 - [immix gc论文](https://www.cs.utexas.edu/users/speedway/DaCapo/papers/immix-pldi-2008.pdf)
@@ -30,10 +29,9 @@ gc中并发和并行是两个不同的术语，并发gc指的是能够在应用�
 - [给scala-native使用的一个immix gc的C实现](https://github.com/scala-native/immix)
 - [康奈尔大学CS6120课程关于immix gc的博客，可以帮助快速理解论文的基本思路](https://www.cs.cornell.edu/courses/cs6120/2019fa/blog/immix/)
 
-
 ## General Description
 
-本gc是为pl __定制的__，虽然理论上能被其他项目使用，但是对外部项目的支持**并不是主要目标**  
+本gc是为pl __定制的__，虽然理论上能被其他项目使用，但是对外部项目的支持 __并不是主要目标__
 
 pl的组件包含一个全局的`GlobalAllocator`，然后每个`mutator`线程会包含一个独属于该线程的`Collector`，每个`Collector`中包含一个
 `ThreadLocalAllocator`。在线程使用gc相关功能的时候，该线程对应的`Collector`会自动被创建，直到线程结束或者
@@ -114,7 +112,6 @@ graph LR;
 Immix GC由于分配以line为单位，在内存利用率上稍有不足，但是其算法保证了极其优秀的内存局部性，配合TLA、GA的设计也大大
 减少了线程间的竞争。
 
-
 ## Allocation
 
 ### Global Allocator
@@ -130,7 +127,8 @@ GA同时维护一个`free`动态数组，用于存储已经被回收的block，�
 ```admonish info
 潜在的优化点：使用bitmap来记录block的使用情况，这样可以减少动态数组的开销
 ```
-```admonish warning 
+
+```admonish warning
 如果GA在分配新block的时候，发现`current`指针已经超出了初始申请的内存空间，会导致程序panic。这个行为应该在未来被改善
 ```
 
@@ -149,6 +147,7 @@ TLA是线程本地的，每个线程都会有一个TLA，负责分配line，和�
 所有完全被占用的block会被加入到`unavailable`数组中，不会被重复利用。
 
 TLA的小对象分配策略如下：
+
 <center>
 
 ```mermaid
@@ -183,16 +182,18 @@ graph TD;
 
 ## Mark
 
-Mark阶段的主要工作是标记所有被使用的line和block，以便在后续的sweep阶段进行回收。我们的mark算法是**精确**的，
+Mark阶段的主要工作是标记所有被使用的line和block，以便在后续的sweep阶段进行回收。我们的mark算法是__精确__的，
 这点对evacuation算法的实现至关重要。
 
 精确GC有两个要求：
+
 - root的精确定位
 - 对象的精确遍历
 
-我们的精确root定位是基于**Stack Map**的，这部分细节过于复杂，将在[单独的文档](stackmap.md)中介绍。
+我们的精确root定位是基于__Stack Map__的，这部分细节过于复杂，将在[单独的文档](stackmap.md)中介绍。
 
 对象的精确遍历是通过编译器支持实现的，plimmix将所有heap对象分类为以下4种：
+
 - Atomic Object：原子对象，不包含指针的对象，如整数、浮点数、字符串等
 - Pointer Object：指针对象，该对象本身是一个指针
 - Complex Object：复杂对象，该对象可能包含指针
@@ -204,11 +205,13 @@ Mark阶段的主要工作是标记所有被使用的line和block，以便在后�
 
 对于Complex Object，编译器需要在对象开始位置增加一个`vtable`字段，该字段的值指向该类型的遍历函数。此遍历函数由编译器生成，
 其签名为：
+
 ```rust,ignore
 pub type VisitFunc = unsafe fn(&Collector, *mut u8);
 // vtable的签名，第一个函数是mark_ptr，第二个函数是mark_complex，第三个函数是mark_trait
 pub type VtableFunc = fn(*mut u8, &Collector, VisitFunc, VisitFunc, VisitFunc);
 ```
+
 在标记的时候，我们会调用对象的vtable对他进行遍历
 
 对于Trait Object，我们需要遍历他指向实际值的指针
@@ -253,13 +256,16 @@ graph LR;
 ```
 
 对于`ComplexObject1`，他的vtable函数逻辑如下：
+
 ```rust,ignore
 fn vtable_complex_obj1(&self, mark_ptr: VisitFunc, mark_complex: VisitFunc, mark_trait: VisitFunc){
     mark_ptr(self.PointerField)
     mark_complex(self.ComplexField)
 }
 ```
+
 而对于`ComplexField`，他的vtable函数逻辑如下：
+
 ```rust,ignore
 fn vtable_complex_field(&self, mark_ptr: VisitFunc, mark_complex: VisitFunc, mark_trait: VisitFunc){
     mark_ptr(self.PointerField)
@@ -279,10 +285,10 @@ mark queue为空，则标记过程结束。
 尽管这的确可以看作是一个递归的过程，但是此过程一定不能使用递归的方式实现，因为递归的方式在复杂程序中可能会导致栈溢出。
 ```
 
-
 ## Sweep
 
 Sweep阶段的主要工作是：
+
 - 回收所有未被标记的block
 - 修正所有line的header
 - 计算evacuation需要的一些信息
@@ -303,6 +309,7 @@ Sweep阶段的主要工作是：
 ## Evacuation
 
 每次回收开始之前，我们会先判断是否需要进行反碎片化，目前的策略是只要recycle block>1就进行反碎片化。
+
 ```admonish info
 优化点：如果处于内存用尽的紧急情况也应当进行evacuation，且threshold应当设置的更低
 ```
@@ -377,7 +384,6 @@ graph TD;
 
 每次驱逐是以分配的对象为单位，如果一个block被标记为待evacuate，那么在驱逐过程中，该block中的所有对象都一定会被驱逐。
 
-
 请注意，一部分其他gc的驱逐算法中的自愈需要读写屏障的参与，immix不需要。这带来了较大的mutator性能提升。
 
 ```admonish warning
@@ -415,12 +421,10 @@ fn add_sub_ndoe(root: *mut Node) {
 这导致gc无法在回收过程中对其进行修正，就会进一步导致`root.next`指向的地址不正确，从而导致程序出错。
 ```
 
-
 ```admonish tip title="多线程情况下驱逐算法的安全性"
 在多线程情况下，是存在两个线程同时驱逐一个对象的可能的，在这种情况下一些同步操作必不可少，但是并不需要加锁。
 我们通过一个cas操作来保证只有一个线程能够成功驱逐该对象。
 ```
-
 
 ## 性能
 
@@ -433,9 +437,9 @@ fn add_sub_ndoe(root: *mut Node) {
 
 你可以从[这里](https://github.com/Chronostasys/bdwgcvsimmix-bench)下载测试代码，在你的机器上运行并进行比较。这里我提供一组笔者机器上的测试数据截图  
 
-![](immix.png)
+![immix](immix.png)
 
-![](bdw.png)
+![bdw](bdw.png)
 
 测试环境为MacBook Pro (16-inch, 2021) Apple M1 Pro 16 GB，可以看出immix在此环境中已经具有近4倍的性能优势。
 
