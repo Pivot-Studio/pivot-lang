@@ -182,9 +182,9 @@
 <li><a href="#%E5%9C%A8%E7%BA%BF%E7%A8%8B%E5%8D%A1%E9%A1%BF%E7%9A%84%E6%97%B6%E5%80%99">在线程卡顿的时候</a></li>
 </ul>
 <h2 id="overview"><a class="header" href="#overview">Overview</a></h2>
-<p>此gc是我们基于<a href="https://www.cs.utexas.edu/users/speedway/DaCapo/papers/immix-pldi-2008.pdf">immix gc论文</a>实现的，
-大部分的实现细节都与论文一致，对于一些论文没提到的细节我们自行进行了实现，参考了很多别的gc项目。该gc是一个支持多线程使用的、
-基于shadow stack的，精确mark-region 非并发（Concurrency） 并行（Parallelism） gc。</p>
+<p>此gc是我们基于<a href="https://www.cs.utexas.edu/users/speedway/DaCapo/papers/immix-pldi-2008.pdf">immix GC论文</a>实现的，
+大部分的实现细节都与论文一致，对于一些论文没提到的细节我们自行进行了实现，参考了很多别的GC项目。该GC是一个支持多线程使用的、
+基于StackMap的，半精确mark-region 非并发（Concurrency） 并行（Parallelism） gc。</p>
 <div id="admonition-gc的并发concurrency与并行parallelism" class="admonition tip">
 <div class="admonition-title">
 <p>gc的并发（Concurrency）与并行（Parallelism）</p>
@@ -196,7 +196,7 @@
 我们的immix gc目前只具备并行能力</p>
 </div>
 </div>
-这里有一些创建该gc过程中我们主要参考的资料，列表如下：  
+<p>这里有一些创建该gc过程中我们主要参考的资料，列表如下：</p>
 <ul>
 <li><a href="https://www.cs.utexas.edu/users/speedway/DaCapo/papers/immix-pldi-2008.pdf">immix gc论文</a></li>
 <li><a href="https://github.com/playXE/libimmixcons">playxe 的 immixcons（immix gc的一个rust实现，回收存在bug）-- 很多底层内存相关代码是参考该gc完成的，还有在函数头中加入自定义遍历函数的做法</a></li>
@@ -204,7 +204,7 @@
 <li><a href="https://www.cs.cornell.edu/courses/cs6120/2019fa/blog/immix/">康奈尔大学CS6120课程关于immix gc的博客，可以帮助快速理解论文的基本思路</a></li>
 </ul>
 <h2 id="general-description"><a class="header" href="#general-description">General Description</a></h2>
-<p>本gc是为pl <strong>定制的</strong>，虽然理论上能被其他项目使用，但是对外部项目的支持<strong>并不是主要目标</strong></p>
+<p>本gc是为pl <strong>定制的</strong>，虽然理论上能被其他项目使用，但是对外部项目的支持 <strong>并不是主要目标</strong></p>
 <p>pl的组件包含一个全局的<code>GlobalAllocator</code>，然后每个<code>mutator</code>线程会包含一个独属于该线程的<code>Collector</code>，每个<code>Collector</code>中包含一个
 <code>ThreadLocalAllocator</code>。在线程使用gc相关功能的时候，该线程对应的<code>Collector</code>会自动被创建，直到线程结束或者
 用户手动调用销毁api。</p>
@@ -348,14 +348,14 @@
 </div>
 </div>
 <h2 id="mark"><a class="header" href="#mark">Mark</a></h2>
-<p>Mark阶段的主要工作是标记所有被使用的line和block，以便在后续的sweep阶段进行回收。我们的mark算法是<strong>精确</strong>的，
+<p>Mark阶段的主要工作是标记所有被使用的line和block，以便在后续的sweep阶段进行回收。我们的mark算法是__精确__的，
 这点对evacuation算法的实现至关重要。</p>
 <p>精确GC有两个要求：</p>
 <ul>
 <li>root的精确定位</li>
 <li>对象的精确遍历</li>
 </ul>
-<p>我们的精确root定位是基于<strong>Stack Map</strong>的，这部分细节过于复杂，将在<a href="stackmap.html">单独的文档</a>中介绍。</p>
+<p>我们的精确root定位是基于__Stack Map__的，这部分细节过于复杂，将在<a href="stackmap.html">单独的文档</a>中介绍。</p>
 <p>对象的精确遍历是通过编译器支持实现的，plimmix将所有heap对象分类为以下4种：</p>
 <ul>
 <li>Atomic Object：原子对象，不包含指针的对象，如整数、浮点数、字符串等</li>
@@ -579,8 +579,8 @@ fn add_sub_ndoe(root: *mut Node) {
 <p>使用github action进行的基准测试结果可以在<a href="https://chronostasys.github.io/bdwgcvsimmix-bench/report/">这里</a>查看，由于github action使用的机器
 只有两个核心，所以测试线程数量为2，在此结果中，可以看到immix整体性能略差于bdwgc，但是差距小于单线程情况。</p>
 <p>你可以从<a href="https://github.com/Chronostasys/bdwgcvsimmix-bench">这里</a>下载测试代码，在你的机器上运行并进行比较。这里我提供一组笔者机器上的测试数据截图</p>
-<p><img src="immix.png" alt="" /></p>
-<p><img src="bdw.png" alt="" /></p>
+<p><img src="immix.png" alt="immix" /></p>
+<p><img src="bdw.png" alt="bdw" /></p>
 <p>测试环境为MacBook Pro (16-inch, 2021) Apple M1 Pro 16 GB，可以看出immix在此环境中已经具有近4倍的性能优势。</p>
 <p>immix作为天生并发的gc，并发情况下几乎能完全避免锁竞争的出现，因此在多线程情况下的性能优势是非常明显的。并且其分配算法很好的维护了空间局部性，理论上
 能带来更好的mutator性能。</p>

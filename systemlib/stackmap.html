@@ -181,7 +181,7 @@
 <p>为了性能和方便考虑，我们的gc实现了自己的gc策略（plimmix），此策略通过一个自定义llvm插件实现。其代码在 <strong>immix/llvm</strong> 目录下
 两个C文件一个定义了我们的GC策略，一个定义了我们的stackmap格式和生成方式。</p>
 <p>我们的stackmap格式如下：</p>
-<pre><code>Header {
+<pre><code class="language-Rust">Header {
   i64  : Stack Map Version (current version is 1)
   i32  : function 数量
 }
@@ -258,28 +258,9 @@ immix提供一些工具函数。<code>thread_stuck_start</code>和<code>thread_s
 <p><code>gc_init</code>函数主要会读取stackmap中的数据并且进行遍历，之后生成一个哈希表，用于快速的查找对应的safepoint地址。这个哈希表的key是safepoint地址，value是safepoint所在
 函数的所有gcroot信息。</p>
 <h3 id="基于stackmap的精确root定位实现"><a class="header" href="#基于stackmap的精确root定位实现">基于stackmap的精确root定位实现</a></h3>
-<p>为了遍历函数调用栈，我们使用<code>backtrace.rs</code>包，该包封装了一些平台相关的函数调用栈遍历的实现。</p>
-<div id="admonition-warning" class="admonition warning">
-<div class="admonition-title">
-<p>Warning</p>
-<p><a class="admonition-anchor-link" href="#admonition-warning"></a></p>
-</div>
-<div>
-<p>栈爬取的实现不同平台差异巨大，很容易出现bug。目前我们发现在mac aarch64上如果使用lld进行链接会导致该backtrace包出现
-segment fault，这个问题目前使用ld替代lld进行规避。</p>
-</div>
-</div>
-<p>遍历的时候通过<code>backtrace.rs</code>拿到当前ip寄存器的值，然后去我们构建的stackmap中查找到当前函数栈的root进行遍历，遍历完成后继续向上层函数栈遍历。
-注意这里遍历的起点不在mutator代码中，而在gc代码中，所以遍历的开头和结尾查不到对应记录是完全正常的。</p>
-<div id="admonition-note" class="admonition note">
-<div class="admonition-title">
-<p>Note</p>
-<p><a class="admonition-anchor-link" href="#admonition-note"></a></p>
-</div>
-<div>
-<p>潜在优化点：其实从gc的函数到目标语言最底层函数的调用栈层数在运行时是固定的，所以这里其实可以优化，跳过前几个栈帧，直接从目标语言最底层函数开始遍历。</p>
-</div>
-</div>
+<p>为了遍历函数调用栈，在老版本中我们使用<code>backtrace.rs</code>包，该包封装了一些平台相关的函数调用栈遍历的实现。</p>
+<p>在新版本中，由于<code>libbacktrace</code>中使用了全居锁，性能不好，我们决定手动进行栈遍历。为了完成这一点，我们需要
+在mutator调用可能触发GC的runtime函数时，传入当前的<code>sp</code>寄存器值，之后利用StackMap中记录的各个函数栈的大小来一步一步往上爬取。</p>
 <h2 id="参考资料"><a class="header" href="#参考资料">参考资料</a></h2>
 <ol>
 <li><a href="https://llvm.org/docs/StackMaps.html">llvm stackmap 文档</a></li>
