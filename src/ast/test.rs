@@ -6,9 +6,7 @@ use std::{
 };
 
 use expect_test::expect_file;
-use lsp_types::{
-    CompletionItemKind, GotoDefinitionResponse, HoverContents, InlayHintLabel, MarkedString,
-};
+use lsp_types::{CompletionItemKind, GotoDefinitionResponse, HoverContents, MarkedString};
 use rustc_hash::FxHashMap;
 use salsa::{accumulator::Accumulator, storage::HasJar};
 use wait_timeout::ChildExt;
@@ -230,12 +228,9 @@ fn test_hint() {
         ActionType::Hint,
         "test/lsp/test_completion.pi",
     );
-    assert!(!hints.is_empty());
-    assert!(!hints[0].is_empty());
-    if let InlayHintLabel::LabelParts(p) = &hints[0][0].label {
-        assert_eq!(p[0].value, ": ".to_string());
-        assert_eq!(p[1].value, "i64".to_string());
-    }
+
+    let expect = expect_file!["expects/hinttest.expect"];
+    expect.assert_eq(&format!("{:#?}", hints));
 }
 fn new_diag_range(sl: u32, sc: u32, el: u32, ec: u32) -> lsp_types::Range {
     lsp_types::Range {

@@ -277,7 +277,7 @@ impl Node for ExternIdNode {
             ctx.push_semantic_token(self.id.range, SemanticTokenType::VARIABLE, 0);
             let pltype = symbol.tp.clone();
             ctx.set_glob_refs(plmod.get_full_name(self.id.get_name(ctx)), self.id.range);
-            ctx.send_if_go_to_def(self.range, symbol.range, plmod.path);
+            ctx.send_if_go_to_def(self.id.range, symbol.range, plmod.path);
             let name = if symbol.is_extern {
                 self.id.get_name(ctx)
             } else {
@@ -286,7 +286,7 @@ impl Node for ExternIdNode {
             let g = ctx.get_or_add_global(&name, symbol.tp.clone(), builder, false);
             return g.new_output(pltype).set_const().to_result();
         }
-        if let Ok(tp) = plmod.get_type(&self.id.get_name(ctx), self.range, ctx) {
+        if let Ok(tp) = plmod.get_type(&self.id.get_name(ctx), self.id.range, ctx) {
             let mtp = tp.clone();
             let re = match &*mtp.borrow() {
                 PLType::Fn(_) => {
@@ -327,16 +327,9 @@ impl ExternIdNode {
             });
         }
         let mut plmod = &ctx.plmod;
-        for ns in self.namespace.iter() {
-            let re = plmod.submods.get(&ns.get_name(ctx));
-            if let Some(re) = re {
-                plmod = re;
-            } else {
-                return Err(ctx.add_diag(ns.range.new_err(ErrorCode::UNRESOLVED_MODULE)));
-            }
-        }
+        plmod = self.solve_mod(plmod, ctx)?;
 
-        if let Ok(tp) = plmod.get_type(&self.id.get_name(ctx), self.range, ctx) {
+        if let Ok(tp) = plmod.get_type(&self.id.get_name(ctx), self.id.range, ctx) {
             // 必须是public的
             _ = tp.expect_pub(ctx, self.range);
             let re = match *tp.clone().borrow() {
@@ -384,6 +377,7 @@ impl ExternIdNode {
         for ns in self.namespace.iter() {
             let re = plmod.submods.get(&ns.get_name(ctx));
             if let Some(re) = re {
+                ctx.send_if_go_to_def(ns.range, Default::default(), re.path);
                 plmod = re;
             } else {
                 return Err(ctx.add_diag(ns.range.new_err(ErrorCode::UNRESOLVED_MODULE)));
