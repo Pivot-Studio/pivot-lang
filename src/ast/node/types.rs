@@ -696,7 +696,6 @@ impl Node for StructInitNode {
             TypeNodeEnum::Basic(b) => b.get_origin_type_with_infer(ctx, builder)?,
             _ => unreachable!(),
         };
-        ctx.set_if_refs_tp(pltype.clone(), self.typename.range());
         let mut sttype = match &*pltype.clone().borrow() {
             PLType::Struct(s) => s.clone(),
             _ => {
@@ -706,7 +705,6 @@ impl Node for StructInitNode {
                     .add_to_ctx(ctx))
             }
         };
-        ctx.send_if_go_to_def(self.typename.range(), sttype.range, sttype.path);
         // let mut field_init_values = vec![];
         let mut idx = 0;
         ctx.save_if_comment_doc_hover(self.typename.range(), Some(sttype.doc.clone()));

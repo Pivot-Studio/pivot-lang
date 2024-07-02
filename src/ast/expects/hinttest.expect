@@ -1,0 +1,186 @@
+[
+    [
+        InlayHint {
+            position: Position {
+                line: 27,
+                character: 9,
+            },
+            label: LabelParts(
+                [
+                    InlayHintLabelPart {
+                        value: ": ",
+                        tooltip: None,
+                        location: None,
+                        command: None,
+                    },
+                    InlayHintLabelPart {
+                        value: "i64",
+                        tooltip: Some(
+                            MarkupContent(
+                                MarkupContent {
+                                    kind: Markdown,
+                                    value: "primitive",
+                                },
+                            ),
+                        ),
+                        location: None,
+                        command: None,
+                    },
+                ],
+            ),
+            kind: Some(
+                Type,
+            ),
+            text_edits: None,
+            tooltip: None,
+            padding_left: None,
+            padding_right: None,
+            data: None,
+        },
+        InlayHint {
+            position: Position {
+                line: 46,
+                character: 10,
+            },
+            label: LabelParts(
+                [
+                    InlayHintLabelPart {
+                        value: ": ",
+                        tooltip: None,
+                        location: None,
+                        command: None,
+                    },
+                    InlayHintLabelPart {
+                        value: "testSt2",
+                        tooltip: Some(
+                            MarkupContent(
+                                MarkupContent {
+                                    kind: Markdown,
+                                    value: "",
+                                },
+                            ),
+                        ),
+                        location: None,
+                        command: None,
+                    },
+                ],
+            ),
+            kind: Some(
+                Type,
+            ),
+            text_edits: None,
+            tooltip: None,
+            padding_left: None,
+            padding_right: None,
+            data: None,
+        },
+        InlayHint {
+            position: Position {
+                line: 48,
+                character: 9,
+            },
+            label: LabelParts(
+                [
+                    InlayHintLabelPart {
+                        value: ": ",
+                        tooltip: None,
+                        location: None,
+                        command: None,
+                    },
+                    InlayHintLabelPart {
+                        value: "bool",
+                        tooltip: Some(
+                            MarkupContent(
+                                MarkupContent {
+                                    kind: Markdown,
+                                    value: "primitive",
+                                },
+                            ),
+                        ),
+                        location: None,
+                        command: None,
+                    },
+                ],
+            ),
+            kind: Some(
+                Type,
+            ),
+            text_edits: None,
+            tooltip: None,
+            padding_left: None,
+            padding_right: None,
+            data: None,
+        },
+        InlayHint {
+            position: Position {
+                line: 51,
+                character: 9,
+            },
+            label: String(
+                "args:",
+            ),
+            kind: Some(
+                Type,
+            ),
+            text_edits: None,
+            tooltip: None,
+            padding_left: None,
+            padding_right: None,
+            data: None,
+        },
+        InlayHint {
+            position: Position {
+                line: 51,
+                character: 23,
+            },
+            label: String(
+                "b:",
+            ),
+            kind: Some(
+                Type,
+            ),
+            text_edits: None,
+            tooltip: None,
+            padding_left: None,
+            padding_right: None,
+            data: None,
+        },
+        InlayHint {
+            position: Position {
+                line: 55,
+                character: 8,
+            },
+            label: LabelParts(
+                [
+                    InlayHintLabelPart {
+                        value: ": ",
+                        tooltip: None,
+                        location: None,
+                        command: None,
+                    },
+                    InlayHintLabelPart {
+                        value: "*i64",
+                        tooltip: Some(
+                            MarkupContent(
+                                MarkupContent {
+                                    kind: Markdown,
+                                    value: "pointer",
+                                },
+                            ),
+                        ),
+                        location: None,
+                        command: None,
+                    },
+                ],
+            ),
+            kind: Some(
+                Type,
+            ),
+            text_edits: None,
+            tooltip: None,
+            padding_left: None,
+            padding_right: None,
+            data: None,
+        },
+    ],
+]
