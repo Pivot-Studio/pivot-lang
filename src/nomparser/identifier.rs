@@ -46,20 +46,22 @@ pub fn extern_identifier(input: Span) -> IResult<Span, Box<NodeEnum>> {
             opt(tag_token_symbol(TokenType::COLON)),        // 容忍未写完的语句
         )),
         |(mut identifier_with_namespace, opt, opt2)| {
-            let id = identifier_with_namespace.pop().unwrap();
+            let id = identifier_with_namespace.first().unwrap();
+            let lastid = identifier_with_namespace.last().unwrap().clone();
 
-            let mut range = id.range();
+            let mut range = id.range().start.to(lastid.range().end);
             if let Some(opt) = opt {
                 range = range.start.to(opt.1.end);
             }
             if let Some(opt2) = opt2 {
                 range = range.start.to(opt2.1.end);
             }
+            identifier_with_namespace.pop();
             res_enum(
                 ExternIdNode {
                     // after poping, only namespaces are left
                     namespace: identifier_with_namespace,
-                    id,
+                    id: lastid,
                     range,
                     complete: opt.is_none() && opt2.is_none(),
                     singlecolon: opt2.is_some(),

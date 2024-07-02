@@ -41,12 +41,15 @@ struct a {
 use test::mod2;
 use test::trait1;
 
+use core::panic;
+
 fn traitname() void {
     let st = trait1::testSt2{};
     let a:trait1::TestTrait = st;
     let d = st.a;
     a.name();
     trait1::new();
+    name(panic::assert(true));
     return;
 }
 
