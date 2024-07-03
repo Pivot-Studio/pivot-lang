@@ -82,9 +82,9 @@ pub fn test_trait() void {
     let b:generic_trait1<i64> = a;
     b.name1(1);
     let dd: TestTrait;
-    dd = x;
-    dd = y;
-    dd = z;
+    dd = x as TestTrait;
+    dd = y as TestTrait;
+    dd = z as TestTrait;
     let re = dd.set(100);
     panic::assert(re == 100);
     let re1 = trait_ret().set(1);

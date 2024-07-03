@@ -14,7 +14,7 @@ trait C: A+B {
 pub fn test_multi_trait() void {
     let t = test_struct{};
     let c: C;
-    c = t;
+    c = t as C;
     let d = c is test_struct;
     panic::assert(d);
     let _casted_0 = c as test_struct!;
@@ -29,7 +29,7 @@ pub fn test_multi_trait() void {
     panic::assert(x);
     panic::assert(y == 1000);
     panic::assert(trait_with_generic(t) == 1000);
-    cc = c;
+    cc = c as B;
     dd = cc is test_struct;
     panic::assert(dd);
     y = cc.b();

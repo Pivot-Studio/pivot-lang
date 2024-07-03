@@ -31,14 +31,61 @@
             source: None,
             range: Range {
                 start: Pos {
-                    line: 173,
+                    line: 174,
                     column: 15,
-                    offset: 2475,
+                    offset: 2526,
                 },
                 end: Pos {
-                    line: 173,
+                    line: 174,
                     column: 17,
-                    offset: 2477,
+                    offset: 2528,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
+                TYPE_MISMATCH,
+            ),
+            help: None,
+            labels: [
+                PLLabel {
+                    file: u!(""),
+                    txt: Some(
+                        (
+                            u!("expected type {}, real type {}"),
+                            [
+                                u!("**A"),
+                                u!("TestTrait"),
+                            ],
+                        ),
+                    ),
+                    range: Range {
+                        start: Pos {
+                            line: 125,
+                            column: 5,
+                            offset: 1875,
+                        },
+                        end: Pos {
+                            line: 125,
+                            column: 7,
+                            offset: 1877,
+                        },
+                    },
+                },
+            ],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 125,
+                    column: 5,
+                    offset: 1875,
+                },
+                end: Pos {
+                    line: 125,
+                    column: 7,
+                    offset: 1877,
                 },
             },
         },
@@ -200,14 +247,14 @@
                     ),
                     range: Range {
                         start: Pos {
-                            line: 177,
+                            line: 178,
                             column: 6,
-                            offset: 2488,
+                            offset: 2539,
                         },
                         end: Pos {
-                            line: 177,
+                            line: 178,
                             column: 7,
-                            offset: 2489,
+                            offset: 2540,
                         },
                     },
                 },
@@ -215,14 +262,14 @@
             source: None,
             range: Range {
                 start: Pos {
-                    line: 177,
+                    line: 178,
                     column: 6,
-                    offset: 2488,
+                    offset: 2539,
                 },
                 end: Pos {
-                    line: 177,
+                    line: 178,
                     column: 7,
-                    offset: 2489,
+                    offset: 2540,
                 },
             },
         },
@@ -323,12 +370,12 @@
                         start: Pos {
                             line: 105,
                             column: 21,
-                            offset: 1334,
+                            offset: 1373,
                         },
                         end: Pos {
                             line: 105,
                             column: 21,
-                            offset: 1334,
+                            offset: 1373,
                         },
                     },
                 },
@@ -346,12 +393,12 @@
                         start: Pos {
                             line: 105,
                             column: 20,
-                            offset: 1333,
+                            offset: 1372,
                         },
                         end: Pos {
                             line: 105,
                             column: 21,
-                            offset: 1334,
+                            offset: 1373,
                         },
                     },
                 },
@@ -369,12 +416,12 @@
                         start: Pos {
                             line: 105,
                             column: 14,
-                            offset: 1327,
+                            offset: 1366,
                         },
                         end: Pos {
                             line: 105,
                             column: 16,
-                            offset: 1329,
+                            offset: 1368,
                         },
                     },
                 },
@@ -384,12 +431,12 @@
                 start: Pos {
                     line: 105,
                     column: 14,
-                    offset: 1327,
+                    offset: 1366,
                 },
                 end: Pos {
                     line: 105,
                     column: 21,
-                    offset: 1334,
+                    offset: 1373,
                 },
             },
         },
@@ -485,12 +532,12 @@
                         start: Pos {
                             line: 124,
                             column: 9,
-                            offset: 1811,
+                            offset: 1850,
                         },
                         end: Pos {
                             line: 124,
                             column: 17,
-                            offset: 1819,
+                            offset: 1858,
                         },
                     },
                 },
@@ -500,12 +547,12 @@
                 start: Pos {
                     line: 124,
                     column: 9,
-                    offset: 1811,
+                    offset: 1850,
                 },
                 end: Pos {
                     line: 124,
                     column: 17,
-                    offset: 1819,
+                    offset: 1858,
                 },
             },
         },
@@ -531,12 +578,12 @@
                         start: Pos {
                             line: 124,
                             column: 9,
-                            offset: 1811,
+                            offset: 1850,
                         },
                         end: Pos {
                             line: 124,
                             column: 17,
-                            offset: 1819,
+                            offset: 1858,
                         },
                     },
                 },
@@ -546,12 +593,12 @@
                 start: Pos {
                     line: 124,
                     column: 9,
-                    offset: 1811,
+                    offset: 1850,
                 },
                 end: Pos {
                     line: 124,
                     column: 17,
-                    offset: 1819,
+                    offset: 1858,
                 },
             },
         },

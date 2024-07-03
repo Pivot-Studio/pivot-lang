@@ -561,7 +561,7 @@ impl<'ctx> InferenceCtx<'ctx> {
                     ty = new_ty;
                 }
                 let defvar = &mut *d.var;
-                self.def_inference(defvar, ty, ctx, builder);
+                self.deconstruct_inference(defvar, ty, ctx, builder, true);
             }
             NodeEnum::Global(g) => {
                 let ty = self.inference(&mut g.exp, ctx, builder);
@@ -582,7 +582,7 @@ impl<'ctx> InferenceCtx<'ctx> {
                     }
                     crate::ast::node::statement::AssignVar::Raw(d) => {
                         let defvar = &mut *d;
-                        self.def_inference(defvar, ty, ctx, builder);
+                        self.deconstruct_inference(defvar, ty, ctx, builder, false);
                     }
                 }
             }
@@ -1300,23 +1300,29 @@ impl<'ctx> InferenceCtx<'ctx> {
         }
     }
 
-    fn def_inference<'a, 'b>(
+    fn deconstruct_inference<'a, 'b>(
         &mut self,
         defvar: &mut DefVar,
         ty: SymbolType,
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, '_>,
+        def: bool,
     ) {
+        let f = if def {
+            Self::id_inference
+        } else {
+            Self::exist_id_inference
+        };
         match defvar {
             DefVar::Identifier(v) => {
-                self.id_inference(&ty, ctx, builder, v);
+                f(self, &ty, ctx, builder, v);
             }
             DefVar::TupleDeconstruct(t) => {
                 for (i, var) in t.var.iter_mut().enumerate() {
                     let ty =
                         self.symbol_field_symbol(ty.clone(), ctx, i.to_string().into(), builder);
                     if let Some(ty) = ty {
-                        self.def_inference(&mut *var, ty, ctx, builder)
+                        self.deconstruct_inference(&mut *var, ty, ctx, builder, def)
                     }
                 }
             }
@@ -1326,13 +1332,13 @@ impl<'ctx> InferenceCtx<'ctx> {
                         crate::ast::node::statement::StructFieldDeconstructEnum::Var(v) => {
                             let ty = self.symbol_field_symbol(ty.clone(), ctx, v.name, builder);
                             if let Some(ty) = ty {
-                                self.id_inference(&ty, ctx, builder, v);
+                                f(self, &ty, ctx, builder, v);
                             }
                         }
                         crate::ast::node::statement::StructFieldDeconstructEnum::Taged(k, var) => {
                             let ty = self.symbol_field_symbol(ty.clone(), ctx, k.name, builder);
                             if let Some(ty) = ty {
-                                self.def_inference(&mut *var, ty, ctx, builder)
+                                self.deconstruct_inference(&mut *var, ty, ctx, builder, def)
                             }
                         }
                     };
@@ -1352,6 +1358,21 @@ impl<'ctx> InferenceCtx<'ctx> {
         self.unify(id, ty.clone(), ctx, builder);
         v.id = Some(id);
         self.add_symbol(v.name, id);
+    }
+    fn exist_id_inference<'a, 'b>(
+        &mut self,
+        ty: &SymbolType,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b BuilderEnum<'a, '_>,
+        v: &mut crate::ast::node::primary::VarNode,
+    ) {
+        let id = self.new_key();
+        self.unify(id, ty.clone(), ctx, builder);
+        v.id = Some(id);
+        self.get_symbol(v.name).map(|id2| {
+            self.unify(id2, SymbolType::Var(id), ctx, builder);
+            // self.unify_two_symbol(SymbolType::Var(id2), SymbolType::Var(id), ctx, builder);
+        });
     }
 
     fn symbol_field_symbol<'a, 'b>(
@@ -1378,9 +1399,6 @@ impl<'ctx> InferenceCtx<'ctx> {
                         }
                     }
                     TyInfer::Generic((tys, GenericTy::St(st))) => {
-                        // if f == "get" {
-                        //     eprintln!("{:?}", f);
-                        // }
                         let mut generic_map = FxHashMap::default();
                         st.generic_map.iter().enumerate().for_each(|(i, (k, _))| {
                             generic_map.insert(*k, tys[i]);

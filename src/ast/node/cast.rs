@@ -142,7 +142,7 @@ impl<'a, 'ctx> Ctx<'a> {
                         .add_to_ctx(self))
                 }
             }
-            (PLType::Trait(t), target_ty) => {
+            (PLType::Trait(t), target_ty) if !matches!(target_ty, PLType::Trait(_)) => {
                 if node.tail.is_none() {
                     let pos = node.target_type.range().end;
                     let end_range = Range {

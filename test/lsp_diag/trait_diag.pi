@@ -99,9 +99,9 @@ pub fn test_trait() void {
     let b:generic_trait1<f32> = a;
     b.name1(1);
     let dd: TestTrait;
-    dd = x;
-    dd = y;
-    dd = z;
+    dd = x as TestTrait;
+    dd = y as TestTrait;
+    dd = z as TestTrait;
     let _c = dd as A;
     let _cc = dd as B<i64>?;
     let _ccc = dd as C<i64>!;
@@ -122,6 +122,7 @@ pub fn test_trait() void {
     fn_with_trait(y);
     fn_with_trait(y);
     let hashtest:Hash = "a";
+    dd = z;
     return;
 }
 
