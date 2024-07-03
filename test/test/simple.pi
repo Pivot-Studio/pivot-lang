@@ -14,7 +14,7 @@ pub fn test_primitives() void {
     testf32 = testf32 + 1.2;
     let utest: u8 = 1;
     utest = utest + 2;
-    test = 127;
+    test = 127 as i8;
     panic::assert(test == 0x7f);
     panic::assert(test == 0o177);
     panic::assert(test == 0b0111_1111);

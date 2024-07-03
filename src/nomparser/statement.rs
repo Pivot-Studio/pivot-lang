@@ -197,13 +197,18 @@ pub fn assignment(input: Span) -> IResult<Span, Box<NodeEnum>> {
     delspace(map_res(
         tuple((
             alt((
-                map(pointer_exp, AssignVar::Pointer),
-                map(deconstruct, AssignVar::Raw),
+                terminated(
+                    map(deconstruct, AssignVar::Raw),
+                    tag_token_symbol_ex(TokenType::ASSIGN),
+                ),
+                terminated(
+                    map(pointer_exp, AssignVar::Pointer),
+                    tag_token_symbol_ex(TokenType::ASSIGN),
+                ),
             )),
-            tag_token_symbol(TokenType::ASSIGN),
             general_exp,
         )),
-        |(left, _op, right)| {
+        |(left, right)| {
             let range = left.range().start.to(right.range().end);
             res_enum(
                 AssignNode {

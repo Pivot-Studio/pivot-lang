@@ -26,6 +26,12 @@ pub fn test_deconstruct() void {
         aa: false,
         cc: (3, 4)
     };
+    let (d1,d2) = (1,2);
+    (d1,d2) = (3,4);
+    panic::assert(d1 == 3);
+    panic::assert(d2 == 4);
+
+    
     panic::assert(!aa);
     panic::assert(cc1 + cc2 == 3 + 4);
     return;

@@ -317,6 +317,35 @@ fn handle_deconstruct<'a, 'b>(
                         .borrow_mut()
                         .set_modifier(semantic_idx, modifier_set!(CAPTURED));
                 }
+                ctx.send_if_go_to_def(var.range, s.get_data_ref().range, ctx.plmod.path);
+                s.get_data_ref()
+                    .refs
+                    .as_ref()
+                    .map(|refs| {
+                        ctx.set_local_refs(refs.clone(), var.range);
+                    })
+                    .or_else(|| {
+                        ctx.set_glob_refs(ctx.plmod.get_full_name(var.name), var.range);
+                        Some(())
+                    });
+                if !is_def {
+                    let ty = s.get_data_ref().pltype.clone();
+                    if get_type_deep(pltype.clone()) != get_type_deep(ty.clone()) {
+                        return Err(var
+                            .range()
+                            .new_err(ErrorCode::TYPE_MISMATCH)
+                            .add_label(
+                                var.range(),
+                                ctx.get_file(),
+                                format_label!(
+                                    "expected type {}, real type {}",
+                                    pltype.borrow().get_name(),
+                                    ty.borrow().get_name()
+                                ),
+                            )
+                            .add_to_ctx(ctx));
+                    }
+                }
                 s.get_data_ref().value
             } else {
                 return Err(var
@@ -331,6 +360,7 @@ fn handle_deconstruct<'a, 'b>(
                 } else {
                     ptr2value
                 };
+
                 builder.build_store(
                     ptr2value,
                     ctx.try_load2var(range, exp, builder, &pltype.borrow())?,

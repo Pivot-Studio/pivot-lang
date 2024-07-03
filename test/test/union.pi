@@ -5,7 +5,7 @@ type D = *i32 | f64;
 pub fn test_union() i64 {
     let g: Option<i64> = None{};
     panic::assert(g is None);
-    g = 1 as i64;
+    g = 1 as Option<i64>;
     let a: i128 = 1;
     let b: f32 = 1.0;
     let c: A<i128> = a;
@@ -19,9 +19,9 @@ pub fn test_union() i64 {
     let i = h as i128!;
     panic::assert(i == 1);
     let d = c;
-    d = b;
+    d = b as A<i128>;
     let e = a as f32;
-    e = 100.1;
+    e = 100.1 as f32;
     let f = e as i64;
     panic::assert(f == 100);
     let aa: B<i128> = d;
@@ -50,7 +50,7 @@ fn test_ret_union() Option<i64> {
 impl<T> A<T> {
     fn name() void {
         let f = (*self) as f32!;
-        f = 100.0;
+        f = 100.0 as f32;
         return;
     }
 
@@ -59,7 +59,7 @@ impl<T> A<T> {
 type Name = i32 | i64;
 fn generic<R>(a: Option<R>) void {
     let c = a as R!;
-    a = c;
+    a = c as Option<R>;
     return;
 }
 
