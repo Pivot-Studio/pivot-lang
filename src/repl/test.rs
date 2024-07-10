@@ -59,6 +59,7 @@ impl super::editor::TermEditor for TestEditor {
 
 #[ignore]
 #[test]
+#[cfg(test)]
 fn test_repl() {
     let rl = TestEditor::new(
         VecDeque::from(vec![
@@ -81,7 +82,7 @@ fn test_repl() {
             "@repl symbol".to_owned(),
         ]),
         VecDeque::from(vec![
-            false, false, true, true, false, false, false, false, false, false, false, false,
+            false, false, true, false, false, false, false, false, false, false, false, false,
             false, false, false, false, false,
         ]),
     );
