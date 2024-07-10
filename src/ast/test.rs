@@ -409,7 +409,7 @@ fn test_doc_symbol() {
 }
 
 #[test]
-#[ignore]
+// #[ignore]
 #[cfg(feature = "jit")]
 fn test_orc_jit() {
     use crate::ast::compiler::{compile, Options};
