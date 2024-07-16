@@ -101,6 +101,20 @@
             "environment": [],
         },
         {
+            "name": "(Windows) Launch JIT",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/target/debug/plc.exe",
+            "args": ["run", "out.ll"],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "symbolSearchPath": "${workspaceFolder}\\target\\debug",
+            "environment": [{"name" : "PATH", "value" : "${workspaceFolder}\\target\\debug;${env:PATH}"},{
+                "name": "PL_ROOT",
+                "value": "${workspaceFolder}\\target\\debug"
+            }],
+        },
+        {
             "name": "(Windows) 附加",
             "type": "cppvsdbg",
             "request": "attach",
