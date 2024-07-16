@@ -57,7 +57,6 @@ impl super::editor::TermEditor for TestEditor {
     }
 }
 
-#[ignore]
 #[test]
 #[cfg(test)]
 fn test_repl() {
