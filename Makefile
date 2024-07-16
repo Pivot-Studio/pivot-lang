@@ -57,3 +57,6 @@ mdbook-install:
 	@cargo install mdbook-linkcheck
 	@cargo install mdbook-toc
 
+init-submodules:
+	@git submodule update --init --recursive
+
