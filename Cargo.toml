@@ -41,7 +41,7 @@ lsp-server = "0.7"
 serde_json = "1.0"
 rustc-hash = "1.1"
 crossbeam-channel = "0.5"
-salsa = { package = "salsa-2022", git = "https://github.com/salsa-rs/salsa", rev = "4151b09d3c37e50f1a01894fcdfa776bc2909132" }
+salsa = { package = "salsa", git = "https://github.com/salsa-rs/salsa", branch = "master" }
 enum_dispatch = "0.3"
 threadpool = { version = "1.8", optional = true }
 dunce = "1.0"

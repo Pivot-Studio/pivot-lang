@@ -23,6 +23,7 @@ use crate::{
     Db,
 };
 use nom_locate::LocatedSpan;
+use salsa::Accumulator;
 /// extra为布尔类型，代表是否跳过struct init等可能造成if语句条件二义性的parser
 /// 由于我们的if不需要括号，所以如果允许这些表达式将会出现以下情况：
 /// ```pl
@@ -124,17 +125,15 @@ pub struct SourceProgram {
 /// and returns the node representation of the file as a [ProgramNodeWrapper].
 /// the `parse` doesn't attempt to read the other files besides the provided file.
 #[salsa::tracked]
-pub fn parse(db: &dyn Db, source: SourceProgram) -> Result<ProgramNodeWrapper, String> {
+pub fn parse(db: &dyn Db, source: SourceProgram) -> Result<ProgramNodeWrapper<'_>, String> {
     let text = source.text(db);
     let re = program(Span::new_extra(text, Default::default()));
     match re {
         Err(e) => Err(format!("{:?}", e)),
         Ok((i, node)) => {
             log::info!("parse {:?}", source.path(db));
-            Diagnostics::push(
-                db,
-                (source.path(db).to_string(), i.extra.errors.borrow().clone()),
-            );
+            Diagnostics((source.path(db).to_string(), i.extra.errors.borrow().clone()))
+                .accumulate(db);
             Ok(ProgramNodeWrapper::new(db, node))
         }
     }

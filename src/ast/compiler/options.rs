@@ -59,10 +59,8 @@ impl HashOptimizationLevel {
 /// lsp action type
 #[derive(Debug, Clone, PartialEq, Eq, Copy, Hash)]
 pub enum ActionType {
-    Completion,
     GotoDef,
     FindReferences,
-    SemanticTokensFull,
     Diagnostic,
     Hover,
     Compile,
@@ -73,5 +71,6 @@ pub enum ActionType {
     Hint,
     DocSymbol,
     SignatureHelp,
-    CodeLens,
+    #[cfg(test)]
+    Completion,
 }

@@ -507,9 +507,16 @@ impl<'a> Cache<&str> for PLFileCache<'a> {
 pub(crate) fn ensure_no_error(db: &dyn Db, docs: MemDocsInput) {
     let mut errs_num = 0;
     let mut warn_num = 0;
-    let errs = compile_dry::accumulated::<Diagnostics>(db, docs);
+    let mut errs = compile_dry::accumulated::<Diagnostics>(db, docs);
     if !errs.is_empty() {
-        print_diags(errs, docs, db, &mut errs_num, &mut warn_num, false);
+        print_diags(
+            errs.drain(..).map(|e| e.0).collect(),
+            docs,
+            db,
+            &mut errs_num,
+            &mut warn_num,
+            false,
+        );
         if errs_num > 0 {
             eprintln!(
                 "check failed: {} error(s), {} warning(s)",

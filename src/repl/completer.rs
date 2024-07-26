@@ -11,6 +11,7 @@ use rustyline::highlight::Highlighter;
 use rustyline::hint::Hinter;
 use rustyline::validate::Validator;
 use rustyline::Helper;
+use salsa::Setter;
 
 use crate::ast::accumulators::{Completions, PLSemanticTokens};
 use crate::ast::compiler::{self, compile_dry};
@@ -132,9 +133,9 @@ impl Highlighter for REPLCompleter {
             self.input,
         );
         if newtokens.is_empty() {
-            newtokens.push(SemanticTokens::default());
+            newtokens.push(PLSemanticTokens(SemanticTokens::default()));
         }
-        let tokens: Vec<lsp_types::SemanticToken> = newtokens[0].data.clone();
+        let tokens: Vec<lsp_types::SemanticToken> = newtokens[0].0.data.clone();
         // color the line
         let mut new_line = line.to_owned();
         let mut line_n = 0;
@@ -235,7 +236,7 @@ impl Completer for REPLCompleter {
         let compls = comps
             .iter()
             .flat_map(|v| {
-                v.iter()
+                v.0.iter()
                     .filter(|i| i.label.starts_with(last_world) && !i.label.is_empty())
                     .map(|i| {
                         Pair {

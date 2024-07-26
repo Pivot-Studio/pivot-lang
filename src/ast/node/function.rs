@@ -23,6 +23,7 @@ use indexmap::IndexMap;
 use internal_macro::node;
 use linked_hash_map::LinkedHashMap;
 use lsp_types::{CodeLens, Command, SemanticTokenType};
+use salsa::Accumulator;
 use std::cell::RefCell;
 use ustr::ustr;
 
@@ -950,30 +951,26 @@ impl FuncDefNode {
                 builder.rm_curr_debug_location();
                 if self.id.name == "main" {
                     if ctx.is_active_file() {
-                        PLCodeLens::push(
-                            ctx.db,
-                            CodeLens {
-                                range: self.id.range.to_diag_range(),
-                                command: Some(Command::new(
-                                    "run".to_owned(),
-                                    "pivot-lang.run_current".to_owned(),
-                                    None,
-                                )),
-                                data: None,
-                            },
-                        );
-                        PLCodeLens::push(
-                            ctx.db,
-                            CodeLens {
-                                range: self.id.range.to_diag_range(),
-                                command: Some(Command::new(
-                                    "debug".to_owned(),
-                                    "pivot-lang.debug_current".to_owned(),
-                                    None,
-                                )),
-                                data: None,
-                            },
-                        );
+                        PLCodeLens(CodeLens {
+                            range: self.id.range.to_diag_range(),
+                            command: Some(Command::new(
+                                "run".to_owned(),
+                                "pivot-lang.run_current".to_owned(),
+                                None,
+                            )),
+                            data: None,
+                        })
+                        .accumulate(ctx.db);
+                        PLCodeLens(CodeLens {
+                            range: self.id.range.to_diag_range(),
+                            command: Some(Command::new(
+                                "debug".to_owned(),
+                                "pivot-lang.debug_current".to_owned(),
+                                None,
+                            )),
+                            data: None,
+                        })
+                        .accumulate(ctx.db);
                     }
                     if let Some(inst) = builder.get_first_instruction(entry) {
                         builder.position_at(inst);

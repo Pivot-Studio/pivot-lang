@@ -26,7 +26,7 @@ pub struct MemDocs {
 
 /// EmitParams is used to pass information during processing LLVM IR or LSP work
 #[salsa::tracked]
-pub struct EmitParams {
+pub struct EmitParams<'db> {
     #[return_ref]
     pub file: String,
     #[return_ref]
@@ -54,7 +54,7 @@ pub struct MemDocsInput {
 /// FileCompileInput holds the information to parse a program through the entry of file,
 /// with processed dependencies required by the file according to its kagari.toml
 #[salsa::tracked]
-pub struct FileCompileInput {
+pub struct FileCompileInput<'db> {
     /// file represents the entry file path to parse
     #[return_ref]
     pub file: String,
@@ -68,7 +68,7 @@ pub struct FileCompileInput {
 }
 
 #[salsa::tracked]
-impl FileCompileInput {
+impl<'db> FileCompileInput<'db> {
     #[salsa::tracked]
     // get_file_content gets the file content from cache or reads from file with the self.file
     pub fn get_file_content(self, db: &dyn Db) -> Option<SourceProgram> {
@@ -90,7 +90,7 @@ impl FileCompileInput {
         }
     }
     #[salsa::tracked]
-    pub fn get_emit_params(self, db: &dyn Db) -> EmitParams {
+    pub fn get_emit_params(self, db: &'db dyn Db) -> EmitParams<'db> {
         let file = self.file(db);
         if crate::utils::canonicalize(self.docs(db).file(db)).unwrap()
             != crate::utils::canonicalize(file).unwrap()
@@ -155,7 +155,7 @@ impl MemDocsInput {
         db: &dyn Db,
         entry_file: String,
         override_with_kagari_entry: bool,
-    ) -> Option<FileCompileInput> {
+    ) -> Option<FileCompileInput<'_>> {
         let mut final_entry_file: String;
         let re_entry_file = crate::utils::canonicalize(entry_file);
         match re_entry_file {
@@ -210,7 +210,9 @@ impl MemDocsInput {
 }
 
 impl MemDocs {
+    #[cfg(test)]
     pub fn change(&self, db: &mut dyn Db, range: lsp_types::Range, uri: String, text: String) {
+        use salsa::Setter;
         let (doc, txt) = self.change_txt(db, range, &uri, text);
         log::trace!("{} change text to: {}", &uri.as_str().to_string(), txt);
         doc.set_text(db).to(txt);
@@ -252,17 +254,19 @@ impl MemDocs {
         }
         None
     }
-    pub fn get_mut(&mut self, key: &str) -> Option<&mut SourceProgram> {
-        self.docs.get_mut(key)
-    }
+    // #[cfg(test)]
+    // pub fn get_mut(&mut self, key: &str) -> Option<&mut SourceProgram> {
+    //     self.docs.get_mut(key)
+    // }
     pub fn remove(&mut self, key: &str) -> Option<SourceProgram> {
         // let key =  crate::utils::canonicalize(key).unwrap();
         // let key = key.to_str().unwrap();
         self.docs.remove(key)
     }
-    pub fn iter(&self) -> impl Iterator<Item = &SourceProgram> {
-        self.docs.values()
-    }
+    // #[cfg(test)]
+    // pub fn iter(&self) -> impl Iterator<Item = &SourceProgram> {
+    //     self.docs.values()
+    // }
 }
 
 #[cfg(test)]
