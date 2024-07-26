@@ -28,6 +28,7 @@ use lsp_types::Location;
 use lsp_types::SignatureHelp;
 
 use rustc_hash::{FxHashMap, FxHashSet};
+use salsa::Accumulator;
 use ustr::{ustr, Ustr};
 
 use std::cell::{Ref, RefCell, RefMut};
@@ -329,7 +330,7 @@ impl Mod {
     }
     pub fn push_refs(&self, name: &Ustr, db: &dyn Db) {
         if let Some(res) = self.refs_map.borrow().get(name) {
-            PLReferences::push(db, res.borrow().clone());
+            PLReferences(res.borrow().clone()).accumulate(db);
         }
     }
     pub fn get_global_symbol(&self, name: &Ustr) -> Option<&GlobalVar> {

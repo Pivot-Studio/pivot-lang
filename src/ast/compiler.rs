@@ -115,7 +115,7 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
 /// compile_dry compiles the source code of pivot-lang into the pivot-lang AST with a wrapper.
 /// the `dry` refers the function ends up parsing at LLVM IR or LSP analysis.
 #[salsa::tracked]
-pub fn compile_dry(db: &dyn Db, docs: MemDocsInput) -> Result<ModWrapper, String> {
+pub fn compile_dry<'db>(db: &'db dyn Db, docs: MemDocsInput) -> Result<ModWrapper<'db>, String> {
     let path = search_config_file(docs.file(db).to_string());
     if path.is_err() {
         log::warn!("lsp error: {}", path.err().unwrap());
@@ -148,7 +148,10 @@ pub fn compile_dry(db: &dyn Db, docs: MemDocsInput) -> Result<ModWrapper, String
 /// compile_dry_file parses the file inside parser_entry into AST,
 /// and then emit the llvm IR code represented by Mod according to the entry file AST.
 #[salsa::tracked(recovery_fn=cycle_deps_recover)]
-pub fn compile_dry_file(db: &dyn Db, parser_entry: FileCompileInput) -> Option<ModWrapper> {
+pub fn compile_dry_file<'db>(
+    db: &'db dyn Db,
+    parser_entry: FileCompileInput<'db>,
+) -> Option<ModWrapper<'db>> {
     if parser_entry.file(db).ends_with(".toml") {
         log::error!("lsp error: toml file {}", parser_entry.file(db));
         // skip toml
@@ -197,7 +200,7 @@ pub fn process_llvm_ir<'a>(
 ) -> (Module<'a>, Vec<PathBuf>) {
     use inkwell::memory_buffer::MemoryBuffer;
 
-    let mods = compile_dry::accumulated::<ModBuffer>(db, docs);
+    let mods: Vec<ModBuffer> = compile_dry::accumulated::<ModBuffer>(db, docs);
 
     let total_steps = 3;
     let pb = ProgressBar::hidden();
@@ -211,6 +214,7 @@ pub fn process_llvm_ir<'a>(
     let llvmmod = ctx.create_module("main");
 
     for m in mods {
+        let m = m.0;
         pb.inc(1);
         let mem = &m.buf;
         let m = m.path;
@@ -370,7 +374,7 @@ pub fn pl_link(llvmmod: Module, oxbjs: Vec<PathBuf>, out: String, op: Options) {
 
 #[cfg(not(feature = "llvm"))]
 #[salsa::tracked]
-pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
+pub fn compile(db: &'db dyn Db, docs: MemDocsInput, out: String, op: Options) {
     unimplemented!()
 }
 

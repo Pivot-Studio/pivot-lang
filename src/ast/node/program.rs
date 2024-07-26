@@ -39,6 +39,7 @@ use lazy_static::lazy_static;
 use lsp_types::GotoDefinitionResponse;
 use rustc_hash::FxHashMap;
 use rustc_hash::FxHashSet;
+use salsa::Accumulator;
 use std::cell::RefCell;
 use std::collections::hash_map::DefaultHasher;
 use std::fs;
@@ -202,12 +203,12 @@ fn import_symbol(
 }
 
 #[salsa::tracked]
-impl Program {
+impl<'db> Program<'db> {
     /// # is_active_file
     ///
     /// it checks whether the current file is focused in the editor as an active file
     #[salsa::tracked]
-    pub(crate) fn is_active_file(self, db: &dyn Db) -> bool {
+    pub(crate) fn is_active_file(self, db: &'db dyn Db) -> bool {
         let entry_file = self.docs(db).file(db);
         let focused_file = self.params(db).file(db);
         crate::utils::canonicalize(entry_file).unwrap()
@@ -217,7 +218,7 @@ impl Program {
     /// # get_pkgname
     ///
     /// get the package name according to the building file path
-    fn get_pkgname(self, db: &dyn Db) -> String {
+    fn get_pkgname(self, db: &'db dyn Db) -> String {
         let binding = PathBuf::from(self.params(db).file(db)).with_extension("");
         let pkgname = binding.file_name().unwrap().to_str().unwrap();
         pkgname.to_string()
@@ -227,7 +228,7 @@ impl Program {
     ///
     /// guard the entry node of the [Program] is a [NodeEnum::Program] node,
     /// and then loads built-in module and gc module.
-    pub fn guard_and_load_buitin_modules(self, db: &dyn Db) -> ProgramNode {
+    pub fn guard_and_load_buitin_modules(self, db: &'db dyn Db) -> ProgramNode {
         let mut entry_node = match *self.entry_node(db).node(db) {
             NodeEnum::Program(p) => p,
             _ => panic!("not a program"),
@@ -254,7 +255,7 @@ impl Program {
     ///
     /// load_used_modules loads each dependent module used by the entry_node, parses them into modules by [compile_dry_file],
     /// loads all the symbols into the entry_node and returns ProgramEmitParam for the further processing.
-    pub fn load_used_modules(self, db: &dyn Db, entry_node: ProgramNode) -> ProgramEmitParam {
+    pub fn load_used_modules(self, db: &'db dyn Db, entry_node: ProgramNode) -> ProgramEmitParam {
         let mut modmap = FxHashMap::<Ustr, Arc<Mod>>::default();
         let mut global_mthd_map: FxHashMap<Ustr, FxHashMap<Ustr, Arc<RefCell<FNValue>>>> =
             FxHashMap::default();
@@ -422,7 +423,7 @@ impl Program {
     /// resolves all symbols from submodules into the current one,
     /// and compiles the current module with all sub-modules into LLVM IR or does some LSP works
     #[salsa::tracked]
-    pub fn emit(self, db: &dyn Db) -> ModWrapper {
+    pub fn emit(self, db: &'db dyn Db) -> ModWrapper<'db> {
         #[cfg(not(target_arch = "wasm32"))]
         let (job, pb) = if self.params(db).action(db) == ActionType::Compile {
             ("编译", &COMPILE_PROGRESS as &ProgressBar)
@@ -459,22 +460,22 @@ impl Program {
         let or_cond = false;
         if self.is_active_file(db) || or_cond {
             if pos.is_some() {
-                Completions::push(
-                    db,
+                Completions(
                     plmod
                         .completions
                         .borrow()
                         .iter()
                         .map(|x| x.0.clone())
                         .collect(),
-                );
+                )
+                .accumulate(db);
             }
             let hints = plmod.hints.borrow().clone();
-            Hints::push(db, hints);
+            Hints(hints).accumulate(db);
             let docs = plmod.doc_symbols.borrow().clone();
-            DocSymbols::push(db, docs);
+            DocSymbols(docs).accumulate(db);
             let b = plmod.semantic_tokens_builder.borrow().build();
-            PLSemanticTokens::push(db, b);
+            PLSemanticTokens(b).accumulate(db);
         }
 
         self.handle_actions(db, emit_params, raw_node, m);
@@ -484,7 +485,13 @@ impl Program {
     /// # handle_actions
     ///
     /// it handles one of actions for compiler or LSP features
-    fn handle_actions(self, db: &dyn Db, p: ProgramEmitParam, nn: Box<NodeEnum>, m: ModWrapper) {
+    fn handle_actions(
+        self,
+        db: &'db dyn Db,
+        p: ProgramEmitParam,
+        nn: Box<NodeEnum>,
+        m: ModWrapper,
+    ) {
         let params = self.params(db);
         let plmod = m.plmod(db);
         match params.action(db) {
@@ -510,7 +517,7 @@ impl Program {
                 let newcode = builder.generate();
                 let diff = text::diff(oldcode, &newcode);
                 let line_index = text::LineIndex::new(oldcode);
-                PLFormat::push(db, diff.into_text_edit(&line_index));
+                PLFormat(diff.into_text_edit(&line_index)).accumulate(db);
             }
             ActionType::Flow => {
                 if let NodeEnum::Program(pro) = *nn {
@@ -548,7 +555,7 @@ impl Program {
                 let mut pushed = false;
                 if let Some((range, res)) = re {
                     if pos.is_in(*range) {
-                        PLReferences::push(db, res.borrow().clone());
+                        PLReferences(res.borrow().clone()).accumulate(db);
                         pushed = true;
                         db.set_ref_str(None);
                     }
@@ -570,7 +577,7 @@ impl Program {
                 let re = res.range((Unbounded, Included(&range))).last();
                 if let Some((range, LSPDef::Scalar(def))) = re {
                     if pos.is_in(*range) {
-                        GotoDef::push(db, GotoDefinitionResponse::Scalar(def.clone()));
+                        GotoDef(GotoDefinitionResponse::Scalar(def.clone())).accumulate(db);
                     }
                 }
             }
@@ -581,7 +588,7 @@ impl Program {
                 let re = res.range((Unbounded, Included(&range))).last();
                 if let Some((range, res)) = re {
                     if pos.is_in(*range) {
-                        PLSignatureHelp::push(db, res.clone());
+                        PLSignatureHelp(res.clone()).accumulate(db);
                     }
                 }
             }
@@ -592,7 +599,7 @@ impl Program {
                 let re = res.range((Unbounded, Included(&range))).last();
                 if let Some((range, res)) = re {
                     if pos.is_in(*range) {
-                        PLHover::push(db, res.clone());
+                        PLHover(res.clone()).accumulate(db);
                     }
                 }
             }
@@ -644,7 +651,10 @@ pub fn prepare_module_ctx<'a>(
 /// emit_file generates the LLVM IR for a pi file based on the [program_emit_params],
 /// or it does some LSP operations.
 #[salsa::tracked]
-pub fn emit_file(db: &dyn Db, program_emit_params: ProgramEmitParam) -> ModWrapper {
+pub fn emit_file<'db>(
+    db: &'db dyn Db,
+    program_emit_params: ProgramEmitParam<'db>,
+) -> ModWrapper<'db> {
     log::info!("Compiling: {}", program_emit_params.fullpath(db),);
 
     let v = RefCell::new(FxHashSet::default());
@@ -691,13 +701,11 @@ pub fn emit_file(db: &dyn Db, program_emit_params: ProgramEmitParam) -> ModWrapp
     let mut program_node = program_emit_params.program_node(db).node(db);
     let _ = program_node.emit(mctx, &builder);
 
-    Diagnostics::push(
-        db,
-        (
-            program_emit_params.fullpath(db).clone(),
-            ctx.diagnose.borrow().iter().cloned().collect(),
-        ),
-    );
+    Diagnostics((
+        program_emit_params.fullpath(db).clone(),
+        ctx.diagnose.borrow().iter().cloned().collect(),
+    ))
+    .accumulate(db);
     if program_emit_params.lsp_params(db).is_compile(db) {
         builder.finalize_debug();
         let mut hasher = DefaultHasher::new();
@@ -723,15 +731,13 @@ pub fn emit_file(db: &dyn Db, program_emit_params: ProgramEmitParam) -> ModWrapp
         let buf = vec![];
         #[cfg(feature = "repl")]
         LOADED_SET.lock().unwrap().remove(&p.to_path_buf());
-        ModBuffer::push(
-            db,
-            PLModBuffer {
-                path: p.to_path_buf(),
-                buf,
-                is_main: builder.get_function("main").is_some(),
-                name: program_emit_params.file(db).to_string(),
-            },
-        );
+        ModBuffer(PLModBuffer {
+            path: p.to_path_buf(),
+            buf,
+            is_main: builder.get_function("main").is_some(),
+            name: program_emit_params.file(db).to_string(),
+        })
+        .accumulate(db);
     }
 
     db.add_module(ctx.get_file(), ctx.plmod.clone());

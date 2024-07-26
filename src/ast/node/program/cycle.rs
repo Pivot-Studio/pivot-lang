@@ -11,42 +11,53 @@ use crate::ast::plmod::Mod;
 use crate::format_label;
 
 use rustc_hash::FxHashMap;
-use salsa::AsId;
+use salsa::plumbing::LookupId;
+use salsa::Accumulator;
+// use salsa::AsId;
 use ustr::ustr;
 
 use crate::lsp::mem_docs::FileCompileInput;
 
 use crate::Db;
 
-pub fn cycle_deps_recover(
-    db: &dyn Db,
+pub fn cycle_deps_recover<'db>(
+    db: &'db dyn Db,
     cycle: &salsa::Cycle,
     _: FileCompileInput,
-) -> Option<ModWrapper> {
-    let key = cycle.all_participants(db);
+) -> Option<ModWrapper<'db>> {
+    let key = cycle.all_participants(db.as_salsa_database());
     let mut files = FxHashMap::default();
     let mut prev_use_map = FxHashMap::default();
     let params = cycle
         .participant_keys()
         .enumerate()
-        .filter(|(i, _)| key[*i].starts_with("Program_emit"))
-        .map(|(_, k)| Program::from_id(k.key_index()))
+        .filter(|(i, _)| {
+            let key = key[*i];
+            let name = db.lookup_ingredient(key.ingredient_index()).debug_name();
+            name != "compile_dry_file"
+        })
+        .map(|(_, k)| Program::lookup_id(k.key_index(), db.as_salsa_database()))
         .last()
         .unwrap();
     let src_file_path = params.params(db).file(db);
     let mut prev_file = src_file_path;
     build_init_params(params, db, &mut prev_use_map);
-    let filtered = cycle
-        .participant_keys()
-        .enumerate()
-        .filter(|(i, _)| key[*i].starts_with("Program_emit"));
+    let filtered = cycle.participant_keys().enumerate().filter(|(i, _)| {
+        let key = key[*i];
+        let name = db.lookup_ingredient(key.ingredient_index()).debug_name();
+        name != "compile_dry_file"
+    });
     let len = filtered.count();
     while files.len() < len {
         for (_, p) in cycle
             .participant_keys()
             .enumerate()
-            .filter(|(i, _)| key[*i].starts_with("Program_emit"))
-            .map(|(u, k)| (u, Program::from_id(k.key_index())))
+            .filter(|(i, _)| {
+                let key = key[*i];
+                let name = db.lookup_ingredient(key.ingredient_index()).debug_name();
+                name != "compile_dry_file"
+            })
+            .map(|(u, k)| (u, Program::lookup_id(k.key_index(), db.as_salsa_database())))
         {
             let prog = match_node(p, db);
             if let Some(r) = prev_use_map.get(p.params(db).file(db)) {
@@ -65,7 +76,7 @@ pub fn cycle_deps_recover(
         let msg = "import in cycle here";
         diag.add_label(*r, ustr(f), format_label!(msg));
     }
-    Diagnostics::push(db, (src_file_path.to_string(), vec![diag]));
+    Diagnostics((src_file_path.to_string(), vec![diag])).accumulate(db);
     db.report_untracked_read();
     Some(ModWrapper::new(
         db,

@@ -15,6 +15,7 @@ use nom::sequence::terminated;
 use notify::{Event, EventKind, RecursiveMode, Watcher};
 use rustc_hash::{FxHashMap, FxHashSet};
 use rustyline::error::ReadlineError;
+use salsa::Setter;
 use ustr::{ustr, Ustr};
 
 mod completer;
@@ -324,7 +325,14 @@ project = "repl"
                 let diags = compiler::compile_dry::accumulated::<Diagnostics>(&db2, mem_check);
                 let mut errs_num = 0;
                 let mut warn_num = 0;
-                print_diags(diags, mem_check, &db2, &mut errs_num, &mut warn_num, true);
+                print_diags(
+                    diags.iter().map(|e| e.0.clone()).collect::<Vec<_>>(),
+                    mem_check,
+                    &db2,
+                    &mut errs_num,
+                    &mut warn_num,
+                    true,
+                );
                 rl.assert_err(errs_num > 0);
                 if errs_num > 0 {
                     REPL_COUNTER.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
@@ -382,6 +390,7 @@ fn load_mod_and_evaluate(db: &Database, mem: MemDocsInput, ctx: &Context) {
     let mods = compiler::compile_dry::accumulated::<ModBuffer>(db, mem);
 
     for m in &mods {
+        let m = &m.0;
         if !m.name.starts_with("__anon__") {
             if LOADED_SET.lock().unwrap().contains(&m.path) {
                 continue;
@@ -408,6 +417,7 @@ fn load_mod_and_evaluate(db: &Database, mem: MemDocsInput, ctx: &Context) {
         }
     }
     for m in &mods {
+        let m = &m.0;
         if m.name.starts_with("__anon__") {
             unsafe {
                 let m = Module::parse_bitcode_from_buffer(

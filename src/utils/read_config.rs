@@ -89,7 +89,7 @@ pub struct Config {
 /// ConfigWrapper wraps a config, which represents all configuration of an entry node of a program.
 /// it's typically used to resolve path for the dependency used in use statement to the real path the library is downloaded
 #[salsa::tracked]
-pub struct ConfigWrapper {
+pub struct ConfigWrapper<'db> {
     #[return_ref]
     config: Config,
     #[return_ref]
@@ -97,7 +97,7 @@ pub struct ConfigWrapper {
 }
 
 #[salsa::tracked]
-impl ConfigWrapper {
+impl<'db> ConfigWrapper<'db> {
     /// # resolve_dep_path
     ///
     /// resolve_dep_path resolves the path of a used library according to the name.

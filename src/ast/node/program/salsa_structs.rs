@@ -18,9 +18,9 @@ use super::UnsafeWrapper;
 /// ProgramEmitParam is the structure contains all information about the entry node and sub modules.
 /// it's used to generate LLVM IR or do some LSP analysis.
 #[salsa::tracked]
-pub struct ProgramEmitParam {
+pub struct ProgramEmitParam<'db> {
     /// program_node is the entry AST node of a program
-    pub program_node: ProgramNodeWrapper,
+    pub program_node: ProgramNodeWrapper<'db>,
 
     #[return_ref]
     /// dir is the directory path of kagari.toml file
@@ -34,7 +34,7 @@ pub struct ProgramEmitParam {
     /// fullpath is the absolute path of the entry file
     pub fullpath: String,
     #[return_ref]
-    pub lsp_params: LspParams,
+    pub lsp_params: LspParams<'db>,
 
     /// sub-modules analyzed according to the use statements inside the entry node
     pub submods: FxHashMap<Ustr, Arc<Mod>>,
@@ -66,7 +66,7 @@ pub struct ProgramEmitParam {
 pub type MthdTableWrapper = UnsafeWrapper<FxHashMap<Ustr, FxHashMap<Ustr, Arc<RefCell<FNValue>>>>>;
 
 #[salsa::tracked]
-pub struct LspParams {
+pub struct LspParams<'db> {
     #[return_ref]
     pub modpath: String,
 
@@ -78,17 +78,17 @@ pub struct LspParams {
     pub is_compile: bool,
 }
 
-#[salsa::tracked]
 /// # ProgramNodeWrapper
 ///
 /// `ProgramNodeWrapper`` is a wrapper for node to enjoy the functionalities provided by salsa.
 /// Because pivot-lang mixes the lsp and compiler together, it always use the wrapper after parsing.
-pub struct ProgramNodeWrapper {
+#[salsa::tracked]
+pub struct ProgramNodeWrapper<'db> {
     pub node: Box<NodeEnum>,
 }
 
 #[salsa::tracked]
-pub struct ModWrapper {
+pub struct ModWrapper<'db> {
     pub plmod: Mod,
 }
 
@@ -97,12 +97,12 @@ pub struct ModWrapper {
 /// `Program` holds the parsed program entry node, and all necessary information to parse a whole AST tree,
 /// for all files used by the program entry node.
 #[salsa::tracked]
-pub struct Program {
+pub struct Program<'db> {
     /// entry_node is the entry node of a whole program, which represents a file.
     /// It's used to find all dependencies used inside it to parse the whole program.
-    pub entry_node: ProgramNodeWrapper,
+    pub entry_node: ProgramNodeWrapper<'db>,
 
-    pub params: EmitParams,
+    pub params: EmitParams<'db>,
     pub docs: MemDocsInput,
 
     /// config is all neccessary information to represent a program

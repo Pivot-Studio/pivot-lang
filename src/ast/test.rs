@@ -8,7 +8,7 @@ use std::{
 use expect_test::expect_file;
 use lsp_types::{CompletionItemKind, GotoDefinitionResponse, HoverContents, MarkedString};
 use rustc_hash::FxHashMap;
-use salsa::{accumulator::Accumulator, storage::HasJar};
+use salsa::Accumulator;
 use wait_timeout::ChildExt;
 
 use crate::{
@@ -27,15 +27,14 @@ use crate::{
     Db,
 };
 
-fn test_lsp<'db, A>(
-    db: &'db dyn Db,
+fn test_lsp<A>(
+    db: &dyn Db,
     params: Option<(Pos, Option<String>)>,
     action: ActionType,
     src: &str,
-) -> Vec<<A as Accumulator>::Data>
+) -> Vec<A>
 where
     A: Accumulator,
-    dyn Db + 'db: HasJar<<A as Accumulator>::Jar>,
 {
     let docs = MemDocs::default();
     let pos = if let Some((pos, _)) = params {
@@ -67,7 +66,8 @@ fn test_diag() {
     );
     assert!(!comps.is_empty());
     let mut new_comps = FxHashMap::<String, Vec<PLDiag>>::default();
-    for (k, comp) in &comps {
+    for d in &comps {
+        let (k, comp) = &d.0;
         new_comps
             .entry(k.to_string())
             .and_modify(|v| {
@@ -119,9 +119,9 @@ fn test_struct_field_completion() {
         "test/lsp/test_completion.pi",
     );
     assert!(!comps.is_empty());
-    assert_eq!(comps[0].len(), 3);
+    assert_eq!(comps[0].0.len(), 3);
     let compstr = ["a", "b", "c"];
-    for comp in comps[0].iter() {
+    for comp in comps[0].0.iter() {
         assert!(compstr.contains(&comp.label.as_str()));
     }
 }
@@ -142,7 +142,11 @@ fn test_completion() {
         "test/lsp/test_completion.pi",
     );
     assert!(!comps.is_empty());
-    let lables = comps[0].iter().map(|c| c.label.clone()).collect::<Vec<_>>();
+    let lables = comps[0]
+        .0
+        .iter()
+        .map(|c| c.label.clone())
+        .collect::<Vec<_>>();
     assert!(lables.contains(&"test1".to_string()));
     assert!(lables.contains(&"name".to_string()));
     assert!(lables.contains(&"if".to_string()));
@@ -164,7 +168,11 @@ fn test_type_completion() {
         "test/lsp/test_completion.pi",
     );
     assert!(!comps.is_empty());
-    let lables = comps[0].iter().map(|c| c.label.clone()).collect::<Vec<_>>();
+    let lables = comps[0]
+        .0
+        .iter()
+        .map(|c| c.label.clone())
+        .collect::<Vec<_>>();
     assert!(lables.contains(&"test".to_string())); // self refernece
     assert!(lables.contains(&"i64".to_string()));
     assert!(!lables.contains(&"name".to_string()));
@@ -187,7 +195,7 @@ fn test_st_field_completion() {
         "test/lsp/test_completion.pi",
     );
     assert!(!comps.is_empty());
-    let lables = comps[0].to_vec();
+    let lables = comps[0].0.to_vec();
     assert!(
         lables
             .iter()
@@ -212,7 +220,7 @@ fn test_st_field_exttp_completion() {
         "test/lsp/test_completion.pi",
     );
     assert!(!comps.is_empty());
-    let lables = comps[0].to_vec();
+    let lables = comps[0].0.to_vec();
     assert!(
         lables
             .iter()
@@ -260,7 +268,7 @@ fn test_goto_def() {
         "test/lsp/test_completion.pi",
     );
     assert!(!def.is_empty());
-    if let GotoDefinitionResponse::Scalar(sc) = def[0].clone() {
+    if let GotoDefinitionResponse::Scalar(sc) = def[0].0.clone() {
         assert!(sc.uri.to_string().contains("test/lsp/mod.pi"));
         assert_eq!(sc.range, new_diag_range(1, 7, 1, 11));
     } else {
@@ -283,7 +291,7 @@ fn test_hover_struct() {
         "test/lsp/mod2.pi",
     );
     assert!(!hovers.is_empty());
-    if let HoverContents::Array(v) = hovers[0].clone().contents {
+    if let HoverContents::Array(v) = hovers[0].clone().0.contents {
         if let MarkedString::String(st) = v[0].clone() {
             assert_eq!(st.trim(), "# content".to_string());
         } else {
@@ -311,7 +319,7 @@ fn test_sig_help() {
     );
     assert!(!hovers.is_empty());
     assert!(
-        hovers[0].signatures.iter().any(|s| {
+        hovers[0].0.signatures.iter().any(|s| {
             s.label == "test_sig_help(i: i64, ii: bool)" && s.active_parameter == Some(0)
         }),
         "expect to find test_sig_help(i: i64, ii: bool) with active parameter 0, found {:?}",
@@ -337,7 +345,7 @@ fn test_find_refs() {
     assert!(!refs.is_empty());
     let mut locs = vec![];
     for r in refs.iter() {
-        for l in r.iter() {
+        for l in r.0.iter() {
             locs.push(l.clone());
         }
     }
@@ -374,8 +382,8 @@ fn test_doc_symbol() {
         "test/lsp/test_completion.pi",
     );
     assert!(!symbols.is_empty());
-    assert!(!symbols[0].is_empty());
-    let testst = symbols[0].iter().filter(|s| s.name == "test").last();
+    assert!(!symbols[0].0.is_empty());
+    let testst = symbols[0].0.iter().filter(|s| s.name == "test").last();
     assert!(testst.is_some(), "test struct not found");
     assert_eq!(
         testst.unwrap().kind,
@@ -391,7 +399,7 @@ fn test_doc_symbol() {
         expect,
         testst.unwrap().range
     );
-    let name1fn = symbols[0].iter().filter(|s| s.name == "name1").last();
+    let name1fn = symbols[0].0.iter().filter(|s| s.name == "name1").last();
     assert_eq!(
         name1fn.unwrap().kind,
         lsp_types::SymbolKind::FUNCTION,
@@ -561,7 +569,7 @@ fn test_printast() {
 fn test_fmt() {
     let testfile = "test/fmt/test_fmt.pi";
     let text_edit = test_lsp::<PLFormat>(&Database::default(), None, ActionType::LspFmt, testfile);
-    debug_assert!(text_edit[0].is_empty());
+    debug_assert!(text_edit[0].0.is_empty());
 }
 
 #[test]

@@ -4,17 +4,17 @@ use std::{
 };
 
 use rustc_hash::FxHashMap;
-use salsa::DebugWithDb;
+// use salsa::DebugWithDb;
 use ustr::Ustr;
 
 use crate::{
     ast::{plmod::Mod, pltype::PLType},
-    Db,
+    Db, PivotDB,
 };
 
 // ANCHOR: db_struct
 #[derive(Default)]
-#[salsa::db(crate::Jar)]
+#[salsa::db]
 pub struct Database {
     storage: salsa::Storage<Self>,
 
@@ -27,36 +27,35 @@ pub struct Database {
 // ANCHOR_END: db_struct
 
 // ANCHOR: db_impl
+#[salsa::db]
 impl salsa::Database for Database {
     fn salsa_event(&self, event: salsa::Event) {
         // Log interesting events, if logging is enabled
         if let Some(logs) = &self.logs {
             // don't log boring events
             if let salsa::EventKind::WillExecute { .. } = event.kind {
-                logs.lock()
-                    .unwrap()
-                    .push(format!("Event: {:?}", event.debug(self)));
+                logs.lock().unwrap().push(format!("Event: {:?}", event));
             }
         }
     }
 }
-// ANCHOR_END: db_impl
+// // ANCHOR_END: db_impl
 
-// ANCHOR: par_db_impl
-impl salsa::ParallelDatabase for Database {
-    fn snapshot(&self) -> salsa::Snapshot<Self> {
-        salsa::Snapshot::new(Database {
-            storage: self.storage.snapshot(),
-            logs: self.logs.clone(),
-            ref_str: self.ref_str.clone(),
-            module_map: self.module_map.clone(),
-        })
-    }
-}
+// // ANCHOR: par_db_impl
+// impl salsa::ParallelDatabase for Database {
+//     fn snapshot(&self) -> salsa::Snapshot<Self> {
+//         salsa::Snapshot::new(Database {
+//             storage: self.storage.snapshot(),
+//             logs: self.logs.clone(),
+//             ref_str: self.ref_str.clone(),
+//             module_map: self.module_map.clone(),
+//         })
+//     }
+// }
 
 // ANCHOR_END: par_db_impl
 
-impl Db for Database {
+impl PivotDB for Database {
     fn set_ref_str(&self, ref_str: Option<Ustr>) {
         self.ref_str.lock().unwrap().set(ref_str);
     }
@@ -80,6 +79,8 @@ impl Db for Database {
             .and_then(|m| m.types.insert(tpname, pltype.into()));
     }
 }
+#[salsa::db]
+impl Db for Database {}
 
 impl Database {
     /// Enable logging of each salsa event.

@@ -2040,12 +2040,13 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             Err(format!("{:?}\ntp: {:?}\nindex: {}", gep, tp, index))
         }
     }
-    fn place_safepoint(&self, ctx: &mut Ctx<'a>) {
-        let f = self.get_gc_mod_f(ctx, "DioGC__safepoint");
-        let rsp = self.get_sp();
-        self.builder
-            .build_call(f, &[rsp.into()], "safepoint")
-            .unwrap();
+    fn place_safepoint(&self, _ctx: &mut Ctx<'a>) {
+        // FIXME
+        // let f = self.get_gc_mod_f(ctx, "DioGC__safepoint");
+        // let rsp = self.get_sp();
+        // self.builder
+        //     .build_call(f, &[rsp.into()], "safepoint")
+        //     .unwrap();
     }
     fn build_store(&self, ptr: ValueHandle, value: ValueHandle) {
         let ptr = self.get_llvm_value(ptr).unwrap();
