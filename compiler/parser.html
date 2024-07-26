@@ -173,17 +173,15 @@
 /// and returns the node representation of the file as a [ProgramNodeWrapper].
 /// the `parse` doesn't attempt to read the other files besides the provided file.
 #[salsa::tracked]
-pub fn parse(db: &amp;dyn Db, source: SourceProgram) -&gt; Result&lt;ProgramNodeWrapper, String&gt; {
+pub fn parse(db: &amp;dyn Db, source: SourceProgram) -&gt; Result&lt;ProgramNodeWrapper&lt;'_&gt;, String&gt; {
     let text = source.text(db);
     let re = program(Span::new_extra(text, Default::default()));
     match re {
         Err(e) =&gt; Err(format!(&quot;{:?}&quot;, e)),
         Ok((i, node)) =&gt; {
             log::info!(&quot;parse {:?}&quot;, source.path(db));
-            Diagnostics::push(
-                db,
-                (source.path(db).to_string(), i.extra.errors.borrow().clone()),
-            );
+            Diagnostics((source.path(db).to_string(), i.extra.errors.borrow().clone()))
+                .accumulate(db);
             Ok(ProgramNodeWrapper::new(db, node))
         }
     }
