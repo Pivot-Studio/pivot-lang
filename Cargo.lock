@@ -1824,7 +1824,7 @@ checksum = "f3cb5ba0dc43242ce17de99c180e96db90b235b8a9fdc9543c96d2209116bd9f"
 [[package]]
 name = "salsa"
 version = "0.18.0"
-source = "git+https://github.com/salsa-rs/salsa?branch=master#e4ce917f6eda0d775ef654742a6f3cdc710f7d1a"
+source = "git+https://github.com/Chronostasys/salsa?branch=master#726bd11d308e1dce2be46daed916498830113c1a"
 dependencies = [
  "arc-swap",
  "boomphf",
@@ -1844,12 +1844,12 @@ dependencies = [
 [[package]]
 name = "salsa-macro-rules"
 version = "0.1.0"
-source = "git+https://github.com/salsa-rs/salsa?branch=master#e4ce917f6eda0d775ef654742a6f3cdc710f7d1a"
+source = "git+https://github.com/Chronostasys/salsa?branch=master#726bd11d308e1dce2be46daed916498830113c1a"
 
 [[package]]
 name = "salsa-macros"
 version = "0.18.0"
-source = "git+https://github.com/salsa-rs/salsa?branch=master#e4ce917f6eda0d775ef654742a6f3cdc710f7d1a"
+source = "git+https://github.com/Chronostasys/salsa?branch=master#726bd11d308e1dce2be46daed916498830113c1a"
 dependencies = [
  "heck",
  "proc-macro2",

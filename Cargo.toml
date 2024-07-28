@@ -41,7 +41,7 @@ lsp-server = "0.7"
 serde_json = "1.0"
 rustc-hash = "1.1"
 crossbeam-channel = "0.5"
-salsa = { package = "salsa", git = "https://github.com/salsa-rs/salsa", branch = "master" }
+salsa = { package = "salsa", git = "https://github.com/Chronostasys/salsa", branch = "master" }
 enum_dispatch = "0.3"
 threadpool = { version = "1.8", optional = true }
 dunce = "1.0"
