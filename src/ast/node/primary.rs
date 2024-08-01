@@ -189,15 +189,17 @@ impl Node for VarNode {
             );
             ctx.save_if_var_hover(self.range, &symbol.get_data_ref().pltype.borrow());
 
+            let is_global = symbol.is_global();
             let symbol_data = symbol.get_data();
-            let symbol_value = match ctx.generator_data {
-                None => symbol_data.value,
-                _ => builder.build_load(
+            let symbol_value = if ctx.generator_data.is_none() || is_global {
+                symbol_data.value
+            } else {
+                builder.build_load(
                     symbol_data.value,
                     "load_generator_var",
                     &PLType::new_i8_ptr(),
                     ctx,
-                ),
+                )
             };
 
             ctx.send_if_go_to_def(self.range, symbol_data.range, ctx.plmod.path);

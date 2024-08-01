@@ -121,11 +121,11 @@ struct Cli {
     #[arg(value_parser)]
     path: Option<String>,
 
-    /// output file
+    /// Output file
     #[arg(short, long, value_parser, default_value = "out")]
     out: String,
 
-    /// verbose level
+    /// Verbose level
     /// - default: error and warning
     /// - v: error, warning and info
     /// - vv: error, warning, info and debug
@@ -143,42 +143,47 @@ struct Cli {
     )]
     verbose: u8,
 
-    /// quiet mode
+    /// Quiet mode
     #[arg(long, default_value = "false")]
     quiet: bool,
 
     #[arg(long, default_value = "false")]
     debug: bool,
 
-    /// print ast
+    /// Print AST
     #[arg(long)]
     printast: bool,
 
-    /// generate flow chart
+    /// Generate flow chart
     #[arg(long)]
     flow: bool,
 
-    /// generate ir
+    /// Generate IR
     #[arg(long)]
     genir: bool,
 
-    /// generate
+    /// Generate assembly
     #[arg(long, short = 'S')]
     asm: bool,
 
-    /// jit compile
+    /// JIT compile
     #[arg(long)]
     jit: bool,
 
-    /// print source fmt
+    /// Print source format
     #[command(subcommand)]
     command: Option<RunCommand>,
 
-    /// print variables moved to stack during escape analysis
+    /// Print variables moved to stack during escape analysis
     #[arg(long = "pstack")]
     print_stack_var: bool,
 
-    /// optimization level, 0-3
+    /// Skip check before compile.
+    /// If there are any errors, the compiler may exit without any useful information.
+    #[arg(long = "nocheck")]
+    nocheck: bool,
+
+    /// Optimization level, 0-3
     #[arg(short = 'O', value_parser, default_value = "0")]
     optimization: u64,
 
@@ -232,7 +237,7 @@ impl Cli {
     // todo(griffin): make the input name more generic
     // currently it support file path input only,
     pub fn build(&mut self, name: String) {
-        if !(name.ends_with(".bc") || name.ends_with(".ll")) {
+        if !(name.ends_with(".bc") || name.ends_with(".ll") || self.nocheck) {
             self.check(name.clone());
         }
 

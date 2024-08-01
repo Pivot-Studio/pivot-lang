@@ -27,6 +27,8 @@ pub fn test_generator() void {
     assert(next is None);
     next = iterator.next();
     assert(next is None);
+    let g = generator1();
+    executeGenerator(g);
     return;
 }
 
@@ -39,5 +41,50 @@ gen fn generator(b: i64, c: i64) Iterator<i64> {
     a = a + 1;
     yield return a;
     yield return c;
+}
+
+
+var effect1 = 1;
+var effect2 = 2;
+
+gen fn generator1() Iterator<i64> {
+    executeGenerator(generator2());
+    yield return effect1;
+}
+
+gen fn generator2() Iterator<i64> {
+    yield return effect2;
+}
+
+
+fn eff1handler(resolve: ||=>void) void {
+    println!("effect 1");
+    resolve();
+    return;
+}
+fn eff2handler(resolve: ||=>void) void {
+    println!("effect 2");
+    resolve();
+    return;
+}
+
+
+fn executeGenerator(g:Iterator<i64>) void {
+    let eff = g.next();
+    let resolve = || => {
+        executeGenerator(g);
+        return;
+    };
+    match eff {
+        i64(1) => {
+            eff1handler(resolve);
+        }
+        i64(2) => {
+            eff2handler(resolve);
+        }
+        _ => {
+        }
+    }
+    return;
 }
 
