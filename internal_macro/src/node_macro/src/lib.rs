@@ -52,6 +52,10 @@ pub fn node(args: TokenStream, input: TokenStream) -> TokenStream {
         .clone()
         .into_iter()
         .any(|x| x.to_string().to_lowercase() == "comment");
+    let noeq = args
+        .clone()
+        .into_iter()
+        .any(|x| x.to_string().to_lowercase() == "noeq");
     let need_copy = args
         .into_iter()
         .last()
@@ -65,7 +69,13 @@ pub fn node(args: TokenStream, input: TokenStream) -> TokenStream {
                 quote!()
             };
             let derive = if need_copy {
-                quote! { #[derive(Clone, PartialEq, Eq, derivative::Derivative, Copy)] }
+                if noeq {
+                    quote! { #[derive(Clone, derivative::Derivative, Copy)] }
+                } else {
+                    quote! { #[derive(Clone, PartialEq, Eq, derivative::Derivative, Copy)] }
+                }
+            } else if noeq {
+                quote! { #[derive(Clone, derivative::Derivative)] }
             } else {
                 quote! { #[derive(Clone, PartialEq, Eq, derivative::Derivative)] }
             };

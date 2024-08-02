@@ -722,7 +722,7 @@ pub fn emit_file<'db>(
         let pp = Path::new(&hashed).with_extension("bc");
         // let ll = Path::new(&hashed).with_extension("ll");
         let p = pp.as_path();
-        builder.optimize();
+        // builder.optimize();
         // builder.print_to_file(&ll).unwrap();
         // builder.write_bitcode_to_path(p);
         #[cfg(feature = "llvm")]

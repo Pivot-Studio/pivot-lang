@@ -303,7 +303,13 @@ pub fn process_llvm_ir<'a>(
 
 #[cfg(feature = "llvm")]
 pub fn pl_link(llvmmod: Module, oxbjs: Vec<PathBuf>, out: String, op: Options) {
-    llvmmod.verify().unwrap();
+    llvmmod.verify().unwrap_or_else(|e| {
+        // write ir to err.ll
+        let ir = llvmmod.to_string();
+        fs::write("err.ll", ir).unwrap();
+        eprintln!("verify failed, ir written to err.ll");
+        panic!("{}", e);
+    });
     // llvmmod.strip_debug_info();
     if op.genir {
         let mut s = out.to_string();

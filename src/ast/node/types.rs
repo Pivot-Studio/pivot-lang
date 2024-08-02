@@ -1027,11 +1027,18 @@ impl GenericParamNode {
     }
 }
 
-#[node]
+#[node(noeq)]
 pub struct ClosureTypeNode {
     pub arg_types: Vec<Box<TypeNodeEnum>>,
     pub ret_type: Box<TypeNodeEnum>,
 }
+
+impl PartialEq for ClosureTypeNode {
+    fn eq(&self, other: &Self) -> bool {
+        self.arg_types == other.arg_types && self.ret_type == other.ret_type
+    }
+}
+impl Eq for ClosureTypeNode {}
 
 impl TypeNode for ClosureTypeNode {
     fn get_type<'a, 'b>(
