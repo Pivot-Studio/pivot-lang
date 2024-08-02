@@ -388,7 +388,7 @@ project = "repl"
 
 fn load_mod_and_evaluate(db: &Database, mem: MemDocsInput, ctx: &Context) {
     let mods = compiler::compile_dry::accumulated::<ModBuffer>(db, mem);
-
+    unsafe { immix::setREPL(1) };
     for m in &mods {
         let m = &m.0;
         if !m.name.starts_with("__anon__") {
@@ -405,6 +405,7 @@ fn load_mod_and_evaluate(db: &Database, mem: MemDocsInput, ctx: &Context) {
                 )
                 .unwrap();
                 let p = mo.as_mut_ptr();
+                immix::run_module_pass(p as _, mem.op(db).optimization as _, 0, 0);
                 mo.strip_debug_info();
                 log::trace!("Loaded module, content:\n{}", mo.to_string());
                 LOADED_SET.lock().unwrap().insert(m.path.clone());
@@ -430,6 +431,7 @@ fn load_mod_and_evaluate(db: &Database, mem: MemDocsInput, ctx: &Context) {
                 .unwrap();
 
                 let p = m.as_mut_ptr();
+                immix::run_module_pass(p as _, mem.op(db).optimization as _, 0, 0);
                 m.strip_debug_info();
                 log::trace!("Evaluate module, content:\n{}", m.to_string());
                 immix::RunExpr(p as _);
