@@ -239,6 +239,14 @@ pub fn process_llvm_ir<'a>(
         ));
         module.verify().unwrap();
         if op.debug {
+            unsafe {
+                immix::run_module_pass(
+                    module.as_mut_ptr() as _,
+                    op.optimization as _,
+                    op.debug as _,
+                    op.print_escape as _,
+                );
+            }
             // if debug, generate one obj file per file, or debug info will be lost
             tm.write_to_file(&module, inkwell::targets::FileType::Object, &o)
                 .unwrap();
