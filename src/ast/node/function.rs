@@ -1254,6 +1254,7 @@ impl Node for ClosureNode {
         let child = &mut ctx.new_child(self.range.start, builder);
         child.generator_data = None;
         child.ctx_flag = CtxFlag::Normal;
+        child.generator_data = None;
         child.function = Some(closure_fn_handle);
 
         // create the debug program
@@ -1438,7 +1439,13 @@ impl Node for ClosureNode {
                     ctx,
                 )
                 .unwrap();
-            builder.build_store(alloca, *ori_v);
+            let mut ori_v = *ori_v;
+            if ctx.generator_data.is_some() {
+                // load it before store it
+                ori_v =
+                    builder.build_load(ori_v, "load_generator_data", &PLType::new_i8_ptr(), ctx);
+            }
+            builder.build_store(alloca, ori_v);
         }
         let f_field = builder
             .build_struct_gep(closure_alloca, 0, "closure_f", &closure_f_tp, ctx)

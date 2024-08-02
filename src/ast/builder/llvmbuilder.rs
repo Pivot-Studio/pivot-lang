@@ -3020,6 +3020,8 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         self.builder.build_return(None).unwrap();
         if let Some(bb) = currentbb {
             self.builder.position_at_end(bb);
+        } else {
+            self.builder.clear_insertion_position();
         }
     }
 

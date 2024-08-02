@@ -10,6 +10,8 @@ pub fn test_closure() i64 {
         };
         let re = aa(2);
         panic::assert(re == 100);
+        panic::assert(c == 1);
+        panic::assert(a==100);
         return c;
     });
     let fff = |a:|i64| => i64| => {
@@ -38,6 +40,7 @@ pub fn test_closure() i64 {
 }
 
 fn test_type_infer(f: |i64| => i64) void {
+    f(100);
     return;
 }
 
