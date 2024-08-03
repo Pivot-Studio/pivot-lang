@@ -434,6 +434,19 @@ impl MatchArmCondition {
             }
             MatchArmCondition::Var(a) => {
                 ctx.push_semantic_token(a.range, SemanticTokenType::VARIABLE, 0);
+                let v = if ctx.generator_data.is_some() {
+                    // special case: in generator, every variable needs to be stored in the context
+                    let alloca = builder.alloc(
+                        a.name.as_str(),
+                        &PLType::new_i8_ptr(),
+                        ctx,
+                        Some(range.start),
+                    );
+                    builder.build_store(alloca, v);
+                    alloca
+                } else {
+                    v
+                };
                 _ = ctx.add_symbol(a.name, v, ty.clone(), a.range, false, false);
                 ctx.push_type_hints(a.range, ty);
                 let i = builder.int_value(&PriType::BOOL, 1, false);
