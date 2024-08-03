@@ -18,7 +18,7 @@ impl TerminatorEnum {
         self == TerminatorEnum::None || self == TerminatorEnum::YieldReturn
     }
     pub fn is_return(self) -> bool {
-        self == TerminatorEnum::Return || self == TerminatorEnum::YieldReturn
+        self == TerminatorEnum::Return
     }
 }
 

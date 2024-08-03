@@ -46,18 +46,54 @@ gen fn generator(b: i64, c: i64) Iterator<i64> {
 
 var effect1 = 1;
 var effect2 = 2;
+var eff_ret = 10086;
 
-gen fn generator1() Iterator<(i64, |*Iterator<()>,*||=>void| =>void)> {
+gen fn generator1() Iterator<(i64, |*||=>void,*||=>void| =>void)> {
+    let retgen2 = 0;
+    let generator = generator2();
+    while true {
+        let nx = generator.next();
+        if nx is None {
+            break;
+        }
+        let nx_v = nx as (i64, |*||=>void,*||=>void| =>void)!;
+        match nx_v {
+            (10086, f) => {
+                let wrapped_f = |iter:*||=>void,handler:*||=>void| => {
+                    let real_handler = unsafe_cast<|||=>void|=>void>(handler);
+                    let ret_handler = |resolve:||=>void, ret|=>{
+                        retgen2 = ret;
+                        (*real_handler)(resolve);
+                        return;
+                    };
+                    let clp = &ret_handler;
+                    let arg2 = unsafe_cast<||=>void>(clp);
+                    f(iter,arg2);
+
+                    return;
+                };
+                let yr= (eff_ret,wrapped_f);
+                yield return yr;
+                break;
+            }
+            yr => {
+                yield return yr;
+            }
+        }
+    }
+
+    println!("got retgen2 ", retgen2);
+
+
     // executeGenerator(generator2());
-    let a = 1;
+    let a = retgen2;
     let re = 0;
 
-    let f = |iter:*Iterator<()>,handler:*||=>void| => {
+    let f = |next:*||=>void,handler:*||=>void| => {
         let real_handler = unsafe_cast<||i64|=>void,i64|=>void>(handler);
         let resolve = |ret|=> {
             re = ret;
-            println!(ret);
-            (*iter).next();
+            (*next)();
             return;
         };
         (*real_handler)(resolve,a);
@@ -70,26 +106,82 @@ gen fn generator1() Iterator<(i64, |*Iterator<()>,*||=>void| =>void)> {
 }
 
 
-fn executeGenerator(g:Iterator<(i64, |*Iterator<()>,*||=>void| =>void)>) void {
+gen fn generator2() Iterator<(i64, |*||=>void,*||=>void| =>void)> {
+    // executeGenerator(generator2());
+    let a = 1;
+    let re = 0;
+
+    let f = |next:*||=>void,handler:*||=>void| => {
+        let real_handler = unsafe_cast<||i64|=>void,i64|=>void>(handler);
+        let resolve = |ret|=> {
+            re = ret;
+            (*next)();
+            return;
+        };
+        (*real_handler)(resolve,a);
+
+        return;
+    };
+    let yr= (effect1,f);
+    yield return yr;
+    println!("g2 got re ", re);
+
+    f = |next:*||=>void,handler:*||=>void| => {
+        let real_handler = unsafe_cast<|||=>void,i64|=>void>(handler);
+        let resolve = ||=> {
+            (*next)();
+            return;
+        };
+        (*real_handler)(resolve,100);
+
+        return;
+    };
+    // return
+    yr= (eff_ret,f);
+    yield return yr;
+}
+
+
+fn executeGenerator(g:Iterator<(i64, |*||=>void,*||=>void| =>void)>) void {
     let eff = g.next();
     if eff is None {
+        println!("ret none");
         return;
     }
-    match eff as (i64, |*Iterator<()>,*||=>void| =>void)! {
+    match eff as (i64, |*||=>void,*||=>void| =>void)! {
         (1,r) => {
+            println!("handle eff1");
             let cl =|resolve, a| => {
                 eff1handler(resolve, a);
                 return;
             };
-            let it = &g;
+            let next = & ||=>{
+                executeGenerator(g);
+                return;
+            };
             let clp = &cl;
-            let arg1 = unsafe_cast<Iterator<()>>(it);
             let arg2 = unsafe_cast<||=>void>(clp);
-            r(arg1,arg2);
+            r(next,arg2);
         }
         (2,r) => {
+            println!("handle eff2");
         }
-        _ => {
+        (10086,r) => {
+            println!("handle effret");
+            let cl =|resolve:||=>void| => {
+                resolve();
+                return;
+            };
+            let next = & ||=>{
+                executeGenerator(g);
+                return;
+            };
+            let clp = &cl;
+            let arg2 = unsafe_cast<||=>void>(clp);
+            r(next,arg2);
+        }
+        (n, f) => {
+            println!("handle eff", n);
         }
     }
     return;
@@ -109,7 +201,3 @@ fn eff2handler(resolve: ||=>void) void {
     return;
 }
 
-
-gen fn generator2() Iterator<i64> {
-    yield return effect2;
-}
