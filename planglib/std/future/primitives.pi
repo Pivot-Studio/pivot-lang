@@ -1,7 +1,6 @@
 use std::chan;
 pub struct Waker {
-    pub wake:|*chan::Chan<|Waker|=>void>|=>void;
-    pub ch:*chan::Chan<|Waker|=>void>;
+    pub wake:||=>void;
 }
 
 pub struct Pending {}
@@ -39,30 +38,28 @@ impl <T> Future<T> for FnFuture<T> {
 
 use std::io;
 
+
 impl <T|R> FutureExt<T|R> for Future<T> {
     fn continue_with(f:|T|=>Future<R>) Future<R> {
         let re = Pending{} as Poll<R>;
         let ff = FnFuture<R>{};
         ff.re = re;
         ff.f = |wk:Waker|=> {
-            let re = self.poll(Waker{wake:|ch|=>{
+            let re = self.poll(Waker{wake:||=>{
                 let re = self.poll(Waker{}) as Ready<T>!;
-
-                ch.send(|_wk:Waker|=>{
-                    let re1 = f(re.v);
-                    let result = re1.poll(wk);
-                    ff.re = result;
-                    if result is Ready<R>{
-                        wk.wake(wk.ch);
-                    }
-                    return;
-                });
-
+                let re1 = f(re.v);
+                let result = re1.poll(wk);
+                ff.re = result;
+                if result is Ready<R>{
+                    wk.wake();
+                }
                 return;
-            },ch:wk.ch});
+            }});
             if re is Ready<T> {
                 let re = f((re as Ready<T>!).v);
-                return re.poll(wk);
+                let result = re.poll(wk);
+                ff.re = result;
+                return result;
             }
             return Pending{} as Poll<R>;
         };

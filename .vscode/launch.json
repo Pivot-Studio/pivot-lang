@@ -64,7 +64,7 @@
             "type": "lldb",
             "request": "attach",
             "name": "debug lsp",
-            "program": "plc",
+            "pid": "${command:pickProcess}"
         },
         {
             "type": "lldb",

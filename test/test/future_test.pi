@@ -13,11 +13,17 @@ pub fn test_future() void {
     let ff1 = f.continue_with(|r:()| => {
         println!("Hello from future");
         return future::nothing_future();
+    }).continue_with(|r:()| => {
+        println!("continue Hello from future");
+        return future::nothing_future();
     });
     
     let f2:future::Future<()> = future::delay(1 as u64);
     let ff2 = f2.continue_with(|r:()| => {
         println!("Hello from future2");
+        return future::nothing_future();
+    }).continue_with(|r:()| => {
+        println!("continue Hello from future2");
         return future::nothing_future();
     });
     exe.spawn(ff1);

@@ -21,11 +21,10 @@ impl Executor {
         while true {
             let work: |Waker|=>void = self.ch.recv();
             let waker = Waker{
-                wake: |ch| => void {
-                    ch.send(work);
+                wake: || => void {
+                    self.ch.send(work);
                     return;  
                 },
-                ch: self.ch,
             };
             work(waker);
         }

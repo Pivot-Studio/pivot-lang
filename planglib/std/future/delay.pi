@@ -22,11 +22,11 @@ impl Future<()> for Delay{
         thread::spawn(||=>{
             let sec = self.sec - (unixtime() - self.start);
             if sec <= 0 {
-                wk.wake(wk.ch);
+                wk.wake();
                 return;
             }
             thread::sleep(sec);
-            wk.wake(wk.ch);
+            wk.wake();
             return;
         });
         return Pending{};

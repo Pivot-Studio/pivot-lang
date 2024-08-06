@@ -120,7 +120,8 @@ impl Ctx<'_> {
             .push(range.to_diag_range(), type_index(tp), modifiers)
     }
     pub fn push_type_hints(&self, range: Range, pltype: Arc<RefCell<PLType>>) {
-        if self.need_highlight.borrow().ne(&0) || self.in_macro {
+        let ori_mod = unsafe { &*self.origin_mod as &crate::ast::plmod::Mod };
+        if self.need_highlight.borrow().ne(&0) || self.in_macro || ori_mod.path != self.plmod.path {
             return;
         }
         let colon = InlayHintLabelPart {
@@ -151,7 +152,8 @@ impl Ctx<'_> {
         self.plmod.hints.borrow_mut().push(hint);
     }
     pub fn push_param_hint(&self, range: Range, name: Ustr) {
-        if self.need_highlight.borrow().ne(&0) || self.in_macro {
+        let ori_mod = unsafe { &*self.origin_mod as &crate::ast::plmod::Mod };
+        if self.need_highlight.borrow().ne(&0) || self.in_macro || ori_mod.path != self.plmod.path {
             return;
         }
         let hint = InlayHint {
