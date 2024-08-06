@@ -1,5 +1,6 @@
 pub trait SliceExt<T> {
     fn index_of(sub_arr:[T]) Option<i64>;
+    fn index_of_kmp(sub_arr:[T]) Option<i64>;
     fn len() i64;
     fn slice(start: i64, end: i64) [T];
     fn copy(to:[T], len:i64) Result<()|SliceOutOfIdxErr>;
@@ -7,6 +8,25 @@ pub trait SliceExt<T> {
 
 pub struct SliceOutOfIdxErr {
     
+}
+
+
+fn arr_next<T:Eq<T>>(arr:[T]) [i64] {
+    let len = arr.len();
+    let next = [0* len];
+    next[0] = -1;
+    let i = 0;
+    let j = -1;
+    while i < len - 1 {
+        if j == -1 || arr[i].eq(&arr[j]) {
+            i = i + 1;
+            j = j + 1;
+            next[i] = j;
+        } else {
+            j = next[j];
+        }
+    }
+    return next;
 }
 
 use core::eq::Eq;
@@ -17,6 +37,18 @@ impl<T:Eq<T>> SliceExt<T> for [T] {
     fn index_of(sub_arr:[T])  Option<i64> {
         let len = self.len();
         let sub_len = sub_arr.len();
+
+        // Calculate the expected cost of both algorithms
+        let cost_index_of = len * sub_len/2;
+        let cost_index_of_kmp = len + sub_len;
+
+        // Choose the algorithm with the lower expected cost
+        if cost_index_of_kmp < cost_index_of {
+            return self.index_of_kmp(sub_arr);
+        }
+
+
+
         if sub_len > len || sub_len == 0{
             return None{};
         }
@@ -37,6 +69,31 @@ impl<T:Eq<T>> SliceExt<T> for [T] {
         return None{};
 
     }
+
+
+    fn index_of_kmp(sub_arr:[T]) Option<i64> {
+        let len = self.len();
+        let sub_len = sub_arr.len();
+        if sub_len > len || sub_len == 0{
+            return None{};
+        }
+        let next = arr_next(sub_arr);
+        let i = 0;
+        let j = 0;
+        while i < len {
+            if j == -1 || (*self)[i].eq(&sub_arr[j]) {
+                i = i + 1;
+                j = j + 1;
+            } else {
+                j = next[j];
+            }
+            if j == sub_len {
+                return i - sub_len;
+            }
+        }
+        return None{};
+    }
+    
 
     /// # len
     ///

@@ -8,6 +8,9 @@ pub fn test_std() void {
     let re1 =  chars.index_of(subchars);
     panic::assert(re is i64);
     panic::assert((re as i64!) == 2);
+    re = "abfdscdcdcdcde".index_of("cdcde"); // will auto use kmp
+    panic::assert(re is i64);
+    panic::assert((re as i64!) == 9);
 
     panic::assert(re1 is i64);
     panic::assert((re1 as i64!) == 2);
