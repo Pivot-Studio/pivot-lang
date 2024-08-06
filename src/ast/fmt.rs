@@ -468,8 +468,12 @@ impl FmtBuilder {
             c.format(self);
         }
         self.prefix();
-        if node.generator {
+        if node.generator.is_iter() {
             self.token(TokenType::GENERATOR_MARKER.get_str());
+            self.space();
+        }
+        if node.generator.is_async() {
+            self.token(TokenType::ASYNC_MARKER.get_str());
             self.space();
         }
         if let Some((modi, _)) = node.modifier {

@@ -6,7 +6,7 @@ use nom::{
     IResult,
 };
 
-use crate::nomparser::Span;
+use crate::{ast::node::function::GeneratorType, nomparser::Span};
 use crate::{ast::node::function::FuncDefNode, ast::tokens::TokenType};
 
 use internal_macro::{test_parser, test_parser_error};
@@ -17,6 +17,15 @@ use super::*;
     "
     /// this is a comment
     gen pub fn f(  x: int, y  : int  ) int {
+        x = x+1;
+        return 0;
+    }
+    "
+)]
+#[test_parser(
+    "
+    /// this is a comment
+    async pub fn f(  x: int, y  : int  ) int {
         x = x+1;
         return 0;
     }
@@ -70,7 +79,10 @@ pub fn function_def(input: Span) -> IResult<Span, Box<TopLevel>> {
     map_res(
         tuple((
             many0(del_newline_or_space!(comment)),
-            opt(tag_token_word(TokenType::GENERATOR_MARKER)),
+            opt(alt((
+                tag_token_word(TokenType::GENERATOR_MARKER),
+                tag_token_word(TokenType::ASYNC_MARKER),
+            ))),
             modifiable(tag_token_word(TokenType::FN), TokenType::PUB),
             identifier,
             opt(generic_type_def),
@@ -136,7 +148,11 @@ pub fn function_def(input: Span) -> IResult<Span, Box<TopLevel>> {
                 is_method: false,
                 target_range: Default::default(),
                 in_trait_def: false,
-                generator: g.is_some(),
+                generator: match g {
+                    Some((TokenType::ASYNC_MARKER, _)) => GeneratorType::Async,
+                    Some((TokenType::GENERATOR_MARKER, _)) => GeneratorType::Iter,
+                    _ => GeneratorType::None, 
+                },
             };
             Ok::<_, ()>(Box::new(TopLevel::FuncType(node)))
         },
