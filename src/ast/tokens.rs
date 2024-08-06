@@ -101,6 +101,7 @@ define_tokens!(
     IS = "is",
     YIELD = "yield",
     GENERATOR_MARKER = "gen",
+    ASYNC_MARKER = "async",
     BIT_AND = "&",
     BIT_OR = "|",
     BIT_XOR = "^",
