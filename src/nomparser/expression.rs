@@ -1,5 +1,7 @@
 use nom::{
     branch::alt,
+    bytes::complete::tag,
+    character::complete::space1,
     combinator::{map, map_res, not, opt, peek},
     multi::{many0, separated_list0},
     sequence::{delimited, pair, preceded, terminated, tuple},
@@ -102,6 +104,7 @@ fn mul_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
 #[test_parser("!a")]
 #[test_parser("~a")]
 #[test_parser_error("+a")]
+#[test_parser_error("await a")]
 fn unary_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
     // todo: consider to aligh the implementation with UnaryExp EBNF
     delspace(alt((
@@ -112,6 +115,10 @@ fn unary_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
                     tag_token_symbol(TokenType::MINUS),
                     tag_token_symbol(TokenType::NOT),
                     tag_token_symbol(TokenType::BIT_NOT),
+                    terminated(
+                        tag_token(TokenType::AWAIT),
+                        alt((space1, tag("\r\n"), tag("\n"))),
+                    ), // must follow by a space or newline
                 )),
                 pointer_exp,
             )),

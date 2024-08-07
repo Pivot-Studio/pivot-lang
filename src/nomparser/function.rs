@@ -6,8 +6,8 @@ use nom::{
     IResult,
 };
 
-use crate::{ast::node::function::GeneratorType, nomparser::Span};
 use crate::{ast::node::function::FuncDefNode, ast::tokens::TokenType};
+use crate::{ast::node::function::GeneratorType, nomparser::Span};
 
 use internal_macro::{test_parser, test_parser_error};
 
@@ -151,7 +151,7 @@ pub fn function_def(input: Span) -> IResult<Span, Box<TopLevel>> {
                 generator: match g {
                     Some((TokenType::ASYNC_MARKER, _)) => GeneratorType::Async,
                     Some((TokenType::GENERATOR_MARKER, _)) => GeneratorType::Iter,
-                    _ => GeneratorType::None, 
+                    _ => GeneratorType::None,
                 },
             };
             Ok::<_, ()>(Box::new(TopLevel::FuncType(node)))
