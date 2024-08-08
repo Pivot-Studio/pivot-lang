@@ -220,14 +220,29 @@ impl<'a, 'ctx> Ctx<'a> {
     pub fn is_active_file(&self) -> bool {
         self.is_active_file
     }
+    pub fn add_term_to_previous_yield_and_ret<'b>(
+        &'b mut self,
+        builder: &'b BuilderEnum<'a, 'ctx>,
+        next_bb: usize,
+    ) -> Arc<RefCell<crate::ast::ctx::GeneratorCtxData>> {
+        self.add_term_to_previous_yield(builder, next_bb);
+        let ctx = self;
+        let data = ctx.generator_data.as_ref().unwrap().clone();
+        if data.borrow().prev_yield_bb.is_some() {
+            builder.build_unconditional_branch(ctx.return_block.unwrap().0);
+        }
+        data.clone()
+    }
+
     pub fn add_term_to_previous_yield<'b>(
         &'b mut self,
         builder: &'b BuilderEnum<'a, 'ctx>,
-        curbb: usize,
+        next_bb: usize,
     ) -> Arc<RefCell<crate::ast::ctx::GeneratorCtxData>> {
         let ctx = self;
         let data = ctx.generator_data.as_ref().unwrap().clone();
-        if let Some(prev_bb) = data.borrow().prev_yield_bb {
+        let binding = data.borrow().prev_yield_bb;
+        if let Some(prev_bb) = binding {
             builder.position_at_end_block(prev_bb);
             let ctx_handle = builder.get_nth_param(ctx.function.unwrap(), 0);
             let ptr = builder
@@ -240,10 +255,9 @@ impl<'a, 'ctx> Ctx<'a> {
                 )
                 .unwrap();
 
-            let addr = builder.get_block_address(curbb);
+            let addr = builder.get_block_address(next_bb);
+            data.borrow_mut().blocks_may_yield.push(next_bb);
             builder.build_store(ptr, addr);
-
-            builder.build_unconditional_branch(ctx.return_block.unwrap().0);
         }
         data.clone()
     }

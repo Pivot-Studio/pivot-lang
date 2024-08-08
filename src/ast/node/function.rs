@@ -553,9 +553,10 @@ pub struct FuncDefNode {
     pub generator: GeneratorType,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
 pub enum GeneratorType {
     None,
+    #[default]
     Iter,
     Async,
 }
@@ -846,6 +847,7 @@ impl FuncDefNode {
                         &mut funcvalue,
                         &mut generator_alloca_b,
                         &mut sttp_opt,
+                        self.generator,
                     )?;
                 }
 

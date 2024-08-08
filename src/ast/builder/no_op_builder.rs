@@ -524,7 +524,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder<'a, 'ctx> {
         0
     }
 
-    fn build_indirect_br(&self, _block: ValueHandle) {}
+    fn build_indirect_br(&self, _block: ValueHandle, _possible_blocks: &[super::BlockHandle]) {}
 
     unsafe fn store_with_aoto_cast(&self, _ptr: ValueHandle, _value: ValueHandle) {}
 
@@ -625,4 +625,9 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder<'a, 'ctx> {
         _child: &mut Ctx<'a>,
     ) {
     }
+
+    fn await_task(&self, _ctx: &mut Ctx<'a>, _task: ValueHandle) -> ValueHandle {
+        0
+    }
+    fn await_ret(&self, _ctx: &mut Ctx<'a>, _ret: ValueHandle) {}
 }

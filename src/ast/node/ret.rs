@@ -36,6 +36,12 @@ impl Node for RetNode {
     ) -> NodeResult {
         let ret_pltype = ctx.rettp.as_ref().unwrap().clone();
         if self.yield_identifier.is_some() {
+            if self.value.is_none() {
+                return Err(self
+                    .range
+                    .new_err(ErrorCode::GENERATOR_FUNCTION_CANNOT_RETURN_VOID)
+                    .add_to_ctx(ctx));
+            }
             let ret_node = self.value.as_mut().unwrap();
             let v = ret_node.emit(ctx, builder)?.get_value().unwrap();
             if ctx.generator_data.is_none() {
@@ -49,11 +55,23 @@ impl Node for RetNode {
             let v_tp = if let PLType::Union(u) = &*ret_pltype.borrow() {
                 u.sum_types[0].get_type(ctx, builder, false)?
             } else {
-                unreachable!()
+                Arc::new(RefCell::new(PLType::Unknown))
             };
             if get_type_deep(v_tp.clone()) != get_type_deep(value_pltype.clone()) {
-                eprintln!("{:#?}\n\n{:#?}", v_tp, value_pltype);
-                let err = ctx.add_diag(self.range.new_err(ErrorCode::RETURN_TYPE_MISMATCH));
+                let err = self
+                    .range
+                    .new_err(ErrorCode::RETURN_TYPE_MISMATCH)
+                    .add_label(
+                        self.range.start_point(),
+                        ctx.get_file(),
+                        format_label!("expected type {}", v_tp.borrow().get_name()),
+                    )
+                    .add_label(
+                        ret_node.range().start_point(),
+                        ctx.get_file(),
+                        format_label!("found type {}", value_pltype.borrow().get_name()),
+                    )
+                    .add_to_ctx(ctx);
                 return Err(err);
             }
             // let value = ctx.generator_data.as_ref().unwrap().borrow().ret_handle;
@@ -76,11 +94,55 @@ impl Node for RetNode {
                 .unwrap()
                 .borrow_mut()
                 .prev_yield_bb = Some(curbb);
-            ctx.add_term_to_previous_yield(builder, yield_bb);
+            ctx.add_term_to_previous_yield_and_ret(builder, yield_bb);
             ctx.position_at_end(yield_bb, builder);
             return NodeOutput::new_term(TerminatorEnum::YieldReturn).to_result();
         }
         if ctx.generator_data.is_some() {
+            if ctx
+                .generator_data
+                .as_ref()
+                .unwrap()
+                .borrow()
+                .generator_type
+                .is_async()
+            {
+                if self.value.is_none() {
+                    return Err(self
+                        .range
+                        .new_err(ErrorCode::GENERATOR_FUNCTION_CANNOT_RETURN_VOID)
+                        .add_to_ctx(ctx));
+                }
+                let ret_node = self.value.as_mut().unwrap();
+
+                let v = ret_node.emit(ctx, builder)?.get_value().unwrap();
+                let value_pltype = v.get_ty();
+                let v_tp = if let PLType::Union(u) = &*ret_pltype.borrow() {
+                    u.sum_types[0].get_type(ctx, builder, false)?
+                } else {
+                    Arc::new(RefCell::new(PLType::Unknown))
+                };
+                if get_type_deep(v_tp.clone()) != get_type_deep(value_pltype.clone()) {
+                    let err = self
+                        .range
+                        .new_err(ErrorCode::RETURN_TYPE_MISMATCH)
+                        .add_label(
+                            self.range.start_point(),
+                            ctx.get_file(),
+                            format_label!("expected type {}", v_tp.borrow().get_name()),
+                        )
+                        .add_label(
+                            ret_node.range().start_point(),
+                            ctx.get_file(),
+                            format_label!("found type {}", value_pltype.borrow().get_name()),
+                        )
+                        .add_to_ctx(ctx);
+                    return Err(err);
+                }
+
+                builder.await_ret(ctx, v.get_value());
+                return NodeOutput::new_term(TerminatorEnum::Return).to_result();
+            }
             return Err(self
                 .range
                 .new_err(ErrorCode::INVALID_RET_IN_GENERATOR_FUNCTION)
