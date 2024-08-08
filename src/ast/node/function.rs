@@ -550,7 +550,33 @@ pub struct FuncDefNode {
     pub is_method: bool,
     pub in_trait_def: bool,
     pub target_range: Range,
-    pub generator: bool,
+    pub generator: GeneratorType,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
+pub enum GeneratorType {
+    None,
+    #[default]
+    Iter,
+    Async,
+}
+
+impl GeneratorType {
+    pub fn is_none(&self) -> bool {
+        matches!(self, GeneratorType::None)
+    }
+
+    pub fn is_iter(&self) -> bool {
+        matches!(self, GeneratorType::Iter)
+    }
+
+    pub fn is_async(&self) -> bool {
+        matches!(self, GeneratorType::Async)
+    }
+
+    pub fn is_some(&self) -> bool {
+        !self.is_none()
+    }
 }
 
 type OptFOnce<'a> = Option<Box<dyn FnOnce(&mut Ctx) -> Result<(), PLDiag> + 'a>>; // Thank u, Rust!
@@ -812,7 +838,7 @@ impl FuncDefNode {
                 child.function = Some(funcvalue);
                 let mut sttp_opt = None;
                 let mut generator_alloca_b = 0;
-                if self.generator {
+                if self.generator.is_some() {
                     generator::init_generator(
                         child,
                         &i8ptr,
@@ -821,6 +847,7 @@ impl FuncDefNode {
                         &mut funcvalue,
                         &mut generator_alloca_b,
                         &mut sttp_opt,
+                        self.generator,
                     )?;
                 }
 
@@ -835,13 +862,13 @@ impl FuncDefNode {
                 // add block
                 let allocab = builder.append_basic_block(funcvalue, "alloc");
                 let entry = builder.append_basic_block(funcvalue, "entry");
-                if self.generator {
+                if self.generator.is_some() {
                     builder.tag_generator_ctx_as_root(funcvalue, child);
                     generator::save_generator_init_block(builder, child, entry);
                 }
                 let return_block = builder.append_basic_block(funcvalue, "return");
                 child.position_at_end(entry, builder);
-                let ret_value_ptr = if self.generator {
+                let ret_value_ptr = if self.generator.is_some() {
                     generator::build_generator_ret(builder, child, &fnvalue, entry, allocab)?
                 } else {
                     let tp = fnvalue.fntype.ret_pltype.get_type(child, builder, true)?;
@@ -877,7 +904,7 @@ impl FuncDefNode {
                     builder.build_return(None);
                 };
                 child.position_at_end(entry, builder);
-                if self.generator {
+                if self.generator.is_some() {
                     // 设置flag，该flag影响alloc逻辑
                     child.ctx_flag = CtxFlag::InGeneratorYield;
                     child.generator_data.as_ref().unwrap().borrow_mut().is_para = true;
@@ -944,7 +971,7 @@ impl FuncDefNode {
                     }
                 }
                 // builder.place_safepoint(child);
-                if self.generator {
+                if self.generator.is_some() {
                     child.generator_data.as_ref().unwrap().borrow_mut().is_para = false;
                 }
                 // emit body
@@ -980,7 +1007,7 @@ impl FuncDefNode {
                     child.init_global(builder);
                     child.position_at_end(entry, builder);
                 }
-                if !self.generator {
+                if self.generator.is_none() {
                     child.rettp = Some(fnvalue.fntype.ret_pltype.get_type(child, builder, true)?);
                 }
 
@@ -1008,7 +1035,7 @@ impl FuncDefNode {
                         .emit(child, builder)?
                         .get_term())
                 })?;
-                if !terminator.is_return() && !self.generator {
+                if !terminator.is_return() && self.generator.is_none() {
                     return Err(child.add_diag(
                         self.range
                             .end
@@ -1016,7 +1043,7 @@ impl FuncDefNode {
                             .new_err(ErrorCode::FUNCTION_MUST_HAVE_RETURN),
                     ));
                 }
-                if self.generator {
+                if self.generator.is_some() {
                     return generator::end_generator(
                         child,
                         builder,

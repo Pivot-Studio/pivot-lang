@@ -1,7 +1,6 @@
 use std::{
     collections::HashMap,
     error::Error,
-    ops::Deref,
     sync::{Arc, Mutex},
     thread::available_parallelism,
     time::Instant,
@@ -23,7 +22,7 @@ use lsp_types::{
 use lsp_server::{Connection, Message, RequestId};
 
 use rustc_hash::{FxHashMap, FxHashSet};
-use salsa::{Handle, Setter};
+use salsa::Setter;
 #[cfg(not(target_arch = "wasm32"))]
 use threadpool::ThreadPool;
 
@@ -123,12 +122,11 @@ fn main_loop(
 ) -> Result<(), Box<dyn Error + Sync + Send>> {
     let n_workers = available_parallelism().unwrap().get();
     let pool = ThreadPool::new(n_workers);
-    let db = db::Database::default();
-    let mut db = Handle::new(db);
+    let mut db = db::Database::default();
     let _params: InitializeParams = serde_json::from_value(params).unwrap();
     let docs = Arc::new(Mutex::new(Default::default()));
     let docin = MemDocsInput::new(
-        &*db,
+        &db,
         docs.clone(),
         "".to_string(),
         Default::default(),
@@ -153,17 +151,17 @@ fn main_loop(
         di.on::<GotoDefinition, _>(|id, params| {
             let uri = url_to_path(params.text_document_position_params.text_document.uri);
             let pos = Pos::from_diag_pos(&params.text_document_position_params.position);
-            docin.set_file(db.get_mut()).to(uri);
-            docin.set_action(db.get_mut()).to(ActionType::GotoDef);
-            docin.set_params(db.get_mut()).to(Some((pos, None)));
+            docin.set_file(&mut db).to(uri);
+            docin.set_action(&mut db).to(ActionType::GotoDef);
+            docin.set_params(&mut db).to(Some((pos, None)));
             docin
-                .set_docs(db.get_mut())
+                .set_docs(&mut db)
                 .to(Arc::new(Mutex::new(docs.lock().unwrap().clone())));
             let snapshot = db.clone();
             let sender = connection.sender.clone();
             pool.execute(move || {
-                let _ = compile_dry(snapshot.deref(), docin);
-                let defs = compile_dry::accumulated::<GotoDef>(snapshot.deref(), docin);
+                let _ = compile_dry(&snapshot, docin);
+                let defs = compile_dry::accumulated::<GotoDef>(&snapshot, docin);
                 if !defs.is_empty() {
                     send_goto_def(&sender, id, defs[0].0.clone());
                 }
@@ -173,17 +171,17 @@ fn main_loop(
         .on::<HoverRequest, _>(|id, params| {
             let uri = url_to_path(params.text_document_position_params.text_document.uri);
             let pos = Pos::from_diag_pos(&params.text_document_position_params.position);
-            docin.set_file(db.get_mut()).to(uri);
-            docin.set_action(db.get_mut()).to(ActionType::Hover);
-            docin.set_params(db.get_mut()).to(Some((pos, None)));
+            docin.set_file(&mut db).to(uri);
+            docin.set_action(&mut db).to(ActionType::Hover);
+            docin.set_params(&mut db).to(Some((pos, None)));
             docin
-                .set_docs(db.get_mut())
+                .set_docs(&mut db)
                 .to(Arc::new(Mutex::new(docs.lock().unwrap().clone())));
             let snapshot = db.clone();
             let sender = connection.sender.clone();
             pool.execute(move || {
-                let _ = compile_dry(snapshot.deref(), docin);
-                let mut hover = compile_dry::accumulated::<PLHover>(snapshot.deref(), docin);
+                let _ = compile_dry(&snapshot, docin);
+                let mut hover = compile_dry::accumulated::<PLHover>(&snapshot, docin);
                 let hover = hover.pop();
                 if hover.is_none() {
                     send_hover(
@@ -202,19 +200,17 @@ fn main_loop(
         .on::<References, _>(|id, params| {
             let uri = url_to_path(params.text_document_position.text_document.uri);
             let pos = Pos::from_diag_pos(&params.text_document_position.position);
-            docin.set_file(db.get_mut()).to(uri);
+            docin.set_file(&mut db).to(uri);
+            docin.set_action(&mut db).to(ActionType::FindReferences);
+            docin.set_params(&mut db).to(Some((pos, None)));
             docin
-                .set_action(db.get_mut())
-                .to(ActionType::FindReferences);
-            docin.set_params(db.get_mut()).to(Some((pos, None)));
-            docin
-                .set_docs(db.get_mut())
+                .set_docs(&mut db)
                 .to(Arc::new(Mutex::new(docs.lock().unwrap().clone())));
             let snapshot = db.clone();
             let sender = connection.sender.clone();
             pool.execute(move || {
-                let _ = compile_dry(snapshot.deref(), docin);
-                let refs = compile_dry::accumulated::<PLReferences>(snapshot.deref(), docin);
+                let _ = compile_dry(&snapshot, docin);
+                let refs = compile_dry::accumulated::<PLReferences>(&snapshot, docin);
                 let mut rf = vec![];
                 for r in refs {
                     for r in r.clone().0.iter() {
@@ -230,16 +226,16 @@ fn main_loop(
         })
         .on::<CodeLensRequest, _>(|id, params| {
             let uri = url_to_path(params.text_document.uri);
-            if docin.file(&*db) != &uri {
-                docin.set_file(db.get_mut()).to(uri);
+            if docin.file(&db) != &uri {
+                docin.set_file(&mut db).to(uri);
             }
             let snapshot = db.clone();
             let sender = connection.sender.clone();
             let completions = completions.clone();
             pool.execute(move || {
-                let _ = compile_dry(snapshot.deref(), docin);
+                let _ = compile_dry(&snapshot, docin);
                 do_send_completions_and_diags(&snapshot, docin, completions, &sender);
-                let mut codelens = compile_dry::accumulated::<PLCodeLens>(snapshot.deref(), docin);
+                let mut codelens = compile_dry::accumulated::<PLCodeLens>(&snapshot, docin);
                 send_code_lens(
                     &sender,
                     id,
@@ -250,20 +246,19 @@ fn main_loop(
         .on::<SemanticTokensFullRequest, _>(|id, params| {
             let uri = url_to_path(params.text_document.uri);
             last_semantic_file = uri.clone();
-            if docin.file(&*db) != &uri {
-                docin.set_file(db.get_mut()).to(uri);
+            if docin.file(&db) != &uri {
+                docin.set_file(&mut db).to(uri);
             }
             let snapshot = db.clone();
 
-            let _ = compile_dry(snapshot.deref(), docin);
+            let _ = compile_dry(&snapshot, docin);
             do_send_completions_and_diags(
                 &snapshot,
                 docin,
                 completions.clone(),
                 &connection.sender,
             );
-            let mut newtokens =
-                compile_dry::accumulated::<PLSemanticTokens>(snapshot.deref(), docin);
+            let mut newtokens = compile_dry::accumulated::<PLSemanticTokens>(&snapshot, docin);
             if newtokens.is_empty() {
                 newtokens.push(PLSemanticTokens(SemanticTokens::default()));
             }
@@ -291,15 +286,14 @@ fn main_loop(
             }
             last_semantic_file = uri.clone();
             let snapshot = db.clone();
-            let _ = compile_dry(snapshot.deref(), docin);
+            let _ = compile_dry(&snapshot, docin);
             do_send_completions_and_diags(
                 &snapshot,
                 docin,
                 completions.clone(),
                 &connection.sender,
             );
-            let mut newtokens =
-                compile_dry::accumulated::<PLSemanticTokens>(snapshot.deref(), docin);
+            let mut newtokens = compile_dry::accumulated::<PLSemanticTokens>(&snapshot, docin);
             if newtokens.is_empty() {
                 newtokens.push(PLSemanticTokens(SemanticTokens::default()));
             }
@@ -322,16 +316,16 @@ fn main_loop(
         })
         .on::<Formatting, _>(|id, params| {
             let uri = url_to_path(params.text_document.uri);
-            docin.set_file(db.get_mut()).to(uri);
-            docin.set_action(db.get_mut()).to(ActionType::LspFmt);
+            docin.set_file(&mut db).to(uri);
+            docin.set_action(&mut db).to(ActionType::LspFmt);
             docin
-                .set_params(db.get_mut())
+                .set_params(&mut db)
                 .to(Some((Default::default(), None)));
             docin
-                .set_docs(db.get_mut())
+                .set_docs(&mut db)
                 .to(Arc::new(Mutex::new(docs.lock().unwrap().clone())));
-            let _ = compile_dry(&*db, docin);
-            let fmt = compile_dry::accumulated::<PLFormat>(&*db, docin);
+            let _ = compile_dry(&db, docin);
+            let fmt = compile_dry::accumulated::<PLFormat>(&db, docin);
             if !fmt.is_empty() {
                 let sender = connection.sender.clone();
                 pool.execute(move || {
@@ -342,16 +336,14 @@ fn main_loop(
         .on::<Rename, _>(|id, params| {
             let uri = url_to_path(params.text_document_position.text_document.uri);
             let pos = Pos::from_diag_pos(&params.text_document_position.position);
-            docin.set_file(db.get_mut()).to(uri);
+            docin.set_file(&mut db).to(uri);
+            docin.set_action(&mut db).to(ActionType::FindReferences);
+            docin.set_params(&mut db).to(Some((pos, None)));
             docin
-                .set_action(db.get_mut())
-                .to(ActionType::FindReferences);
-            docin.set_params(db.get_mut()).to(Some((pos, None)));
-            docin
-                .set_docs(db.get_mut())
+                .set_docs(&mut db)
                 .to(Arc::new(Mutex::new(docs.lock().unwrap().clone())));
-            let _ = compile_dry(&*db, docin);
-            let refs = compile_dry::accumulated::<PLReferences>(&*db, docin);
+            let _ = compile_dry(&db, docin);
+            let refs = compile_dry::accumulated::<PLReferences>(&db, docin);
             let sender = connection.sender.clone();
             let mut rf: HashMap<lsp_types::Url, Vec<lsp_types::TextEdit>> = Default::default();
             let mut set: FxHashMap<lsp_types::Url, FxHashSet<lsp_types::Range>> =
@@ -361,7 +353,7 @@ fn main_loop(
                 for r in r.clone().iter() {
                     let url = r.uri.clone();
                     let edit = lsp_types::TextEdit::new(r.range, params.new_name.clone());
-                    if set.get(&url).is_some() && set.get(&url).unwrap().contains(&r.range) {
+                    if set.contains_key(&url) && set.get(&url).unwrap().contains(&r.range) {
                         continue;
                     }
                     set.entry(url.clone()).or_default().insert(r.range);
@@ -376,15 +368,15 @@ fn main_loop(
             let doc = params.text_document_position_params;
             let uri = url_to_path(doc.text_document.uri);
             let pos = Pos::from_diag_pos(&doc.position);
-            docin.set_file(db.get_mut()).to(uri);
-            docin.set_action(db.get_mut()).to(ActionType::SignatureHelp);
-            docin.set_params(db.get_mut()).to(Some((pos, None)));
+            docin.set_file(&mut db).to(uri);
+            docin.set_action(&mut db).to(ActionType::SignatureHelp);
+            docin.set_params(&mut db).to(Some((pos, None)));
             docin
-                .set_docs(db.get_mut())
+                .set_docs(&mut db)
                 .to(Arc::new(Mutex::new(docs.lock().unwrap().clone())));
-            let _ = compile_dry(&*db, docin);
+            let _ = compile_dry(&db, docin);
             do_send_completions_and_diags(&db, docin, completions.clone(), &connection.sender);
-            let sigs = compile_dry::accumulated::<PLSignatureHelp>(&*db, docin);
+            let sigs = compile_dry::accumulated::<PLSignatureHelp>(&db, docin);
             if !sigs.is_empty() {
                 let sender = connection.sender.clone();
                 pool.execute(move || {
@@ -407,25 +399,25 @@ fn main_loop(
         })
         .on::<InlayHintRequest, _>(|id, params| {
             let uri = url_to_path(params.text_document.uri);
-            if docin.file(&*db) != &uri {
-                docin.set_file(db.get_mut()).to(uri.clone());
-                docin.set_action(db.get_mut()).to(ActionType::Hint);
+            if docin.file(&db) != &uri {
+                docin.set_file(&mut db).to(uri.clone());
+                docin.set_action(&mut db).to(ActionType::Hint);
                 docin
-                    .set_params(db.get_mut())
+                    .set_params(&mut db)
                     .to(Some((Default::default(), None)));
                 docin
-                    .set_docs(db.get_mut())
+                    .set_docs(&mut db)
                     .to(Arc::new(Mutex::new(docs.lock().unwrap().clone())));
             }
             let sender = connection.sender.clone();
             let snapshot = db.clone();
             let completions = completions.clone();
             pool.execute(move || {
-                if docin.file(snapshot.deref()) != &uri {
-                    let _ = compile_dry(snapshot.deref(), docin);
+                if docin.file(&snapshot) != &uri {
+                    let _ = compile_dry(&snapshot, docin);
                     do_send_completions_and_diags(&snapshot, docin, completions, &sender);
                 }
-                let hints = compile_dry::accumulated::<Hints>(snapshot.deref(), docin);
+                let hints = compile_dry::accumulated::<Hints>(&snapshot, docin);
                 if !hints.is_empty() {
                     send_hints(&sender, id, hints[0].clone().0);
                 }
@@ -433,26 +425,26 @@ fn main_loop(
         })
         .on::<DocumentSymbolRequest, _>(|id, params| {
             let uri = url_to_path(params.text_document.uri);
-            if docin.file(&*db) != &uri {
-                docin.set_file(db.get_mut()).to(uri.clone());
-                docin.set_action(db.get_mut()).to(ActionType::DocSymbol);
+            if docin.file(&db) != &uri {
+                docin.set_file(&mut db).to(uri.clone());
+                docin.set_action(&mut db).to(ActionType::DocSymbol);
                 docin
-                    .set_params(db.get_mut())
+                    .set_params(&mut db)
                     .to(Some((Default::default(), None)));
             }
             docin
-                .set_docs(db.get_mut())
+                .set_docs(&mut db)
                 .to(Arc::new(Mutex::new(docs.lock().unwrap().clone())));
 
             let sender = connection.sender.clone();
             let snapshot = db.clone();
             let completions = completions.clone();
             pool.execute(move || {
-                if docin.file(snapshot.deref()) != &uri {
-                    let _ = compile_dry(snapshot.deref(), docin);
+                if docin.file(&snapshot) != &uri {
+                    let _ = compile_dry(&snapshot, docin);
                 }
                 do_send_completions_and_diags(&snapshot, docin, completions, &sender);
-                let doc_symbols = compile_dry::accumulated::<DocSymbols>(snapshot.deref(), docin);
+                let doc_symbols = compile_dry::accumulated::<DocSymbols>(&snapshot, docin);
                 if !doc_symbols.is_empty() {
                     send_doc_symbols(&sender, id, doc_symbols[0].clone().0);
                 }
@@ -462,28 +454,28 @@ fn main_loop(
             let f = url_to_path(params.text_document.uri);
             for content_change in params.content_changes.iter() {
                 let (doc, txt) = docs.lock().unwrap().change_txt(
-                    &*db,
+                    &db,
                     content_change.range.unwrap(),
                     &f,
                     content_change.text.clone(),
                 );
 
-                doc.set_text(db.get_mut()).to(txt);
+                doc.set_text(&mut db).to(txt);
                 let mut pos = Pos::from_diag_pos(&content_change.range.unwrap().start);
                 pos.column += 1;
-                docin.set_edit_pos(db.get_mut()).to(Some(pos));
+                docin.set_edit_pos(&mut db).to(Some(pos));
             }
             docin
-                .set_docs(db.get_mut())
+                .set_docs(&mut db)
                 .to(Arc::new(Mutex::new(docs.lock().unwrap().clone())));
-            docin.set_file(db.get_mut()).to(f);
+            docin.set_file(&mut db).to(f);
 
-            docin.set_action(db.get_mut()).to(ActionType::Diagnostic);
+            docin.set_action(&mut db).to(ActionType::Diagnostic);
             let snapshot = db.clone();
             let sender = connection.sender.clone();
             let completions = completions.clone();
             pool.execute(move || {
-                let _ = compile_dry(snapshot.deref(), docin);
+                let _ = compile_dry(&snapshot, docin);
                 do_send_completions_and_diags(&snapshot, docin, completions, &sender);
             });
         })
@@ -491,13 +483,13 @@ fn main_loop(
             let f = url_to_path(params.text_document.uri);
             docs.lock()
                 .unwrap()
-                .insert(&*db, f.clone(), params.text_document.text, f.clone());
-            docin.set_docs(db.get_mut()).to(docs.clone());
-            docin.set_file(db.get_mut()).to(f);
-            docin.set_action(db.get_mut()).to(ActionType::Diagnostic);
-            docin.set_params(db.get_mut()).to(None);
-            let _ = compile_dry(&*db, docin);
-            let diags = compile_dry::accumulated::<Diagnostics>(&*db, docin);
+                .insert(&db, f.clone(), params.text_document.text, f.clone());
+            docin.set_docs(&mut db).to(docs.clone());
+            docin.set_file(&mut db).to(f);
+            docin.set_action(&mut db).to(ActionType::Diagnostic);
+            docin.set_params(&mut db).to(None);
+            let _ = compile_dry(&db, docin);
+            let diags = compile_dry::accumulated::<Diagnostics>(&db, docin);
             let sender = connection.sender.clone();
             pool.execute(move || {
                 let mut m = FxHashMap::<String, Vec<Diagnostic>>::default();
@@ -513,7 +505,7 @@ fn main_loop(
         .on_noti::<DidCloseTextDocument, _>(|_params| {
             // let f = url_to_path(params.text_document.uri);
             // docs.lock().unwrap().borrow_mut().remove(&f);
-            // docin.set_docs(db.get_mut()).to(docs.clone());
+            // docin.set_docs(& mut db).to(docs.clone());
         });
         let elapsed = now.elapsed();
         log::info!("main loop handle message: {:?}", elapsed);
@@ -522,12 +514,12 @@ fn main_loop(
 }
 
 fn do_send_completions_and_diags(
-    snapshot: &Handle<crate::Database>,
+    snapshot: &crate::Database,
     docin: MemDocsInput,
     completions: Arc<Mutex<Option<RequestId>>>,
     sender: &crossbeam_channel::Sender<Message>,
 ) {
-    let comps = compile_dry::accumulated::<Completions>(snapshot.deref(), docin);
+    let comps = compile_dry::accumulated::<Completions>(snapshot, docin);
     let mut guard = completions.lock().unwrap();
     if let Some(id) = &*guard {
         send_completions(
@@ -538,7 +530,7 @@ fn do_send_completions_and_diags(
     }
     *guard = None;
     drop(guard);
-    let diags = compile_dry::accumulated::<Diagnostics>(snapshot.deref(), docin);
+    let diags = compile_dry::accumulated::<Diagnostics>(snapshot, docin);
     debug!("diags: {:#?}", diags);
     let mut m = FxHashMap::<String, Vec<Diagnostic>>::default();
     for d in &diags {
@@ -547,7 +539,7 @@ fn do_send_completions_and_diags(
     }
     for d in &diags {
         let (p, _) = &d.0;
-        if m.get(p).is_none() {
+        if !m.contains_key(p) {
             send_diagnostics(sender, p.to_string(), vec![]);
         }
     }

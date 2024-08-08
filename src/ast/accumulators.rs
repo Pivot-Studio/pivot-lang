@@ -35,7 +35,6 @@ pub struct ModBuffer(pub PLModBuffer);
 pub struct PLModBuffer {
     pub path: PathBuf,
     pub buf: Vec<u8>,
-    pub is_main: bool,
     pub name: String,
 }
 

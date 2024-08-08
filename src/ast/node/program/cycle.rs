@@ -25,7 +25,7 @@ pub fn cycle_deps_recover<'db>(
     cycle: &salsa::Cycle,
     _: FileCompileInput,
 ) -> Option<ModWrapper<'db>> {
-    let key = cycle.all_participants(db.as_salsa_database());
+    let key = cycle.all_participants(db.as_dyn_database());
     let mut files = FxHashMap::default();
     let mut prev_use_map = FxHashMap::default();
     let params = cycle
@@ -33,10 +33,10 @@ pub fn cycle_deps_recover<'db>(
         .enumerate()
         .filter(|(i, _)| {
             let key = key[*i];
-            let name = db.lookup_ingredient(key.ingredient_index()).debug_name();
+            let name = db.ingredient_debug_name(key.ingredient_index());
             name != "compile_dry_file"
         })
-        .map(|(_, k)| Program::lookup_id(k.key_index(), db.as_salsa_database()))
+        .map(|(_, k)| Program::lookup_id(k.key_index(), db.as_dyn_database()))
         .last()
         .unwrap();
     let src_file_path = params.params(db).file(db);
@@ -44,7 +44,7 @@ pub fn cycle_deps_recover<'db>(
     build_init_params(params, db, &mut prev_use_map);
     let filtered = cycle.participant_keys().enumerate().filter(|(i, _)| {
         let key = key[*i];
-        let name = db.lookup_ingredient(key.ingredient_index()).debug_name();
+        let name = db.ingredient_debug_name(key.ingredient_index());
         name != "compile_dry_file"
     });
     let len = filtered.count();
@@ -54,10 +54,10 @@ pub fn cycle_deps_recover<'db>(
             .enumerate()
             .filter(|(i, _)| {
                 let key = key[*i];
-                let name = db.lookup_ingredient(key.ingredient_index()).debug_name();
+                let name = db.ingredient_debug_name(key.ingredient_index());
                 name != "compile_dry_file"
             })
-            .map(|(u, k)| (u, Program::lookup_id(k.key_index(), db.as_salsa_database())))
+            .map(|(u, k)| (u, Program::lookup_id(k.key_index(), db.as_dyn_database())))
         {
             let prog = match_node(p, db);
             if let Some(r) = prev_use_map.get(p.params(db).file(db)) {

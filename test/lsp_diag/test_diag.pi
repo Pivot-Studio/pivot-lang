@@ -136,3 +136,15 @@ fn testf<T>() void {
     let b = arg_ptr;
     return;
 }
+
+async fn test_async() void {
+    
+    return;
+}
+
+
+use std::task::Task;
+
+async fn async_f1() Task<()> {
+    return 1;
+}

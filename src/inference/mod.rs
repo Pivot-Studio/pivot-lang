@@ -938,7 +938,58 @@ impl<'ctx> InferenceCtx<'ctx> {
                 }
             }
             NodeEnum::Un(u) => {
-                return self.inference(&mut u.exp, ctx, builder);
+                match u.op.0 {
+                    TokenType::AWAIT => {
+                        let ty = self.inference(&mut u.exp, ctx, builder);
+                        match ty {
+                            SymbolType::Var(v) => {
+                                let k = self.unify_table.borrow_mut().probe_value(v);
+                                match k {
+                                    TyInfer::Term(t) => match &*t.borrow() {
+                                        PLType::Trait(t) if t.name.starts_with("Task") => {
+                                            let re = t
+                                                .generic_infer_types
+                                                .first()
+                                                .map(|(_, v)| v.clone())
+                                                .unwrap_or(unknown_arc());
+                                            return SymbolType::PLType(re);
+                                        }
+                                        _ => (),
+                                    },
+                                    TyInfer::Generic((v, GenericTy::St(st)))
+                                        if st.name.starts_with("Task") =>
+                                    {
+                                        if v.len() == 1 {
+                                            return SymbolType::Var(v[0]);
+                                        }
+                                        let re = st
+                                            .generic_infer_types
+                                            .first()
+                                            .map(|(_, v)| v.clone())
+                                            .unwrap_or(unknown_arc());
+                                        return SymbolType::PLType(re);
+                                    }
+                                    _ => (),
+                                }
+                            }
+                            SymbolType::PLType(ty) => {
+                                let ty = ty.borrow();
+                                match &*ty {
+                                    PLType::Trait(t) if t.name.starts_with("Task") => {
+                                        let re = t
+                                            .generic_infer_types
+                                            .first()
+                                            .map(|(_, v)| v.clone())
+                                            .unwrap_or(unknown_arc());
+                                        return SymbolType::PLType(re);
+                                    }
+                                    _ => (),
+                                }
+                            }
+                        }
+                    }
+                    _ => return self.inference(&mut u.exp, ctx, builder),
+                };
             }
             NodeEnum::PointerOpNode(p) => {
                 let ty = self.inference(&mut p.value, ctx, builder);

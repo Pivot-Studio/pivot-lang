@@ -101,6 +101,7 @@ define_tokens!(
     IS = "is",
     YIELD = "yield",
     GENERATOR_MARKER = "gen",
+    ASYNC_MARKER = "async",
     BIT_AND = "&",
     BIT_OR = "|",
     BIT_XOR = "^",
@@ -108,6 +109,7 @@ define_tokens!(
     BIT_RIGHT_SHIFT = ">>",
     BIT_NOT = "~",
     MATCH = "match",
+    AWAIT = "await",
 );
 
 impl TokenType {

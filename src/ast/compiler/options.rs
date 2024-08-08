@@ -73,4 +73,6 @@ pub enum ActionType {
     SignatureHelp,
     #[cfg(test)]
     Completion,
+    #[cfg(target_arch = "wasm32")]
+    SemanticTokensFull,
 }

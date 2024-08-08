@@ -293,7 +293,7 @@ pub trait IRBuilder<'a, 'ctx> {
         ret_tp: &PLType,
     ) -> ValueHandle;
     fn get_block_address(&self, block: BlockHandle) -> ValueHandle;
-    fn build_indirect_br(&self, block: ValueHandle);
+    fn build_indirect_br(&self, block: ValueHandle, possible_blocks: &[BlockHandle]);
     // only used in special case, as it does not add gc root
     unsafe fn store_with_aoto_cast(&self, ptr: ValueHandle, value: ValueHandle);
     // fn stack_alloc(&self, name: &str, ctx: &mut Ctx<'a>, tp: &PLType) -> ValueHandle;
@@ -326,6 +326,8 @@ pub trait IRBuilder<'a, 'ctx> {
     ) -> ValueHandle;
     fn place_safepoint(&self, ctx: &mut Ctx<'a>);
     fn is_main(&self, f: ValueHandle) -> bool;
+    fn await_task(&self, ctx: &mut Ctx<'a>, task: ValueHandle) -> ValueHandle;
+    fn await_ret(&self, ctx: &mut Ctx<'a>, ret: ValueHandle);
 }
 
 /// ValueHandle is an index used to separate the low level generatted code inside [BuilderEnum] from the respective high level ast node

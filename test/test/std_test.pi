@@ -1,6 +1,41 @@
 use core::panic;
 use std::string;
 use std::math::F64Ext;
+use std::task::Task;
+use std::io;
+
+
+
+async fn async_f1() Task<()> {
+    let ct = CustomTask{first:true};
+    let d = await (ct as Task<i64>);
+    panic::assert(d == 100);
+    d = await async_f2();
+    panic::assert(d == 102);
+    return ();
+}
+
+
+async fn async_f2( ) Task<i64> {
+    return 102;
+}
+
+struct CustomTask {
+    first: bool;
+}
+
+impl Task<i64> for CustomTask {
+    fn poll(f:||=>void) Option<i64> {
+        if self.first {
+            self.first = false;
+            return None{} as Option<i64>;
+        }
+        return 100 as Option<i64>;
+    }
+    
+}
+
+
 pub fn test_std() void {
     let re = "abcde".index_of("cde");
     let chars = [1,2,3];
@@ -35,5 +70,13 @@ pub fn test_std() void {
     let mi = math::min(1.0, 2.0);
     panic::assert(mi==1.0);
     panic::assert((math::cos(math::PI) - -1.0).abs() < 0.0000001);
+
+    let task = async_f1();
+    task.poll(||=>{
+        return;
+    });
+    task.poll(||=>{
+        return;
+    });    
     return;
 }

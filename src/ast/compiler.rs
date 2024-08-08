@@ -388,7 +388,7 @@ pub fn pl_link(llvmmod: Module, oxbjs: Vec<PathBuf>, out: String, op: Options) {
 
 #[cfg(not(feature = "llvm"))]
 #[salsa::tracked]
-pub fn compile(db: &'db dyn Db, docs: MemDocsInput, out: String, op: Options) {
+pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
     unimplemented!()
 }
 

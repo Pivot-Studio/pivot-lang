@@ -210,7 +210,7 @@ impl MemDocsInput {
 }
 
 impl MemDocs {
-    #[cfg(test)]
+    #[cfg(any(target_arch = "wasm32", test))]
     pub fn change(&self, db: &mut dyn Db, range: lsp_types::Range, uri: String, text: String) {
         use salsa::Setter;
         let (doc, txt) = self.change_txt(db, range, &uri, text);

@@ -156,7 +156,8 @@ define_diag!(
     TRY_TO_EXPORT_NON_REEXPORT_SYMBOL = "try to export non reexport symbol",
     CYCLE_DEPENDENCY = "cycle dependency not allowed",
     YIELD_RETURN_MUST_BE_IN_GENERATOR = "yield return must be in generator function",
-    GENERATOR_FN_MUST_RET_ITER = "generator function must return an iterator",
+    GENERATOR_FN_MUST_RET_ITER = "generator function must return an Iterator",
+    ASYNC_FN_MUST_RET_TASK = "async function must return a Task",
     INVALID_RET_IN_GENERATOR_FUNCTION = "invalid `return` in generator function",
     ARRAY_LEN_MUST_BE_I64 = "array len must be i64",
     EXPECT_ARRAY_TYPE = "expect array type",
@@ -176,6 +177,8 @@ define_diag!(
     SYNTAX_ERROR_IF_CONDITION = "syntax error: if condition",
     SYNTAX_ERROR_WHILE_CONDITION = "syntax error: while condition",
     SYNTAX_ERROR_FOR_CONDITION = "syntax error: for condition",
+    ONLY_TASK_CAN_BE_AWAIT = "only Task can be awaited",
+    GENERATOR_FUNCTION_CANNOT_RETURN_VOID = "generator function cannot return void",
 );
 
 define_diag! {

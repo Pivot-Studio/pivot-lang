@@ -5,7 +5,6 @@ struct TestEditor {
     err_expects: VecDeque<bool>,
 }
 
-#[cfg(target_os = "linux")]
 impl TestEditor {
     fn new(input: VecDeque<String>, err_expects: VecDeque<bool>) -> Self {
         Self { input, err_expects }
@@ -35,13 +34,6 @@ impl super::editor::TermEditor for TestEditor {
         Ok(())
     }
 
-    fn append_history<P: AsRef<std::path::Path> + ?Sized>(
-        &mut self,
-        _path: &P,
-    ) -> Result<(), rustyline::error::ReadlineError> {
-        Ok(())
-    }
-
     fn add_history_entry<S: AsRef<str> + Into<String>>(
         &mut self,
         _line: S,
@@ -59,7 +51,6 @@ impl super::editor::TermEditor for TestEditor {
 }
 
 #[test]
-#[cfg(all(test, target_os = "linux"))]
 fn test_repl() {
     let rl = TestEditor::new(
         VecDeque::from(vec![

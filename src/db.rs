@@ -29,13 +29,25 @@ pub struct Database {
 // ANCHOR: db_impl
 #[salsa::db]
 impl salsa::Database for Database {
-    fn salsa_event(&self, event: salsa::Event) {
+    fn salsa_event(&self, event: &dyn Fn() -> salsa::Event) {
         // Log interesting events, if logging is enabled
         if let Some(logs) = &self.logs {
+            let event = event();
             // don't log boring events
             if let salsa::EventKind::WillExecute { .. } = event.kind {
                 logs.lock().unwrap().push(format!("Event: {:?}", event));
             }
+        }
+    }
+}
+
+impl Clone for Database {
+    fn clone(&self) -> Self {
+        Self {
+            storage: self.storage.clone(),
+            logs: self.logs.clone(),
+            ref_str: self.ref_str.clone(),
+            module_map: self.module_map.clone(),
         }
     }
 }

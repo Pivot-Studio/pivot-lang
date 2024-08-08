@@ -40,8 +40,8 @@ use ustr::Ustr;
 use crate::ast::{
     ctx::{PLSymbolData, STUCK_FNS},
     diag::PLDiag,
-    node::function::generator::CtxFlag,
-    pltype::{get_type_deep, TraitImplAble},
+    node::{cast::get_option_type, function::generator::CtxFlag},
+    pltype::{get_type_deep, ClosureType, TraitImplAble},
     tokens::TokenType,
 };
 
@@ -287,18 +287,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             if !data.borrow_mut().is_para {
                 self.build_store(data_ptr, ret_handle);
             }
-            let load = self.build_load_raw(
-                data_ptr,
-                &format!("data_load_{}", name),
-                self.gc_ptr_ty().as_basic_type_enum(),
-            );
 
-            let load_again = self.build_load_raw(
-                load,
-                &format!("data_load_again_{}", name),
-                self.gc_ptr_ty().as_basic_type_enum(),
-            );
-            data.borrow_mut().para_tmp = load_again;
             ret_handle = data_ptr;
 
             let id = data.borrow().table.len().to_string();
@@ -1680,6 +1669,31 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 tp,
             ))
         }
+    }
+
+    fn poll_task(
+        &self,
+        poll_fn: BasicValueEnum<'ctx>,
+        self_p: BasicValueEnum<'ctx>,
+        second_arg: PointerValue<'ctx>,
+    ) -> PointerValue<'ctx> {
+        let poll_fn_ty = self.gc_ptr_ty().fn_type(
+            &[
+                self.context.ptr_type(AddressSpace::from(1)).into(),
+                self.context.ptr_type(AddressSpace::from(1)).into(),
+            ],
+            false,
+        );
+        let re = self
+            .builder
+            .build_indirect_call(
+                poll_fn_ty,
+                poll_fn.into_pointer_value(),
+                &[self_p.into(), second_arg.into()],
+                "poll_async",
+            )
+            .unwrap();
+        re.as_any_value_enum().into_pointer_value()
     }
 }
 impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
@@ -3240,7 +3254,26 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         ret_tp: &PLType,
     ) -> ValueHandle {
         let tp = self.context.ptr_type(AddressSpace::from(1)).into();
-        let ftp = self.get_ret_type(ret_tp, ctx, true).fn_type(&[tp], false);
+        let ftp = if ctx
+            .generator_data
+            .as_ref()
+            .unwrap()
+            .borrow()
+            .generator_type
+            .is_async()
+        {
+            // async poll fn's second argument is a closure
+            let ty = PLType::Closure(ClosureType {
+                arg_types: vec![],
+                ret_type: Arc::new(RefCell::new(PLType::Void)),
+                range: Default::default(),
+            });
+            let tp2 = self.get_param_type(&ty, ctx, true).into();
+            self.get_ret_type(ret_tp, ctx, true)
+                .fn_type(&[tp, tp2], false)
+        } else {
+            self.get_ret_type(ret_tp, ctx, true).fn_type(&[tp], false)
+        };
         let f = self
             .module
             .add_function(&format!("{}__yield", ctx_name), ftp, None);
@@ -3258,22 +3291,14 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
                 .into()
         })
     }
-    fn build_indirect_br(&self, block: ValueHandle) {
+    fn build_indirect_br(&self, block: ValueHandle, possible_blocks: &[BlockHandle]) {
         let block = self.get_llvm_value(block).unwrap();
-        let bv = self.builder.get_insert_block().unwrap();
         self.builder
             .build_indirect_branch::<BasicValueEnum>(
                 block.try_into().unwrap(),
-                &bv.get_parent()
-                    .unwrap()
-                    .get_basic_blocks()
+                &possible_blocks
                     .iter()
-                    .skip(1)
-                    .copied()
-                    .filter(|b| {
-                        b.get_name().to_str().unwrap().to_string().contains("yield")
-                            || b.get_name().to_str().unwrap().to_string().contains("entry")
-                    })
+                    .map(|b| self.get_llvm_block(*b).unwrap())
                     .collect::<Vec<_>>(),
             )
             .unwrap();
@@ -3404,6 +3429,259 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             .build_right_shift(lhs, rhs, true, "right_shift")
             .unwrap();
         self.get_llvm_value_handle(&v.into())
+    }
+
+    fn await_task(&self, ctx: &mut Ctx<'a>, task: ValueHandle) -> ValueHandle {
+        let data = ctx.generator_data.as_ref().unwrap().clone();
+
+        // generator ctx需要记录我们的task，以让他存活过这次yield
+
+        let task_ptr = self
+            .build_struct_gep(
+                data.borrow().yield_ctx_handle,
+                2,
+                "task_ctx_slot",
+                &data.borrow().ctx_tp.as_ref().unwrap().borrow(),
+                ctx,
+            )
+            .unwrap();
+        if !self.is_ptr(task) {
+            let t = self.alloc_raw("taskptr", &PLType::new_i8_ptr(), ctx, None, "DioGC__malloc");
+            self.build_store(t, task);
+            self.build_store(task_ptr, t);
+        } else {
+            self.build_store(task_ptr, task);
+        }
+
+        // append cond block
+        let current_bb = self.builder.get_insert_block().unwrap();
+        let current_fn = current_bb.get_parent().unwrap();
+        let cond_bb = self.context.append_basic_block(current_fn, "await_cond");
+        self.builder.build_unconditional_branch(cond_bb).unwrap();
+        self.builder.position_at_end(cond_bb);
+
+        // load from generator ctx
+        let task_ptr = self
+            .get_llvm_value(
+                self.build_struct_gep(
+                    data.borrow().yield_ctx_handle,
+                    2,
+                    "task_ctx_slot",
+                    &data.borrow().ctx_tp.as_ref().unwrap().borrow(),
+                    ctx,
+                )
+                .unwrap(),
+            )
+            .unwrap()
+            .into_pointer_value();
+        let real_task = self
+            .builder
+            .build_load(self.gc_ptr_ty(), task_ptr, "task")
+            .unwrap()
+            .into_pointer_value();
+
+        // its type can be seen as 3 pointers
+        let task_type = self.context.struct_type(
+            &[
+                self.context.ptr_type(AddressSpace::from(1)).into(),
+                self.context.ptr_type(AddressSpace::from(1)).into(),
+                self.context.ptr_type(AddressSpace::from(1)).into(),
+            ],
+            false,
+        );
+        // gep third field
+        let poll_ptr = self
+            .builder
+            .build_struct_gep(task_type, real_task, 2, "taskPtr")
+            .unwrap();
+        // gep second field
+        let self_ptr = self
+            .builder
+            .build_struct_gep(task_type, real_task, 1, "selfPtr")
+            .unwrap();
+        // get second arg for current function
+        let second_arg = current_fn.get_nth_param(1).unwrap().into_pointer_value();
+        // invoke poll function, with arguments
+        let poll_fn = self
+            .builder
+            .build_load(
+                self.context.ptr_type(AddressSpace::from(1)),
+                poll_ptr,
+                "poll_f",
+            )
+            .unwrap();
+        let self_p = self
+            .builder
+            .build_load(
+                self.context.ptr_type(AddressSpace::from(1)),
+                self_ptr,
+                "self",
+            )
+            .unwrap();
+
+        let polled = self.poll_task(poll_fn, self_p, second_arg);
+
+        // check if polled is none
+        let tag = self
+            .builder
+            .build_load(self.context.i64_type(), polled, "tag")
+            .unwrap()
+            .into_int_value();
+        let is_none = self
+            .builder
+            .build_int_compare(
+                IntPredicate::EQ,
+                tag,
+                self.context.i64_type().const_int(1, false),
+                "is_none",
+            )
+            .unwrap();
+        // if none, into loop logic
+        let loop_bb = self.context.append_basic_block(current_fn, "await_loop");
+        let end_bb = self.context.append_basic_block(current_fn, "await_end");
+        self.builder
+            .build_conditional_branch(is_none, loop_bb, end_bb)
+            .unwrap();
+        self.builder.position_at_end(loop_bb);
+        // return None
+        let ret_handle = ctx.return_block.unwrap().1.unwrap();
+        let ret_v = self
+            .get_llvm_value(ret_handle)
+            .unwrap()
+            .into_pointer_value();
+        // store 1 to its start (means tag None)
+        self.builder
+            .build_store(ret_v, self.context.i64_type().const_int(1, false))
+            .unwrap();
+        let curbb = self.get_cur_basic_block();
+
+        ctx.generator_data
+            .as_ref()
+            .unwrap()
+            .borrow_mut()
+            .prev_yield_bb = Some(curbb);
+        // resume to cond block, so when enter again it will poll again
+        ctx.add_term_to_previous_yield_and_ret(
+            &self.clone().into(),
+            self.get_llvm_block_handle(cond_bb),
+        );
+
+        // emit end block
+        self.builder.position_at_end(end_bb);
+
+        // option is a struct contains two pointers
+        let opt_st = self.context.struct_type(
+            &[
+                self.context.ptr_type(AddressSpace::from(1)).into(),
+                self.context.ptr_type(AddressSpace::from(1)).into(),
+            ],
+            false,
+        );
+
+        let value = self
+            .builder
+            .build_struct_gep(opt_st, polled, 1, "polled_value")
+            .unwrap();
+        let value = self
+            .builder
+            .build_load(
+                self.context.ptr_type(AddressSpace::from(1)),
+                value,
+                "polled_value",
+            )
+            .unwrap()
+            .into_pointer_value();
+        // return
+        self.get_llvm_value_handle(&value.into())
+    }
+    fn await_ret(&self, ctx: &mut Ctx<'a>, ret: ValueHandle) {
+        let ret = if !self.is_ptr(ret) {
+            let t = self.alloc_raw("taskptr", &PLType::new_i8_ptr(), ctx, None, "DioGC__malloc");
+            self.build_store(t, ret);
+            t
+        } else {
+            ret
+        };
+        let data = ctx.generator_data.as_ref().unwrap().clone();
+
+        // generator ctx需要记录我们的ret，以让他存活过这次yield
+
+        let task_ptr = self
+            .build_struct_gep(
+                data.borrow().yield_ctx_handle,
+                3,
+                "ret_ctx_slot",
+                &data.borrow().ctx_tp.as_ref().unwrap().borrow(),
+                ctx,
+            )
+            .unwrap();
+        self.build_store(task_ptr, ret);
+
+        let end_bb = self.context.append_basic_block(
+            self.builder
+                .get_insert_block()
+                .unwrap()
+                .get_parent()
+                .unwrap(),
+            "await_end_ret",
+        );
+
+        let curbb = self.get_cur_basic_block();
+
+        ctx.generator_data
+            .as_ref()
+            .unwrap()
+            .borrow_mut()
+            .prev_yield_bb = Some(curbb);
+        // resume to end block, so when enter again it will poll again
+        ctx.add_term_to_previous_yield(&self.clone().into(), self.get_llvm_block_handle(end_bb));
+        self.builder.build_unconditional_branch(end_bb).unwrap();
+
+        // emit end block
+        self.builder.position_at_end(end_bb);
+
+        // load ret
+        let ret_ptr = self
+            .get_llvm_value(
+                self.build_struct_gep(
+                    data.borrow().yield_ctx_handle,
+                    3,
+                    "ret_ctx_slot",
+                    &data.borrow().ctx_tp.as_ref().unwrap().borrow(),
+                    ctx,
+                )
+                .unwrap(),
+            )
+            .unwrap()
+            .into_pointer_value();
+        let ret = self
+            .builder
+            .build_load(self.gc_ptr_ty(), ret_ptr, "ret")
+            .unwrap()
+            .into_pointer_value();
+        let opt_ty = get_option_type(
+            ctx,
+            &self.clone().into(),
+            Arc::new(RefCell::new(PLType::Primitive(PriType::BOOL))),
+        )
+        .unwrap();
+        let mem = self
+            .get_llvm_value(self.alloc_raw("ret_opt", &opt_ty.borrow(), ctx, None, "DioGC__malloc"))
+            .unwrap()
+            .into_pointer_value();
+        // store ret to opt's second field
+        let opt_ty = self.get_basic_type_op(&opt_ty.borrow(), ctx).unwrap();
+        let value = self
+            .builder
+            .build_struct_gep(opt_ty, mem, 1, "value")
+            .unwrap();
+        self.builder.build_store(value, ret).unwrap();
+        // store 0 to its start (means tag Some)
+        self.builder
+            .build_store(mem, self.context.i64_type().const_int(0, false))
+            .unwrap();
+        // return
+        self.builder.build_return(Some(&mem)).unwrap();
     }
 }
 

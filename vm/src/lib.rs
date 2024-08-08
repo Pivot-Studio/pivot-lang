@@ -25,15 +25,6 @@ fn printi64ln(i: i64) {
     println!("{}", i);
 }
 
-/// see https://lang.pivotstudio.cn/docs/systemlib/vm.html#jit-invalid-memory-access-issue
-#[cfg(feature = "jit")]
-pub fn reg() {
-    gc::reg();
-    libcwrap::reg();
-    mutex::reg();
-    time::reg();
-}
-
 #[is_runtime]
 fn pl_panic() {
     println!("pivot lang panic occured!");

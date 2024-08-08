@@ -18,8 +18,3 @@ fn pl_clock_gettime(sec: *mut i64, nano: *mut u32) {
         *nano = t.subsec_nanos();
     }
 }
-
-#[cfg(feature = "jit")]
-pub fn reg() {
-    add_symbol_unixtime();
-}

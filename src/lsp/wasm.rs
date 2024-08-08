@@ -1,17 +1,15 @@
 use std::{
-    borrow::Borrow,
     cell::RefCell,
-    fmt::format,
     sync::{Arc, Mutex},
 };
 
 use include_dir::{include_dir, Dir};
 use lazy_static::lazy_static;
 use lsp_types::{
-    notification::DidChangeTextDocument, CompletionParams, Diagnostic, DidChangeTextDocumentParams,
-    GotoDefinitionParams, Position, SemanticTokens, SemanticTokensDelta, Url,
+    Diagnostic, DidChangeTextDocumentParams, Position, SemanticTokens, SemanticTokensDelta, Url,
 };
 use rustc_hash::FxHashMap;
+use salsa::Setter;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 use crate::{
@@ -22,9 +20,8 @@ use crate::{
         compiler::{compile_dry, ActionType},
         range::Pos,
     },
-    db::{self, Database},
+    db::Database,
     lsp::semantic_tokens::diff_tokens,
-    Db,
 };
 
 use super::{
@@ -101,17 +98,18 @@ pub unsafe fn on_change_doc(req: &str) -> String {
     docin.set_file(db).to(f);
 
     docin.set_action(db).to(ActionType::Diagnostic);
-    let re = compile_dry(db, docin);
+    let _ = compile_dry(db, docin);
     // log::trace!("mod {:#?}", re.plmod(db));
     // completions = compile_dry::accumulated::<Completions>(db, docin);
     let diags = compile_dry::accumulated::<Diagnostics>(db, docin);
     let mut m = FxHashMap::<String, Vec<Diagnostic>>::default();
-    for (p, diags) in &diags {
+    for d in &diags {
+        let (p, diags) = &d.0;
         diags.iter().for_each(|x| x.get_diagnostic(p, &mut m));
     }
     let comps = compile_dry::accumulated::<Completions>(db, docin);
     if comps.len() > 0 {
-        COMPLETIONS.inner.replace(comps[0].clone());
+        COMPLETIONS.inner.replace(comps[0].0.clone());
     } else {
         COMPLETIONS.inner.replace(vec![]);
     }
@@ -197,12 +195,13 @@ pub fn set_init_content(content: &str) -> String {
     docin.set_file(db).to(LSP_DEMO_URI.to_string());
 
     docin.set_action(db).to(ActionType::Diagnostic);
-    let re = compile_dry(db, docin);
+    let _ = compile_dry(db, docin);
     // log::trace!("mod {:#?}", re.plmod(db));
     // completions = compile_dry::accumulated::<Completions>(db, docin);
     let diags = compile_dry::accumulated::<Diagnostics>(db, docin);
     let mut m = FxHashMap::<String, Vec<Diagnostic>>::default();
-    for (p, diags) in &diags {
+    for d in &diags {
+        let (p, diags) = &d.0;
         diags.iter().for_each(|x| x.get_diagnostic(p, &mut m));
     }
     log::trace!("diags: {:#?}", diags);
@@ -236,7 +235,10 @@ pub fn get_semantic_tokens() -> String {
     docin.set_params(db).to(Some((Default::default(), None)));
     compile_dry(db, docin);
     // let docs = DOCIN.docs(db);
-    let mut newtokens = compile_dry::accumulated::<PLSemanticTokens>(db, docin);
+    let mut newtokens = compile_dry::accumulated::<PLSemanticTokens>(db, docin)
+        .drain(..)
+        .map(|x| x.0)
+        .collect::<Vec<_>>();
     if newtokens.is_empty() {
         newtokens.push(SemanticTokens::default());
     }
@@ -260,7 +262,10 @@ pub fn get_semantic_tokens_full() -> String {
     docin.set_params(db).to(Some((Default::default(), None)));
     compile_dry(db, docin);
     // let docs = DOCIN.docs(db);
-    let mut newtokens = compile_dry::accumulated::<PLSemanticTokens>(db, docin);
+    let mut newtokens = compile_dry::accumulated::<PLSemanticTokens>(db, docin)
+        .drain(..)
+        .map(|x| x.0)
+        .collect::<Vec<_>>();
     if newtokens.is_empty() {
         newtokens.push(SemanticTokens::default());
     }
@@ -290,7 +295,10 @@ pub fn get_inlay_hints() -> String {
     let docin = *DOCIN;
     let binding = &DB.inner;
     let db = &mut *binding.borrow_mut();
-    let mut hints = compile_dry::accumulated::<Hints>(db, docin);
+    let mut hints = compile_dry::accumulated::<Hints>(db, docin)
+        .drain(..)
+        .map(|x| x.0)
+        .collect::<Vec<_>>();
     if hints.is_empty() {
         hints.push(vec![]);
     }
@@ -304,7 +312,7 @@ pub fn get_doc_symbol() -> String {
     let db = &mut *binding.borrow_mut();
     let doc_symbols = compile_dry::accumulated::<DocSymbols>(db, docin);
     let symbol = &doc_symbols[0];
-    return serde_json::to_value(symbol).unwrap().to_string();
+    return serde_json::to_value(&symbol.0).unwrap().to_string();
 }
 
 #[wasm_bindgen]
@@ -325,7 +333,7 @@ pub fn go_to_def(req: &str) -> String {
             .unwrap()
             .to_string();
     }
-    let def = &defs[0];
+    let def = &defs[0].0;
     return serde_json::to_value(def).unwrap().to_string();
 }
 
@@ -341,7 +349,10 @@ pub fn get_refs(req: &str) -> String {
     docin.set_action(db).to(ActionType::FindReferences);
     docin.set_params(db).to(Some((pos, None)));
     compile_dry(db, docin);
-    let refs = compile_dry::accumulated::<PLReferences>(db, docin);
+    let refs = compile_dry::accumulated::<PLReferences>(db, docin)
+        .drain(..)
+        .map(|x| x.0)
+        .collect::<Vec<_>>();
     let mut rf = vec![];
     for r in refs {
         for r in r.clone().iter() {
