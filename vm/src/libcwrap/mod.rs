@@ -5,11 +5,6 @@ extern crate winapi;
 use internal_macro::is_runtime;
 
 struct LibC {}
-#[cfg(feature = "jit")]
-pub fn reg() {
-    add_symbol_consts();
-    add_symbol_impl_libc();
-}
 
 #[cfg(not(target_os = "windows"))]
 #[no_mangle]
