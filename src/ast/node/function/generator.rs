@@ -1,4 +1,5 @@
 use super::super::cast::get_option_type;
+use super::GeneratorType;
 use super::Pos;
 
 use crate::ast::builder::BlockHandle;
@@ -39,9 +40,11 @@ pub struct GeneratorCtxData {
     pub prev_yield_bb: Option<BlockHandle>,
     pub ctx_size_handle: ValueHandle,
     pub is_para: bool,
-    pub para_tmp: ValueHandle,
+    // pub para_tmp: ValueHandle,
     pub ctx_tp: Option<Arc<RefCell<PLType>>>,
     pub ret_type: Option<Arc<RefCell<PLType>>>,
+    pub generator_type: GeneratorType,
+    pub blocks_may_yield: Vec<BlockHandle>, // blocks that may yield
 }
 
 /// # CtxFlag
@@ -84,6 +87,17 @@ pub(crate) fn end_generator<'a>(
 
     // 1. 产生真实的generator_ctx对应的pltype
     let mut tps = vec![Arc::new(RefCell::new(i8ptr))];
+    if child
+        .generator_data
+        .as_ref()
+        .unwrap()
+        .borrow()
+        .generator_type
+        .is_async()
+    {
+        tps.push(Arc::new(RefCell::new(PLType::new_i8_ptr())));
+        tps.push(Arc::new(RefCell::new(PLType::new_i8_ptr())));
+    }
     let st_tp = sttp_opt.as_mut().unwrap();
     for (k, v) in &child.generator_data.as_ref().unwrap().borrow().table {
         let pltp = PLType::Pointer(v.pltype.to_owned());
@@ -139,18 +153,27 @@ pub(crate) fn end_generator<'a>(
     // 4. 生成yield函数的done分支代码
     builder.position_at_end_block(generator_alloca_b);
     builder.build_unconditional_branch(data.borrow().entry_bb);
-    builder.position_at_end_block(done);
-    let flag = builder
-        .build_struct_gep(
-            child.return_block.unwrap().1.unwrap(),
-            0,
-            "flag",
-            &b.ret_type.as_ref().unwrap().borrow(),
-            child,
-        )
-        .unwrap();
-    builder.build_store(flag, builder.int_value(&PriType::U64, 1, false));
-    builder.build_unconditional_branch(child.return_block.unwrap().0);
+    if child
+        .generator_data
+        .as_ref()
+        .unwrap()
+        .borrow()
+        .generator_type
+        .is_iter()
+    {
+        builder.position_at_end_block(done);
+        let flag = builder
+            .build_struct_gep(
+                child.return_block.unwrap().1.unwrap(),
+                0,
+                "flag",
+                &b.ret_type.as_ref().unwrap().borrow(),
+                child,
+            )
+            .unwrap();
+        builder.build_store(flag, builder.int_value(&PriType::U64, 1, false));
+        builder.build_unconditional_branch(child.return_block.unwrap().0);
+    }
 
     // 5. 生成yield函数的跳转代码
     builder.position_at_end_block(allocab);
@@ -165,7 +188,15 @@ pub(crate) fn end_generator<'a>(
         )
         .unwrap();
     let address = builder.build_load(address, "block_address", &PLType::new_i8_ptr(), child);
-    builder.build_indirect_br(address);
+    builder.build_indirect_br(
+        address,
+        &child
+            .generator_data
+            .as_ref()
+            .unwrap()
+            .borrow()
+            .blocks_may_yield,
+    );
 
     // 6. 用最终的generator_ctx大小修正之前的malloc语句
     builder.correct_generator_ctx_malloc_inst(child, &st_tp.get_full_name());
@@ -180,6 +211,7 @@ pub(crate) fn end_generator<'a>(
 /// 2. 创建generator_ctx结构体
 /// 3. 创建generator_yield函数，替代上下文中函数为yield函数
 /// 4. 将generator的基础信息写入上下文中，方便以后使用
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn init_generator<'a>(
     child: &mut Ctx<'a>,
     i8ptr: &PLType,
@@ -188,8 +220,15 @@ pub(crate) fn init_generator<'a>(
     funcvalue: &mut usize,
     generator_alloca_b: &mut usize,
     sttp_opt: &mut Option<STType>,
+    generator_type: GeneratorType,
 ) -> Result<(), PLDiag> {
     child.generator_data = Some(Default::default());
+    child
+        .generator_data
+        .as_ref()
+        .unwrap()
+        .borrow_mut()
+        .generator_type = generator_type;
     let mut m = LinkedHashMap::default();
     m.insert(
         "address".into(),
@@ -201,6 +240,28 @@ pub(crate) fn init_generator<'a>(
             modifier: None,
         },
     );
+    if generator_type == GeneratorType::Async {
+        m.insert(
+            "task".into(),
+            Field {
+                index: 2,
+                typenode: i8ptr.clone().get_typenode(&child.plmod.path),
+                name: "task".into(),
+                range: Default::default(),
+                modifier: None,
+            },
+        );
+        m.insert(
+            "final_ret".into(),
+            Field {
+                index: 3,
+                typenode: i8ptr.clone().get_typenode(&child.plmod.path),
+                name: "final_ret".into(),
+                range: Default::default(),
+                modifier: None,
+            },
+        );
+    }
     let st_tp = STType {
         name: fnvalue.get_generator_ctx_name(),
         path: child.plmod.path,
@@ -228,14 +289,35 @@ pub(crate) fn init_generator<'a>(
             r.new_err(ErrorCode::GENERATOR_FN_MUST_RET_ITER)
                 .add_to_ctx(ctx)
         };
+        let f2 = |ctx| r.new_err(ErrorCode::ASYNC_FN_MUST_RET_TASK).add_to_ctx(ctx);
         return match &*tp.borrow() {
             PLType::Trait(t) => {
-                if t.name != "Iterator" {
-                    return Err(f(child));
-                }
+                match generator_type {
+                    GeneratorType::Iter => {
+                        if t.name != "Iterator" {
+                            return Err(f(child));
+                        }
+                    }
+                    GeneratorType::Async => {
+                        if t.name != "Task" {
+                            return Err(f2(child));
+                        }
+                    }
+                    _ => unreachable!(),
+                };
                 Ok(t.generic_map.first().unwrap().1.clone())
             }
-            _ => Err(f(child)),
+            _ => {
+                match generator_type {
+                    GeneratorType::Iter => {
+                        return Err(f(child));
+                    }
+                    GeneratorType::Async => {
+                        return Err(f2(child));
+                    }
+                    _ => unreachable!(),
+                };
+            }
         };
     })?;
     let rettp = get_option_type(child, builder, rettp)?;
@@ -276,6 +358,13 @@ pub(crate) fn save_generator_init_block<'a>(
 ) {
     builder.position_at_end_block(child.generator_data.as_ref().unwrap().borrow().entry_bb);
     let address = builder.get_block_address(entry);
+    child
+        .generator_data
+        .as_ref()
+        .unwrap()
+        .borrow_mut()
+        .blocks_may_yield
+        .push(entry);
     let data = child.generator_data.as_ref().unwrap().clone();
     let address_ptr = builder
         .build_struct_gep(

@@ -73,6 +73,26 @@ impl Node for UnaryOpNode {
                 )
                 .new_output(pltype.clone()),
             (_, TokenType::BIT_NOT) => builder.build_bit_not(exp).new_output(pltype.clone()),
+            (_, TokenType::AWAIT) => {
+                let poll_ty = match &*pltype.borrow() {
+                    PLType::Trait(st) => {
+                        if !st.name.starts_with("Task") {
+                            return Err(self
+                                .range
+                                .new_err(ErrorCode::ONLY_TASK_CAN_BE_AWAIT)
+                                .add_label(exp_range, ctx.get_file(), None)
+                                .add_to_ctx(ctx));
+                        }
+                        st.generic_infer_types
+                            .first()
+                            .map(|(_, v)| v.clone())
+                            .unwrap_or(Arc::new(RefCell::new(PLType::Unknown)))
+                    }
+                    _ => Arc::new(RefCell::new(PLType::Unknown)),
+                };
+                let awaited = builder.await_task(ctx, rv.get_value());
+                return Ok(NodeOutput::new_value(NodeValue::new(awaited, poll_ty)));
+            }
             (_exp, _op) => {
                 return Err(ctx.add_diag(self.range.new_err(ErrorCode::INVALID_UNARY_EXPRESSION)));
             }
