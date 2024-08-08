@@ -6,15 +6,6 @@ use std::{
 
 use internal_macro::is_runtime;
 
-/// see https://lang.pivotstudio.cn/docs/systemlib/vm.html#jit-invalid-memory-access-issue
-#[cfg(feature = "jit")]
-pub fn reg() {
-    add_symbol_create_mutex();
-    add_symbol_lock_mutex();
-    add_symbol_unlock_mutex();
-    add_symbol_drop_mutex();
-}
-
 struct MutexContainer {
     mutex: Mutex<()>,
     guard: Cell<Option<MutexGuard<'static, ()>>>,
