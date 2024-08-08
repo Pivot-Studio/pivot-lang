@@ -124,6 +124,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b3d1d046238990b9cf5bcde22a3fb3584ee5cf65fb2765f454ed428c7a0063da"
 
 [[package]]
+name = "append-only-vec"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "74d9f7083455f1a474276ccd32374958d2cb591024aac45101c7623b10271347"
+
+[[package]]
 name = "arc-swap"
 version = "1.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -182,18 +188,6 @@ name = "bitflags"
 version = "2.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b048fb63fd8b5923fc5aa7b340d8e156aec7ec02f0c78fa8a6ddc2613f6f71de"
-
-[[package]]
-name = "boomphf"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "617e2d952880a00583ddb9237ac3965732e8df6a92a8e7bcc054100ec467ec3b"
-dependencies = [
- "crossbeam-utils",
- "log",
- "rayon",
- "wyhash",
-]
 
 [[package]]
 name = "bumpalo"
@@ -1355,66 +1349,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b410bbe7e14ab526a0e86877eb47c6996a2bd7746f027ba551028c925390e4e9"
 
 [[package]]
-name = "orx-concurrent-bag"
-version = "1.16.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "626ac9e207af7af7c638c1dbaa89f9eb164de9a5df7834d2cd3bae603e9ec8d9"
-dependencies = [
- "orx-fixed-vec",
- "orx-pinned-concurrent-col",
- "orx-pinned-vec",
- "orx-split-vec",
-]
-
-[[package]]
-name = "orx-concurrent-vec"
-version = "1.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "560e3d819a361775846793bd3453d4ad92ead343d78a032218524d810a10f03f"
-dependencies = [
- "orx-concurrent-bag",
- "orx-fixed-vec",
- "orx-pinned-concurrent-col",
- "orx-pinned-vec",
- "orx-split-vec",
-]
-
-[[package]]
-name = "orx-fixed-vec"
-version = "2.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "92b1feab17e804565dc7203abe7010f2923c6bebbcd2ea44ce539a6b14aba7d7"
-dependencies = [
- "orx-pinned-vec",
-]
-
-[[package]]
-name = "orx-pinned-concurrent-col"
-version = "1.6.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a8090454a4719b3d663d5fd0fead482ece27573ef70a6217514f0526c6486990"
-dependencies = [
- "orx-fixed-vec",
- "orx-pinned-vec",
- "orx-split-vec",
-]
-
-[[package]]
-name = "orx-pinned-vec"
-version = "2.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "10d7e4bbaaf315d1b3d4b574a005b09659c3a696ee87791f8d50115bf7a7efe7"
-
-[[package]]
-name = "orx-split-vec"
-version = "2.14.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "492b61b2cc2fdd3d06ebe34acdbe8670c21452f06b42d025136aaef994c5b4da"
-dependencies = [
- "orx-pinned-vec",
-]
-
-[[package]]
 name = "os_str_bytes"
 version = "6.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1824,15 +1758,15 @@ checksum = "f3cb5ba0dc43242ce17de99c180e96db90b235b8a9fdc9543c96d2209116bd9f"
 [[package]]
 name = "salsa"
 version = "0.18.0"
-source = "git+https://github.com/Chronostasys/salsa?branch=master#726bd11d308e1dce2be46daed916498830113c1a"
+source = "git+https://github.com/salsa-rs/salsa?branch=master#05c7fbea456184a5f4ea490eb5f6ee9292203b33"
 dependencies = [
+ "append-only-vec",
  "arc-swap",
- "boomphf",
  "crossbeam",
  "dashmap",
  "hashlink",
  "indexmap 2.2.6",
- "orx-concurrent-vec",
+ "lazy_static",
  "parking_lot",
  "rustc-hash 2.0.0",
  "salsa-macro-rules",
@@ -1844,12 +1778,12 @@ dependencies = [
 [[package]]
 name = "salsa-macro-rules"
 version = "0.1.0"
-source = "git+https://github.com/Chronostasys/salsa?branch=master#726bd11d308e1dce2be46daed916498830113c1a"
+source = "git+https://github.com/salsa-rs/salsa?branch=master#05c7fbea456184a5f4ea490eb5f6ee9292203b33"
 
 [[package]]
 name = "salsa-macros"
 version = "0.18.0"
-source = "git+https://github.com/Chronostasys/salsa?branch=master#726bd11d308e1dce2be46daed916498830113c1a"
+source = "git+https://github.com/salsa-rs/salsa?branch=master#05c7fbea456184a5f4ea490eb5f6ee9292203b33"
 dependencies = [
  "heck",
  "proc-macro2",
@@ -2608,15 +2542,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f593a95398737aeed53e489c785df13f3618e41dbcd6718c6addbf1395aa6876"
 dependencies = [
  "memchr",
-]
-
-[[package]]
-name = "wyhash"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "baf6e163c25e3fac820b4b453185ea2dea3b6a3e0a721d4d23d75bd33734c295"
-dependencies = [
- "rand_core",
 ]
 
 [[package]]

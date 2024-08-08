@@ -13,9 +13,6 @@ pub trait TermEditor {
     /// Save the history in the specified file.
     fn save_history<P: AsRef<Path> + ?Sized>(&mut self, path: &P) -> Result<(), ReadlineError>;
 
-    /// Append new entries in the specified file.
-    fn append_history<P: AsRef<Path> + ?Sized>(&mut self, path: &P) -> Result<(), ReadlineError>;
-
     /// Add a new entry in the history.
     fn add_history_entry<S: AsRef<str> + Into<String>>(
         &mut self,
@@ -46,10 +43,6 @@ impl TermEditor for rustyline::Editor<REPLCompleter, rustyline::history::FileHis
 
     fn save_history<P: AsRef<Path> + ?Sized>(&mut self, path: &P) -> Result<(), ReadlineError> {
         self.save_history(path)
-    }
-
-    fn append_history<P: AsRef<Path> + ?Sized>(&mut self, path: &P) -> Result<(), ReadlineError> {
-        self.append_history(path)
     }
 
     fn add_history_entry<S: AsRef<str> + Into<String>>(
@@ -97,10 +90,6 @@ impl TermEditor for HeadlessEditor {
     }
 
     fn save_history<P: AsRef<Path> + ?Sized>(&mut self, _path: &P) -> Result<(), ReadlineError> {
-        Ok(())
-    }
-
-    fn append_history<P: AsRef<Path> + ?Sized>(&mut self, _path: &P) -> Result<(), ReadlineError> {
         Ok(())
     }
 

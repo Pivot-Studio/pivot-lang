@@ -734,7 +734,6 @@ pub fn emit_file<'db>(
         ModBuffer(PLModBuffer {
             path: p.to_path_buf(),
             buf,
-            is_main: builder.get_function("main").is_some(),
             name: program_emit_params.file(db).to_string(),
         })
         .accumulate(db);

@@ -398,7 +398,7 @@ impl FmtBuilder {
     }
     pub fn parse_take_op_node(&mut self, node: &TakeOpNode) {
         node.head.format(self);
-        for id in &node.field {
+        if let Some(id) = &node.field {
             self.dot();
             id.format(self);
         }
