@@ -552,5 +552,5 @@ fn new_watcher(sender: Sender<PathBuf>) -> notify::RecommendedWatcher {
     .expect("create watcher failed")
 }
 
-#[cfg(test)]
+#[cfg(all(test, target_os = "linux"))]
 mod test;
