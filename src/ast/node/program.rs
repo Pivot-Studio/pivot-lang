@@ -720,10 +720,10 @@ pub fn emit_file<'db>(
             hasher.finish()
         );
         let pp = Path::new(&hashed).with_extension("bc");
-        // let ll = Path::new(&hashed).with_extension("ll");
+        let ll = Path::new(&hashed).with_extension("ll");
         let p = pp.as_path();
         // builder.optimize();
-        // builder.print_to_file(&ll).unwrap();
+        builder.print_to_file(&ll).unwrap();
         // builder.write_bitcode_to_path(p);
         #[cfg(feature = "llvm")]
         let buf = a.write_bitcode_to_memory().as_slice().to_vec();

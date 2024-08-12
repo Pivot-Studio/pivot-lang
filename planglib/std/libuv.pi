@@ -1,0 +1,99 @@
+var UV_RUN_DEFAULT = 0 as u32;
+var UV_RUN_ONCE = 1 as u32;
+var UV_RUN_NOWAIT = 2 as u32;
+var UV_ASYNC = 1 as u32;
+var UV_IDLE = 6 as u32;
+var UV_TIMER = 13 as u32;
+
+pub struct uv_loop_t {}
+pub struct uv_idle_t {}
+pub struct uv_async_t {}
+pub struct uv_timer_t {}
+
+pub fn uv_default_loop() *uv_loop_t;
+
+fn uv_handle_get_data(handle:*()) *u8;
+
+/// # uv_handle_set_data
+/// 
+/// Set the data of the handle.
+/// 
+/// If you want to pass data using the handle,
+/// remember the GC does not know the handle's
+/// layout, so you need either call `gc::keep_alive`
+/// or store the data in the handle elsewhere.
+/// 
+/// Also, remember to call `gc::pin` on the data, or
+/// the GC evaluator may move the data to other place.
+fn uv_handle_set_data(handle:*(), data:*()) void;
+
+pub fn uv_run(loop:*uv_loop_t, mode:u32) i32;
+
+pub fn uv_close(handle:*(), cb:*()) void;
+
+pub fn uv_handle_size(tp:u32) u64;
+
+pub fn uv_idle_init(loop:*uv_loop_t, handle:*uv_idle_t) i32;
+
+pub fn uv_idle_start(handle:*uv_idle_t, cb:* ()) i32;
+
+pub fn uv_timer_init(loop:*uv_loop_t, handle:*uv_timer_t) i32;
+
+pub fn uv_timer_start(handle:*uv_timer_t, cb:* (), timeout:u64, repeat:u64) i32;
+
+pub fn uv_async_init(loop:*uv_loop_t, handle:*uv_async_t, cb:* ()) i32;
+
+pub fn uv_async_send(handle:*uv_async_t) i32;
+
+pub fn new_uv_idle_t() *uv_idle_t {
+    let re = gc::malloc_pinned(uv_handle_size(UV_IDLE) as i64);
+    return unsafe_cast<uv_idle_t>(re);
+}
+
+pub fn new_uv_async_t() *uv_async_t {
+    let re = gc::malloc_pinned(uv_handle_size(UV_ASYNC) as i64);
+    return unsafe_cast<uv_async_t>(re);
+}
+
+pub fn new_uv_timer_t() *uv_timer_t {
+    let re = gc::malloc_pinned(uv_handle_size(UV_TIMER) as i64);
+    return unsafe_cast<uv_timer_t>(re);
+}
+
+/// # uv_handle_set_data
+/// 
+/// This function is used to set the data of the handle.
+/// The function will remove the previous data from the GC,
+/// tag the new data as pinned, and keep it alive.
+/// 
+/// It is intended to be used with the `get_data_for_handle` function,
+/// which will undo the pinning and keep-alive when the data is retrieved.
+/// 
+/// ## Safety
+/// 
+/// This function should be used in pair with the `get_data_for_handle` function.
+/// Both functions should be called in the same thread.
+pub fn set_data_for_handle<H|T> (handle:*H, data:*T) void {
+    // try rm previous live data
+    let v = unsafe_cast<()>(handle);
+    let re;re = uv_handle_get_data(v);
+    gc::rm_alive_pinned(re);
+    gc::pin(data);
+    gc::keep_alive_pinned(data);
+    uv_handle_set_data(unsafe_cast<()>(handle), unsafe_cast<()>(data));
+    return;
+}
+
+/// # get_data_for_handle
+/// 
+/// This function is used to get the data of the handle.
+/// It will undo the pinning and keep-alive of the data
+/// 
+/// For more information, see the `set_data_for_handle` function.
+pub fn get_data_for_handle<H|T> (handle:*H) *T {
+    let re = uv_handle_get_data(unsafe_cast<()>(handle));
+    gc::rm_alive_pinned(re);
+    return unsafe_cast<T>(re);
+}
+
+

@@ -1,78 +1,81 @@
-use project1::test::_match;
-use project1::test::time;
-use project1::test::print;
-use project1::test::ifel;
-use project1::test::generic;
-use project1::test::st;
-use project1::test::method;
-use project1::test::global;
-use project1::test::traits;
-use project1::test::simple;
-use project1::test::flow;
-use project1::test::compiletime_reflection::test_compile_time_reflection;
-use project1::test::list;
-use project1::test::module;
-use project1::test::str;
-use project1::test::macros;
-use project1::test::union;
-use project1::test::multi_trait;
-use project1::test::tuple;
-use project1::test::fntype;
-use project1::test::closure;
-use project1::test::map;
-use project1::test::tree;
-use project1::test::fixed_point;
-use project1::test::sort_test;
-use project1::tmod2;
-// use pl_test::main;
-use project1::test::deconstruct;
-use project1::test::st::*;
-use project1::test::arr;
-use project1::test::iter;
-use project1::test::inference;
-use project1::test::rand;
-use project1::test::_hashtable;
-use project1::test::_io;
-use project1::test::future_test;
-use project1::test::std_test;
-// use std::cols::hashtable::new_hash_table;
+// use project1::test::_match;
+// use project1::test::time;
+// use project1::test::print;
+// use project1::test::ifel;
+// use project1::test::generic;
+// use project1::test::st;
+// use project1::test::method;
+// use project1::test::global;
+// use project1::test::traits;
+// use project1::test::simple;
+// use project1::test::flow;
+// use project1::test::compiletime_reflection::test_compile_time_reflection;
+// use project1::test::list;
+// use project1::test::module;
+// use project1::test::str;
+// use project1::test::macros;
+// use project1::test::union;
+// use project1::test::multi_trait;
+// use project1::test::tuple;
+// use project1::test::fntype;
+// use project1::test::closure;
+// use project1::test::map;
+// use project1::test::tree;
+// use project1::test::fixed_point;
+// use project1::test::sort_test;
+// use project1::tmod2;
+// // use pl_test::main;
+// use project1::test::deconstruct;
+// use project1::test::st::*;
+// use project1::test::arr;
+// use project1::test::iter;
+// use project1::test::inference;
+// use project1::test::rand;
+// use project1::test::_hashtable;
+// use project1::test::_io;
+// use project1::test::future_test;
+// use project1::test::std_test;
+// // use std::cols::hashtable::new_hash_table;
 
+
+use std::libuv;
+use std::thread;
+use std::task::reactor;
+use std::task::executor;
+use std::task::delay;
+use std::task::Task;
+
+
+async fn async_1() Task<()> {
+    println!("async 1");
+    let _re = await delay::delay(2000 as u64);
+    println!("async 1 end");
+
+    return ();
+}
 
 pub fn main() i64 {
-    macros::test_macros();
-    ifel::test_if_else();
-    generic::test_generic();
-    method::test_impl();
-    test_struct();
-    global::test_global();
-    traits::test_trait();
-    simple::test_simple();
-    flow::test_flow();
-    list::test_list();
-    // main::simple_test();
-    module::test_module();
-    str::test_string();
-    union::test_union();
-    multi_trait::test_multi_trait();
-    deconstruct::test_deconstruct();
-    tuple::test_tuple();
-    fntype::test_fntype()();
-    closure::test_closure();
-    tree::test_eva();
-    map::test_map();
-    fixed_point::test_fixed_point();
-    generic::ret_generic1<i64>();
-    test_compile_time_reflection();
-    iter::test_generator();
-    inference::test_inference();
-    rand::test_rand();
-    sort_test::test_sort();
-    arr::test_arr();
-    _hashtable::test_hashtable();
-    _io::test_io();
-    future_test::test_future();
-    std_test::test_std();
-
+    thread::spawn(||=>{
+        reactor::GLOBAL_REACTOR.start_ev_loop();
+        return;
+    });
+    executor::GLOBAL_EXECUTOR.spawn(async_1());
+    executor::GLOBAL_EXECUTOR.start_exec_loop();
     return 0;
 }
 
+
+fn async_cb(async_t:*libuv::uv_async_t) void {
+    // gc::pin(async_t);
+    // let p = gc::is_pinned(async_t);
+    // println!("async cb ", p);
+    let data = libuv::get_data_for_handle<libuv::uv_async_t|i64>(async_t);
+    gc::pin(data);
+    println!(*data);
+    return;
+}
+
+fn idle_cb(_idle: *libuv::uv_idle_t) void {
+    gc::DioGC__safepoint(asm_sp());
+    return;
+}

@@ -384,7 +384,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             .unwrap();
         // let obj_type = tp.get_immix_type().int_value();
         let f = self.get_gc_mod_f(ctx, malloc_fn);
-        let llvmtp = self.get_basic_type_op(tp, ctx).unwrap();
+        let llvmtp = self.get_basic_type_op(tp, ctx).expect(&format!("{:?}", tp));
         let immix_tp = self
             .context
             .i8_type()
@@ -1406,7 +1406,8 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 self.ditypes_placeholder
                     .borrow_mut()
                     .insert(u.get_full_name(), RefCell::new(vec![]));
-                let ditps = u
+                let ditps = ctx.run_in_type_mod(u, |ctx, u| {
+                     u
                     .sum_types
                     .iter()
                     .map(|v| {
@@ -1427,7 +1428,8 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                             )
                             .as_type()
                     })
-                    .collect::<Vec<_>>();
+                    .collect::<Vec<_>>()
+                });
                 let ptr = self.gc_ptr_ty();
                 let tp = self.dibuilder.create_union_type(
                     self.get_cur_di_file().as_debug_info_scope(),
@@ -1856,8 +1858,12 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         let f = self.get_llvm_value(f).unwrap();
         let mut f_tp: Option<FunctionType> = None;
         let mut fv = None;
+        let mut is_ffi = false;
         let f = if f.is_function_value() {
             let ff = f.into_function_value();
+            if !ff.get_name().to_str().unwrap().contains("..") {
+                is_ffi = true;
+            }
             fv = Some(ff);
             f_tp = Some(ff.get_type());
             ff.as_global_value().as_pointer_value()
@@ -1934,7 +1940,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         if matches!(
             &*get_type_deep(Arc::new(RefCell::new(ret_type.clone()))).borrow(),
             PLType::Pointer(_)
-        ) {
+        ) && !is_ffi {
             let alloca = self.alloc("call_ret", ret_type, ctx, None);
             builder
                 .build_store(
