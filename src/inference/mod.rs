@@ -242,11 +242,7 @@ impl TyInfer {
                         let ty = infer.get_type(ctx, builder, unify_table);
                         if !ty.borrow().is_complete() {
                             return new_arc_refcell(PLType::PartialInferred(Arc::new(
-                                RefCell::new(PLType::Arr(ARRType {
-                                    element_type: ty.clone(),
-                                    size_handle: 0,
-                                    generic_map: IndexMap::from([(Ustr::from("T"), ty)]),
-                                })),
+                                RefCell::new(PLType::Pointer(ty.clone())),
                             )));
                         }
                         Arc::new(RefCell::new(PLType::Pointer(ty)))
@@ -327,6 +323,20 @@ pub fn unknown_arc() -> Arc<RefCell<PLType>> {
 pub enum SymbolType {
     Var(TyVariable),
     PLType(Arc<RefCell<PLType>>),
+}
+
+impl SymbolType {
+    pub fn get_type<'a, 'b>(
+        &self,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b BuilderEnum<'a, '_>,
+        unify_table: &mut UnificationTable<InPlace<TyVariable>>,
+    ) -> Arc<RefCell<PLType>> {
+        match self {
+            SymbolType::Var(v) => unify_table.probe_value(*v).get_type(ctx, builder, unify_table),
+            SymbolType::PLType(ty) => ty.clone(),
+        }
+    }
 }
 
 impl<'ctx> InferenceCtx<'ctx> {
@@ -621,7 +631,11 @@ impl<'ctx> InferenceCtx<'ctx> {
                         return SymbolType::Var(id);
                     }
                 }
-                let plmod = &ctx.get_root_ctx().plmod;
+                let plmod = if ctx.get_root_ctx().plmod.path == ctx.plmod.path {
+                    &ctx.get_root_ctx().plmod
+                }else {
+                    &ctx.db.get_module(ctx.plmod.path).unwrap()
+                };
                 if let Ok(plmod) = ex.solve_mod(plmod, ctx) {
                     if let Some(t) = plmod.global_table.get(&ex.id.name) {
                         return SymbolType::PLType(t.tp.clone());

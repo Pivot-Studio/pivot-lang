@@ -14,9 +14,13 @@ pub mod libcwrap;
 pub mod logger;
 pub mod mutex;
 pub mod time;
+pub use libuv_sys2::*;
 
 #[is_runtime]
 fn test_vm_link() -> i64 {
+    // libuv_sys2::uv_close(handle, cb, timeout, repeat)
+    // let a = libuv_sys2::uv_async_cb;
+    // let re = libuv_sys2::uv_handle_size(libuv_sys2::uv_handle_type_UV_IDLE);
     66
 }
 
@@ -99,13 +103,13 @@ fn new_thread(f: *mut i128) {
     // immix::gc_add_root(data_ptr  as *mut _, ObjectType::Pointer.int_value());
     let c = move || {
         // thread::sleep(std::time::Duration::from_secs(1));
-        let handle = immix::gc_keep_live(ptr_i as _);
+        immix::gc_keep_live(ptr_i as _);
         // immix::set_evacuation(false);
         // immix::gc_add_root(&mut f as *mut _ as *mut _, ObjectType::Trait.int_value());
         s.send(()).unwrap();
         func(data_ptr);
         // immix::gc_remove_root(&mut f as *mut _ as *mut _);
-        immix::gc_rm_live(handle);
+        immix::gc_rm_live(ptr_i as _);
         immix::no_gc_thread();
     };
     thread::spawn(c);

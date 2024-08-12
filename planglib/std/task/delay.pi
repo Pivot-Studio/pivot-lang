@@ -1,0 +1,38 @@
+use std::task::Task;
+use std::task::reactor;
+use std::task::executor;
+
+
+
+pub struct DelayTask {
+    first:bool;
+    ready:bool;
+    delay:u64;
+}
+
+use std::io;
+impl Task<()> for DelayTask {
+    fn poll(wk:||=>void) Option<()> {
+        if self.first {
+            self.first = false;
+            reactor::GLOBAL_REACTOR.add_timer(self.delay , 0 as u64, || => {
+                self.ready = true;
+                wk();
+                return;
+            });
+        }
+
+        if self.ready {
+            return () as Option<()>;
+        }
+        return None{} as Option<()>;
+    }
+}
+
+pub fn delay(delay:u64) Task<()> {
+    return DelayTask {
+        first:true,
+        ready:false,
+        delay:delay,
+    } as Task<()>;
+}

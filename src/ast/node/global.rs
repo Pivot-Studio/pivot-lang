@@ -104,7 +104,7 @@ impl GlobalNode {
         builder: &'b BuilderEnum<'a, '_>,
     ) -> Result<(), PLDiag> {
         let mut infer_ctx = InferenceCtx::new(ctx.unify_table.clone());
-        infer_ctx.inference(&mut self.exp, ctx, builder);
+        let ty = infer_ctx.inference(&mut self.exp, ctx, builder);
         if {
             #[cfg(feature = "repl")]
             {
@@ -118,14 +118,12 @@ impl GlobalNode {
         {
             return Err(ctx.add_diag(self.var.range.new_err(ErrorCode::REDEFINE_SYMBOL)));
         }
-        *ctx.need_highlight.borrow_mut() += 1;
-        let v = self.exp.emit(ctx, builder)?.get_value();
-        *ctx.need_highlight.borrow_mut() -= 1;
-        if v.is_none() {
-            return Err(ctx.add_diag(self.range.new_err(ErrorCode::UNDEFINED_TYPE)));
+        let ty = ty.get_type(ctx, builder, &mut ctx.unify_table.clone().borrow_mut());
+
+        if !ty.borrow().is_complete() {
+            return Err(ctx.add_diag(self.range.new_err(ErrorCode::TYPE_CANNOT_BE_FULLY_INFERRED)));
         }
-        let v = v.unwrap();
-        let pltype = v.get_ty();
+        let pltype = ty;
         let globalptr = builder.add_global(
             // &ctx.plmod.get_full_name(self.var.name),
             &ctx.plmod.get_full_name(ustr(&format!(

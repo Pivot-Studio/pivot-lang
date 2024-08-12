@@ -1,3 +1,4 @@
 pub trait Task<T> {
     fn poll(wk:||=>void) Option<T>;
 }
+

@@ -1,0 +1,41 @@
+use std::chan;
+use std::task::Task;
+struct SingleThreadExecutor {
+    pub ch:*chan::Chan<| ||=>void |=>void>;
+}
+
+
+var GLOBAL_EXECUTOR = new_executor(&chan::channel<|||=>void |=>void>(10 as u64));
+
+
+pub fn new_executor(queue: *chan::Chan<|||=>void |=>void>) SingleThreadExecutor {
+    return SingleThreadExecutor {
+        ch: queue,
+    };
+}
+
+use std::io;
+impl SingleThreadExecutor {
+    pub fn start_exec_loop() void {
+        while true {
+            let work: | ||=>void |=>void = self.ch.recv();
+            let waker = || => void {
+                self.ch.send(work);
+                return;  
+            };
+            work(waker);
+        }
+        return;
+    }
+
+    pub fn spawn<T>(task:Task<T>) void {
+        self.ch.send(|wk|=>{
+            task.poll(wk);
+            return;
+        });
+        return;
+    }
+}
+
+
+

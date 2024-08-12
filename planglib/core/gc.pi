@@ -1,4 +1,4 @@
-fn DioGC__malloc(size: i64, obj_type: u8, rsp:i64) *u8;
+fn DioGC__malloc(size: i64, obj_type: u8, rsp:i64) *();
 
 pub fn DioGC__collect() void;
 
@@ -10,9 +10,31 @@ pub fn DioGC__enable_auto_collect() void;
 
 pub fn DioGC__get_stw_num() i64;
 
-fn DioGC__stuck_begin(sp:i64) void;
+pub fn DioGC__stuck_begin(sp:i64) void;
 
-fn DioGC__stuck_end() void;
+pub fn DioGC__pin(ptr: * u8) void;
+
+fn DioGC__keep_live_pinned(ptr: *u8) void;
+
+fn DioGC__rm_live_pinned(ptr: *u8) void;
+
+fn DioGC__is_pinned(ptr: *u8) i32;
+
+pub fn is_pinned<T>(ptr: *T) bool {
+    return DioGC__is_pinned(unsafe_cast<u8>(ptr)) == 1;
+}
+
+pub fn keep_alive_pinned<T>(ptr: *T) void {
+    DioGC__keep_live_pinned(unsafe_cast<u8>(ptr));
+    return;
+}
+
+pub fn rm_alive_pinned<T>(ptr: *T) void {
+    DioGC__rm_live_pinned(unsafe_cast<u8>(ptr));
+    return;
+}
+
+pub fn DioGC__stuck_end() void;
 fn DioGC__add_coro_stack(sp:i64, stack:* u8) void;
 fn DioGC__remove_coro_stack(stack:i64) void;
 
@@ -29,6 +51,11 @@ pub fn add_coro_stack(stack:* u8) void {
 
 pub fn remove_coro_stack(stack:i64) void {
     DioGC__remove_coro_stack(stack);
+    return;
+}
+
+pub fn pin<T>(ptr: *T) void {
+    DioGC__pin(unsafe_cast<u8>(ptr));
     return;
 }
 
@@ -71,8 +98,6 @@ pub fn int_to_ptr(i: i64) *u8;
 pub fn ptr_to_int(ptr: *u8) i64;
 
 pub fn utf8_count(ptr: *u8, len:i64) i64;
-
-    fn printi64ln(i:i64) void;
 
 impl string {
     pub fn append(str: string) void {
@@ -168,4 +193,28 @@ pub fn string_eq(l:string, r:string) bool {
         }
     }
     return true;
+}
+
+
+/// # malloc
+/// 
+/// Allocate memory using GC
+/// 
+/// The allocated memory is treated as atomic, which means the memory
+/// shall not contain any gc pointer.
+pub fn malloc(size: i64) * () {
+    return DioGC__malloc(size, 0 as u8, asm_sp());
+}
+
+
+/// # malloc_pinned
+/// 
+/// Allocate memory using GC
+/// 
+/// The allocated memory is treated as pinned-atomic, which means the memory
+/// shall not contain any gc pointer, and it will not be moved by gc.
+pub fn malloc_pinned(size: i64) * () {
+    let mem = DioGC__malloc(size, 0 as u8, asm_sp());
+    pin(mem);
+    return mem;
 }

@@ -1,0 +1,116 @@
+use std::libuv;
+use std::chan;
+
+struct UVReactor {
+    async_t: *libuv::uv_async_t;
+    idle_t: *libuv::uv_idle_t;
+    loop: *libuv::uv_loop_t;
+    ch: *chan::Chan<EV>;
+}
+
+
+type EV = TimerEV;
+
+struct TimerEV {
+    wake: ||=>void;
+    timeout_ms: u64;
+    repeat_ms: u64;
+}
+
+var GLOBAL_REACTOR = new_uv_reactor();
+
+
+fn timer_cb(timer:*libuv::uv_timer_t) void {
+    let ev = libuv::get_data_for_handle<libuv::uv_timer_t|TimerEV>(timer);
+    ev.wake();
+    let cb = unsafe_cast<()>(&close_cb);
+    let handle = unsafe_cast<()>(timer);
+    libuv::uv_close(handle,cb);
+    return;
+}
+
+fn close_cb(handle:*()) void {
+    gc::rm_alive_pinned(handle);
+    return;
+}
+
+
+use std::io;
+
+
+fn async_cb(async_t:*libuv::uv_async_t) void {
+    let reactor = libuv::get_data_for_handle<libuv::uv_async_t|UVReactor>(async_t);
+    let ch = reactor.ch;
+    let ev = ch.recv();
+    match ev {
+        TimerEV(ev) => {
+            let timer = libuv::new_uv_timer_t();
+            gc::keep_alive_pinned(timer);
+            let cb = unsafe_cast<()>(&timer_cb);
+            libuv::uv_timer_init(libuv::uv_default_loop(), timer);
+            libuv::set_data_for_handle(timer, &ev);
+            libuv::uv_timer_start(timer, cb, ev.timeout_ms, ev.repeat_ms);
+
+        }
+        _ => {
+        }
+    }
+    return;
+}
+
+fn idle_cb(_idle: *libuv::uv_idle_t) void {
+    gc::DioGC__safepoint(asm_sp());
+    return;
+}
+
+
+pub fn new_uv_reactor() *UVReactor {
+    let loop = libuv::uv_default_loop();
+    let async_t = libuv::new_uv_async_t();
+    let cb = unsafe_cast<()>(&async_cb);
+    let idle_t = libuv::new_uv_idle_t();
+    gc::pin(idle_t);
+    gc::keep_alive_pinned(idle_t);
+    gc::pin(async_t);
+    gc::keep_alive_pinned(async_t);
+    let idle_cb = unsafe_cast<()>(&idle_cb);
+    libuv::uv_idle_init(loop, idle_t);
+    libuv::uv_idle_start(idle_t, idle_cb);
+    libuv::uv_async_init(loop, async_t, cb);
+    let ch = &chan::channel<|EV|=>void>(10 as u64);
+    gc::pin(ch);
+    let reactor = &UVReactor{
+        async_t: async_t,
+        idle_t: idle_t,
+        loop: loop,
+        ch: ch,
+    };
+    gc::pin(reactor);
+    libuv::set_data_for_handle(async_t, reactor);
+    return reactor;
+}
+
+
+impl UVReactor {
+    pub fn start_ev_loop() void {
+        libuv::uv_run(self.loop, libuv::UV_RUN_DEFAULT);
+        return;
+    }
+
+
+    pub fn add_timer(timeout_ms: u64, repeat_ms: u64, wake: ||=>void) void {
+        let ev = TimerEV{
+            wake: wake,
+            timeout_ms: timeout_ms,
+            repeat_ms: repeat_ms,
+        };
+        let e = ev as EV;
+        self.ch.send(e);
+        libuv::uv_async_send(self.async_t);
+        return;
+    }
+
+    
+}
+
+
