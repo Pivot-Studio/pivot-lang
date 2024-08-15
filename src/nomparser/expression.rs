@@ -8,16 +8,13 @@ use nom::{
     IResult,
 };
 
-use crate::{
-    ast::node::function::FuncCallNode,
-    ast::{
-        node::{
-            function::ClosureNode,
-            pointer::{PointerOpEnum, PointerOpNode},
-        },
-        range::Pos,
-        tokens::TokenType,
+use crate::ast::{
+    node::{
+        function::{ClosureNode, FuncCallNode, GeneratorType},
+        pointer::{PointerOpEnum, PointerOpNode},
     },
+    range::Pos,
+    tokens::TokenType,
 };
 use crate::{ast::node::macro_nodes::MacroCallNode, nomparser::Span};
 use internal_macro::{test_parser, test_parser_error};
@@ -329,10 +326,12 @@ fn parantheses_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
 #[test_parser("|a:i64| =>void{return a;}")]
 #[test_parser("|a| =>void{return a;}")]
 #[test_parser("|a| =>{return a;}")]
+#[test_parser("async |a| =>{return a;}")]
 fn closure(input: Span) -> IResult<Span, Box<NodeEnum>> {
     map_res(
         tuple((
             tuple((
+                opt(tag_modifier(TokenType::ASYNC_MARKER)),
                 tag_token_symbol_ex(TokenType::GENERIC_SEP),
                 separated_list0(
                     tag_token_symbol_ex(TokenType::COMMA),
@@ -347,7 +346,7 @@ fn closure(input: Span) -> IResult<Span, Box<NodeEnum>> {
             opt(type_name),
             statement_block,
         )),
-        |(((_, sr), args, _), _, ret, body)| {
+        |((modi, (_, sr), args, _), _, ret, body)| {
             let range = sr.start.to(body.range().end);
             res_enum(
                 ClosureNode {
@@ -356,6 +355,10 @@ fn closure(input: Span) -> IResult<Span, Box<NodeEnum>> {
                     body,
                     ret,
                     ret_id: None,
+                    generator_ty: match modi {
+                        Some(_) => GeneratorType::Async,
+                        None => GeneratorType::None,
+                    },
                 }
                 .into(),
             )

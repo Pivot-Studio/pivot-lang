@@ -36,6 +36,7 @@
 // use project1::test::future_test;
 // use project1::test::std_test;
 // // use std::cols::hashtable::new_hash_table;
+use project1::test::std_test;
 
 
 use std::libuv;
@@ -55,6 +56,7 @@ async fn async_1() Task<()> {
 }
 
 pub fn main() i64 {
+    std_test::test_std();
     thread::spawn(||=>{
         reactor::GLOBAL_REACTOR.start_ev_loop();
         return;

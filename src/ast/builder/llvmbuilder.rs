@@ -384,7 +384,9 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             .unwrap();
         // let obj_type = tp.get_immix_type().int_value();
         let f = self.get_gc_mod_f(ctx, malloc_fn);
-        let llvmtp = self.get_basic_type_op(tp, ctx).expect(&format!("{:?}", tp));
+        let llvmtp = self
+            .get_basic_type_op(tp, ctx)
+            .unwrap_or_else(|| panic!("{:?}", tp));
         let immix_tp = self
             .context
             .i8_type()
@@ -1407,28 +1409,28 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     .borrow_mut()
                     .insert(u.get_full_name(), RefCell::new(vec![]));
                 let ditps = ctx.run_in_type_mod(u, |ctx, u| {
-                     u
-                    .sum_types
-                    .iter()
-                    .map(|v| {
-                        let tp =
-                            PLType::Pointer(v.get_type(ctx, &self.clone().into(), true).unwrap());
-                        let base_di = self.get_ditype(&tp, ctx).unwrap();
-                        self.dibuilder
-                            .create_member_type(
-                                self.get_cur_di_file().as_debug_info_scope(),
-                                &tp.get_name(),
-                                self.get_cur_di_file(),
-                                u.range.start.line as u32 + 1,
-                                td.get_bit_size(&self.context.i64_type()),
-                                td.get_abi_alignment(&self.context.i64_type()),
-                                0,
-                                DIFlags::PUBLIC,
-                                base_di,
-                            )
-                            .as_type()
-                    })
-                    .collect::<Vec<_>>()
+                    u.sum_types
+                        .iter()
+                        .map(|v| {
+                            let tp = PLType::Pointer(
+                                v.get_type(ctx, &self.clone().into(), true).unwrap(),
+                            );
+                            let base_di = self.get_ditype(&tp, ctx).unwrap();
+                            self.dibuilder
+                                .create_member_type(
+                                    self.get_cur_di_file().as_debug_info_scope(),
+                                    &tp.get_name(),
+                                    self.get_cur_di_file(),
+                                    u.range.start.line as u32 + 1,
+                                    td.get_bit_size(&self.context.i64_type()),
+                                    td.get_abi_alignment(&self.context.i64_type()),
+                                    0,
+                                    DIFlags::PUBLIC,
+                                    base_di,
+                                )
+                                .as_type()
+                        })
+                        .collect::<Vec<_>>()
                 });
                 let ptr = self.gc_ptr_ty();
                 let tp = self.dibuilder.create_union_type(
@@ -1940,7 +1942,8 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         if matches!(
             &*get_type_deep(Arc::new(RefCell::new(ret_type.clone()))).borrow(),
             PLType::Pointer(_)
-        ) && !is_ffi {
+        ) && !is_ffi
+        {
             let alloca = self.alloc("call_ret", ret_type, ctx, None);
             builder
                 .build_store(
@@ -2797,6 +2800,10 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         allocab: BlockHandle,
         tp: &PLType,
     ) {
+        let is_by_val = matches!(
+            &*get_type_deep(Arc::new(RefCell::new(tp.clone()))).borrow(),
+            PLType::Pointer(_) | PLType::Primitive(_)
+        );
         let divar = self.dibuilder.create_parameter_variable(
             self.discope.get(),
             &fnvalue.param_names[i],
@@ -2832,28 +2839,38 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             let origin_bb = self.get_cur_basic_block();
             self.position_at_end_block(bb_v);
             child.ctx_flag = CtxFlag::Normal;
-            let ptr = self.alloc("param_ptr", tp, child, None);
+            let mut ptr = self.alloc("param_ptr", tp, child, None);
             child.ctx_flag = CtxFlag::InGeneratorYield;
+            let n = data.borrow().para_offset;
             let ctx_v = data.borrow().ctx_handle;
             let para_ptr = self
                 .build_struct_gep(
                     ctx_v,
-                    (i + 2) as u32,
+                    (i + n) as u32,
                     "para",
                     &data.borrow().ctx_tp.as_ref().unwrap().borrow(),
                     child,
                 )
                 .unwrap();
 
-            self.build_store(
-                ptr,
-                self.get_llvm_value_handle(
+            if is_by_val {
+                self.build_store(
+                    ptr,
+                    self.get_llvm_value_handle(
+                        &funcvalue
+                            .get_nth_param(i as u32)
+                            .unwrap()
+                            .as_any_value_enum(),
+                    ),
+                );
+            } else {
+                ptr = self.get_llvm_value_handle(
                     &funcvalue
                         .get_nth_param(i as u32)
                         .unwrap()
                         .as_any_value_enum(),
-                ),
-            );
+                );
+            }
             self.build_store(para_ptr, ptr);
             self.position_at_end_block(origin_bb);
 
@@ -2871,7 +2888,10 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             .unwrap()
             .as_basic_value_enum();
 
-        let nv_handle = self.get_llvm_value_handle(&nv.as_any_value_enum());
+        let mut nv_handle = self.get_llvm_value_handle(&nv.as_any_value_enum());
+        if !is_by_val {
+            nv_handle = self.build_load(nv_handle, "load", tp, child);
+        }
 
         self.position_at_end_block(cubb);
         self.build_store(alloca, nv_handle);
@@ -3106,7 +3126,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
     fn i8ptr_null(&self) -> ValueHandle {
         self.get_llvm_value_handle(&self.gc_ptr_ty().const_null().into())
     }
-
+    #[allow(clippy::too_many_arguments)]
     fn create_closure_parameter_variable(
         &self,
         i: u32,
@@ -3114,7 +3134,52 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         alloca: ValueHandle,
         allocab: BlockHandle,
         tp: &PLType,
+        child: &mut Ctx<'a>,
     ) {
+        let is_by_val = matches!(
+            &*get_type_deep(Arc::new(RefCell::new(tp.clone()))).borrow(),
+            PLType::Pointer(_) | PLType::Primitive(_)
+        );
+        if child.ctx_flag == CtxFlag::InGeneratorYield {
+            let data = child.generator_data.as_ref().unwrap().clone();
+            let bb_v = data.borrow().entry_bb;
+            let bb = self.get_llvm_block(bb_v).unwrap();
+            let funcvalue = bb.get_parent().unwrap();
+            let origin_bb = self.get_cur_basic_block();
+            self.position_at_end_block(bb_v);
+            child.ctx_flag = CtxFlag::Normal;
+            let mut ptr = self.alloc("param_ptr", tp, child, None);
+            child.ctx_flag = CtxFlag::InGeneratorYield;
+            let n = data.borrow().para_offset;
+            let ctx_v = data.borrow().ctx_handle;
+            let para_ptr = self
+                .build_struct_gep(
+                    ctx_v,
+                    i + n as u32 - 1,
+                    "para",
+                    &data.borrow().ctx_tp.as_ref().unwrap().borrow(),
+                    child,
+                )
+                .unwrap();
+
+            if is_by_val {
+                self.build_store(
+                    ptr,
+                    self.get_llvm_value_handle(
+                        &funcvalue.get_nth_param(i).unwrap().as_any_value_enum(),
+                    ),
+                );
+            } else {
+                ptr = self.get_llvm_value_handle(
+                    &funcvalue.get_nth_param(i).unwrap().as_any_value_enum(),
+                );
+            }
+            self.build_store(para_ptr, ptr);
+            self.position_at_end_block(origin_bb);
+
+            return;
+        }
+
         let funcvalue = self.get_llvm_value(f).unwrap().into_function_value();
 
         let cubb = self.get_cur_basic_block();
@@ -3136,10 +3201,15 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         let _nv_handle = self.get_llvm_value_handle(&nv.as_any_value_enum());
 
         self.position_at_end_block(cubb);
-        self.build_store(
-            alloca,
-            self.get_llvm_value_handle(&funcvalue.get_nth_param(i).unwrap().as_any_value_enum()),
-        );
+        let param =
+            self.get_llvm_value_handle(&funcvalue.get_nth_param(i).unwrap().as_any_value_enum());
+        let param = if is_by_val {
+            param
+        } else {
+            self.build_load(param, "load", tp, child)
+        };
+
+        self.build_store(alloca, param);
     }
 
     /// # create_closure_fn

@@ -922,6 +922,66 @@ pub struct FnType {
 }
 impl FnType {}
 
+pub trait Callable {
+    fn iter_param_tys<'a, 'b>(
+        &self,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b BuilderEnum<'a, '_>,
+        gen_code: bool,
+    ) -> Vec<Arc<RefCell<PLType>>>;
+    fn get_ret_ty<'a, 'b>(
+        &self,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b BuilderEnum<'a, '_>,
+        gen_code: bool,
+    ) -> Arc<RefCell<PLType>>;
+}
+
+impl Callable for FNValue {
+    fn iter_param_tys<'a, 'b>(
+        &self,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b BuilderEnum<'a, '_>,
+        gen_code: bool,
+    ) -> Vec<Arc<RefCell<PLType>>> {
+        self.fntype
+            .param_pltypes
+            .iter()
+            .map(|t| t.get_type(ctx, builder, gen_code).unwrap_or(unknown_arc()))
+            .collect()
+    }
+    fn get_ret_ty<'a, 'b>(
+        &self,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b BuilderEnum<'a, '_>,
+        gen_code: bool,
+    ) -> Arc<RefCell<PLType>> {
+        self.fntype
+            .ret_pltype
+            .get_type(ctx, builder, gen_code)
+            .unwrap_or(unknown_arc())
+    }
+}
+
+impl Callable for ClosureType {
+    fn iter_param_tys(
+        &self,
+        _ctx: &mut Ctx<'_>,
+        _builder: &BuilderEnum<'_, '_>,
+        _gen_code: bool,
+    ) -> Vec<Arc<RefCell<PLType>>> {
+        self.arg_types.clone()
+    }
+    fn get_ret_ty(
+        &self,
+        _ctx: &mut Ctx<'_>,
+        _builder: &BuilderEnum<'_, '_>,
+        _gen_code: bool,
+    ) -> Arc<RefCell<PLType>> {
+        self.ret_type.clone()
+    }
+}
+
 #[range]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FNValue {
@@ -948,7 +1008,7 @@ impl TryFrom<PLType> for FNValue {
     }
 }
 
-static GLOB_COUNTER: AtomicI64 = AtomicI64::new(0);
+pub static GLOB_COUNTER: AtomicI64 = AtomicI64::new(0);
 
 impl FNValue {
     pub fn get_generator_ctx_name(&self) -> Ustr {

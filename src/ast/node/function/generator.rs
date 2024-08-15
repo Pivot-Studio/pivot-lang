@@ -11,23 +11,24 @@ use crate::ast::ctx::PLSymbolData;
 use crate::ast::diag::ErrorCode;
 
 use crate::ast::diag::PLDiag;
-use crate::ast::node::TypeNode;
+use crate::ast::pltype::Callable;
 use crate::ast::pltype::PriType;
+use crate::ast::pltype::GLOB_COUNTER;
 use crate::ast::tokens::TokenType;
+use crate::ast::traits::CustomType;
+use crate::inference::unknown_arc;
 
 use linked_hash_map::LinkedHashMap;
 use ustr::Ustr;
 
-use crate::ast::pltype::FNValue;
-
 use std::cell::RefCell;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use crate::ast::pltype::Field;
 
 use crate::ast::pltype::STType;
 
-use crate::ast::node::RangeTrait;
 use crate::ast::pltype::PLType;
 
 #[derive(Clone, Default)]
@@ -40,6 +41,7 @@ pub struct GeneratorCtxData {
     pub prev_yield_bb: Option<BlockHandle>,
     pub ctx_size_handle: ValueHandle,
     pub is_para: bool,
+    pub para_offset: usize,
     // pub para_tmp: ValueHandle,
     pub ctx_tp: Option<Arc<RefCell<PLType>>>,
     pub ret_type: Option<Arc<RefCell<PLType>>>,
@@ -72,6 +74,7 @@ pub struct ClosureCtxData {
     pub data_tp: Option<Arc<RefCell<PLType>>>,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn end_generator<'a>(
     child: &mut Ctx<'a>,
     builder: &BuilderEnum<'a, '_>,
@@ -80,6 +83,7 @@ pub(crate) fn end_generator<'a>(
     funcvalue: usize,
     generator_alloca_b: usize,
     allocab: usize,
+    is_closure: bool,
 ) -> Result<(), PLDiag> {
     child.ctx_flag = CtxFlag::Normal;
     let done = builder.get_cur_basic_block();
@@ -97,6 +101,9 @@ pub(crate) fn end_generator<'a>(
     {
         tps.push(Arc::new(RefCell::new(PLType::new_i8_ptr())));
         tps.push(Arc::new(RefCell::new(PLType::new_i8_ptr())));
+        if is_closure {
+            tps.push(Arc::new(RefCell::new(PLType::new_i8_ptr())));
+        }
     }
     let st_tp = sttp_opt.as_mut().unwrap();
     for (k, v) in &child.generator_data.as_ref().unwrap().borrow().table {
@@ -212,15 +219,16 @@ pub(crate) fn end_generator<'a>(
 /// 3. 创建generator_yield函数，替代上下文中函数为yield函数
 /// 4. 将generator的基础信息写入上下文中，方便以后使用
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn init_generator<'a>(
+pub(crate) fn init_generator<'a, T: Callable + CustomType>(
     child: &mut Ctx<'a>,
     i8ptr: &PLType,
-    fnvalue: &FNValue,
+    fnvalue: &T,
     builder: &BuilderEnum<'a, '_>,
     funcvalue: &mut usize,
     generator_alloca_b: &mut usize,
     sttp_opt: &mut Option<STType>,
     generator_type: GeneratorType,
+    is_closure: bool,
 ) -> Result<(), PLDiag> {
     child.generator_data = Some(Default::default());
     child
@@ -261,9 +269,36 @@ pub(crate) fn init_generator<'a>(
                 modifier: None,
             },
         );
+        if is_closure {
+            m.insert(
+                "closure".into(),
+                Field {
+                    index: 4,
+                    typenode: i8ptr.clone().get_typenode(&child.plmod.path),
+                    name: "closure".into(),
+                    range: Default::default(),
+                    modifier: None,
+                },
+            );
+            child
+                .generator_data
+                .as_ref()
+                .unwrap()
+                .borrow_mut()
+                .para_offset = 5;
+        } else {
+            child
+                .generator_data
+                .as_ref()
+                .unwrap()
+                .borrow_mut()
+                .para_offset = 4;
+        }
     }
+    let name =
+        "__generator_ctx".to_string() + &GLOB_COUNTER.fetch_add(1, Ordering::SeqCst).to_string();
     let st_tp = STType {
-        name: fnvalue.get_generator_ctx_name(),
+        name: name.into(),
         path: child.plmod.path,
         fields: m,
         range: Default::default(),
@@ -283,8 +318,8 @@ pub(crate) fn init_generator<'a>(
     builder.opaque_struct_type(&st_tp.get_full_name());
     builder.add_body_to_struct_type(&st_tp.get_full_name(), &st_tp, child);
     let rettp = child.run_in_type_mod(fnvalue, |child, fnvalue| {
-        let tp = fnvalue.fntype.ret_pltype.get_type(child, builder, false)?;
-        let r = fnvalue.fntype.ret_pltype.range();
+        let tp = fnvalue.get_ret_ty(child, builder, false);
+        let r = fnvalue.get_range();
         let f = |ctx| {
             r.new_err(ErrorCode::GENERATOR_FN_MUST_RET_ITER)
                 .add_to_ctx(ctx)
@@ -299,13 +334,18 @@ pub(crate) fn init_generator<'a>(
                         }
                     }
                     GeneratorType::Async => {
-                        if t.name != "Task" {
+                        if t.name != "Task" && !t.name.starts_with("Task<") {
                             return Err(f2(child));
                         }
                     }
                     _ => unreachable!(),
                 };
-                Ok(t.generic_map.first().unwrap().1.clone())
+                Ok(t.generic_map.first().map(|(_, t)| t.clone()).unwrap_or(
+                    t.generic_infer_types
+                        .first()
+                        .map(|(_, t)| t.clone())
+                        .unwrap_or(unknown_arc()),
+                ))
             }
             _ => {
                 match generator_type {
@@ -325,16 +365,12 @@ pub(crate) fn init_generator<'a>(
     let f = builder.add_generator_yield_fn(child, &st_tp.get_full_name(), &rettp.borrow());
     child.function = Some(f);
     let allocab = builder.append_basic_block(*funcvalue, "alloc");
-    let param_tys = fnvalue
-        .fntype
-        .param_pltypes
-        .iter()
-        .map(|x| x.get_type(child, builder, false).unwrap())
-        .collect::<Vec<_>>();
+    let param_tys = fnvalue.iter_param_tys(child, builder, false);
     builder.create_params_roots(*funcvalue, allocab, &param_tys);
     let entry = builder.append_basic_block(*funcvalue, "set_up_entry");
     builder.position_at_end_block(allocab);
     *generator_alloca_b = allocab;
+    let old_f = *funcvalue;
     *funcvalue = f;
     builder.position_at_end_block(entry);
     let ctx_handle = builder.alloc("___ctx", &PLType::Struct(st_tp.clone()), child, None);
@@ -345,8 +381,30 @@ pub(crate) fn init_generator<'a>(
         .unwrap()
         .borrow_mut()
         .ctx_handle = ctx_handle;
+
     child.generator_data.as_ref().unwrap().borrow_mut().ctx_tp =
         Some(Arc::new(RefCell::new(PLType::Struct(st_tp.clone()))));
+    if is_closure {
+        let para_ptr = builder
+            .build_struct_gep(
+                ctx_handle,
+                4_u32,
+                "closure",
+                &child
+                    .generator_data
+                    .clone()
+                    .unwrap()
+                    .borrow_mut()
+                    .ctx_tp
+                    .as_ref()
+                    .unwrap()
+                    .borrow(),
+                child,
+            )
+            .unwrap();
+        let closure_in = builder.get_nth_param(old_f, 0);
+        builder.build_store(para_ptr, closure_in);
+    }
     *sttp_opt = Some(st_tp);
     Ok(())
 }
@@ -378,10 +436,10 @@ pub(crate) fn save_generator_init_block<'a>(
     builder.build_store(address_ptr, address);
 }
 
-pub(crate) fn build_generator_ret<'a>(
+pub(crate) fn build_generator_ret<'a, T: Callable + CustomType>(
     builder: &BuilderEnum<'a, '_>,
     child: &mut Ctx<'a>,
-    fnvalue: &FNValue,
+    fnvalue: &T,
     entry: usize,
     _allocab: usize,
 ) -> Result<Option<usize>, PLDiag> {
@@ -389,7 +447,7 @@ pub(crate) fn build_generator_ret<'a>(
     let data = child.generator_data.as_ref().unwrap().clone();
     child.position_at_end(data.borrow().entry_bb, builder);
     let tp = child.rettp.clone().unwrap();
-    let r = fnvalue.fntype.ret_pltype.get_type(child, builder, true)?;
+    let r = fnvalue.get_ret_ty(child, builder, true);
     match &*r.clone().borrow() {
         PLType::Void => unreachable!(),
         other => {
