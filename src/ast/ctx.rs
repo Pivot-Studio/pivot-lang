@@ -699,21 +699,25 @@ impl<'a, 'ctx> Ctx<'a> {
                         };
                         builder.add_closure_st_field(st, new_symbol.value, self);
                         drop(st_r);
-                        let new_symbol = PLSymbolData {
-                            value: builder.build_load(
-                                builder
-                                    .build_struct_gep(
-                                        data.data_handle,
-                                        len as u32 + 1,
-                                        "closure_tmp",
-                                        &data.data_tp.as_ref().unwrap().borrow(),
-                                        self,
-                                    )
-                                    .unwrap(),
+                        let mut gep = builder
+                            .build_struct_gep(
+                                data.data_handle,
+                                len as u32 + 1,
+                                "closure_tmp",
+                                &data.data_tp.as_ref().unwrap().borrow(),
+                                self,
+                            )
+                            .unwrap();
+                        if self.generator_data.is_none() {
+                            gep = builder.build_load(
+                                gep,
                                 "closure_loaded",
                                 &PLType::new_i8_ptr(),
                                 self,
-                            ),
+                            );
+                        }
+                        let new_symbol = PLSymbolData {
+                            value: gep,
                             ..new_symbol
                         };
                         data.table.insert(*name, (new_symbol.clone(), symbol.value));

@@ -468,11 +468,11 @@ impl FmtBuilder {
             c.format(self);
         }
         self.prefix();
-        if node.generator.is_iter() {
+        if node.generator_ty.is_iter() {
             self.token(TokenType::GENERATOR_MARKER.get_str());
             self.space();
         }
-        if node.generator.is_async() {
+        if node.generator_ty.is_async() {
             self.token(TokenType::ASYNC_MARKER.get_str());
             self.space();
         }

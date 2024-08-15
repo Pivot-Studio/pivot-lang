@@ -333,7 +333,9 @@ impl SymbolType {
         unify_table: &mut UnificationTable<InPlace<TyVariable>>,
     ) -> Arc<RefCell<PLType>> {
         match self {
-            SymbolType::Var(v) => unify_table.probe_value(*v).get_type(ctx, builder, unify_table),
+            SymbolType::Var(v) => unify_table
+                .probe_value(*v)
+                .get_type(ctx, builder, unify_table),
             SymbolType::PLType(ty) => ty.clone(),
         }
     }
@@ -633,7 +635,7 @@ impl<'ctx> InferenceCtx<'ctx> {
                 }
                 let plmod = if ctx.get_root_ctx().plmod.path == ctx.plmod.path {
                     &ctx.get_root_ctx().plmod
-                }else {
+                } else {
                     &ctx.db.get_module(ctx.plmod.path).unwrap()
                 };
                 if let Ok(plmod) = ex.solve_mod(plmod, ctx) {
@@ -714,7 +716,29 @@ impl<'ctx> InferenceCtx<'ctx> {
                     .borrow_mut()
                     .unify_var_value(id, TyInfer::Generic((argtys, GenericTy::Closure)))
                     .unwrap();
-                child.add_symbol("@ret".into(), ret_ty);
+                if c.generator_ty.is_async() {
+                    let task = ctx
+                        .get_type(&"Task".into(), Default::default())
+                        .unwrap()
+                        .typ;
+                    let new_id = child.new_key();
+                    let sym = TyInfer::Generic((
+                        vec![new_id],
+                        GenericTy::St(match &*task.borrow() {
+                            PLType::Trait(s) => s.clone(),
+                            _ => unreachable!(),
+                        }),
+                    ));
+
+                    child
+                        .unify_table
+                        .borrow_mut()
+                        .unify_var_value(ret_ty, sym)
+                        .unwrap();
+                    child.add_symbol("@ret".into(), new_id);
+                } else {
+                    child.add_symbol("@ret".into(), ret_ty);
+                }
                 c.ret_id = Some(ret_ty);
                 child.inference_statements(&mut c.body, ctx, builder);
                 return SymbolType::Var(id);

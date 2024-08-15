@@ -263,6 +263,7 @@ pub trait IRBuilder<'a, 'ctx> {
         alloca: ValueHandle,
         allocab: BlockHandle,
         tp: &PLType,
+        child: &mut Ctx<'a>,
     );
     fn get_nth_param(&self, f: ValueHandle, i: u32) -> ValueHandle;
     fn add_closure_st_field(&self, st: &STType, field: ValueHandle, ctx: &mut Ctx<'a>);

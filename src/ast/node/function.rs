@@ -550,7 +550,7 @@ pub struct FuncDefNode {
     pub is_method: bool,
     pub in_trait_def: bool,
     pub target_range: Range,
-    pub generator: GeneratorType,
+    pub generator_ty: GeneratorType,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
@@ -838,7 +838,7 @@ impl FuncDefNode {
                 child.function = Some(funcvalue);
                 let mut sttp_opt = None;
                 let mut generator_alloca_b = 0;
-                if self.generator.is_some() {
+                if self.generator_ty.is_some() {
                     generator::init_generator(
                         child,
                         &i8ptr,
@@ -847,7 +847,8 @@ impl FuncDefNode {
                         &mut funcvalue,
                         &mut generator_alloca_b,
                         &mut sttp_opt,
-                        self.generator,
+                        self.generator_ty,
+                        false,
                     )?;
                 }
 
@@ -862,13 +863,13 @@ impl FuncDefNode {
                 // add block
                 let allocab = builder.append_basic_block(funcvalue, "alloc");
                 let entry = builder.append_basic_block(funcvalue, "entry");
-                if self.generator.is_some() {
+                if self.generator_ty.is_some() {
                     builder.tag_generator_ctx_as_root(funcvalue, child);
                     generator::save_generator_init_block(builder, child, entry);
                 }
                 let return_block = builder.append_basic_block(funcvalue, "return");
                 child.position_at_end(entry, builder);
-                let ret_value_ptr = if self.generator.is_some() {
+                let ret_value_ptr = if self.generator_ty.is_some() {
                     generator::build_generator_ret(builder, child, &fnvalue, entry, allocab)?
                 } else {
                     let tp = fnvalue.fntype.ret_pltype.get_type(child, builder, true)?;
@@ -904,7 +905,7 @@ impl FuncDefNode {
                     builder.build_return(None);
                 };
                 child.position_at_end(entry, builder);
-                if self.generator.is_some() {
+                if self.generator_ty.is_some() {
                     // 设置flag，该flag影响alloc逻辑
                     child.ctx_flag = CtxFlag::InGeneratorYield;
                     child.generator_data.as_ref().unwrap().borrow_mut().is_para = true;
@@ -916,62 +917,38 @@ impl FuncDefNode {
                 for (i, para) in fnvalue.fntype.param_pltypes.iter().enumerate() {
                     let tp = para.get_type(child, builder, true)?;
                     let b = tp.clone();
-                    if matches!(
-                        &*get_type_deep(b.clone()).borrow(),
-                        PLType::Pointer(_) | PLType::Primitive(_)
-                    ) {
-                        let basetype = b.borrow();
-                        let alloca = builder.alloc(
-                            &fnvalue.param_names[i],
-                            &basetype,
-                            child,
-                            Some(Pos::default()),
-                        );
-                        // add alloc var debug info
-                        builder.create_parameter_variable(
-                            &fnvalue,
-                            self.paralist[i].range.start,
-                            i,
-                            child,
-                            funcvalue,
+                    let basetype = b.borrow();
+                    let alloca = builder.alloc(
+                        &fnvalue.param_names[i],
+                        &basetype,
+                        child,
+                        Some(Pos::default()),
+                    );
+                    // add alloc var debug info
+                    builder.create_parameter_variable(
+                        &fnvalue,
+                        self.paralist[i].range.start,
+                        i,
+                        child,
+                        funcvalue,
+                        alloca,
+                        allocab,
+                        &basetype,
+                    );
+                    let parapltype = tp;
+                    child
+                        .add_symbol(
+                            fnvalue.param_names[i],
                             alloca,
-                            allocab,
-                            &basetype,
-                        );
-                        let parapltype = tp;
-                        child
-                            .add_symbol(
-                                fnvalue.param_names[i],
-                                alloca,
-                                parapltype,
-                                self.paralist[i].id.range,
-                                false,
-                                false,
-                            )
-                            .unwrap();
-                    } else {
-                        let p = builder.get_nth_param(funcvalue, i as _);
-                        // add debug info
-                        builder.create_parameter_variable_dbg(
-                            &fnvalue,
-                            self.paralist[i].range.start,
-                            i,
-                            child,
-                        );
-                        child
-                            .add_symbol(
-                                fnvalue.param_names[i],
-                                p,
-                                tp,
-                                self.paralist[i].id.range,
-                                false,
-                                false,
-                            )
-                            .unwrap();
-                    }
+                            parapltype,
+                            self.paralist[i].id.range,
+                            false,
+                            false,
+                        )
+                        .unwrap();
                 }
                 // builder.place_safepoint(child);
-                if self.generator.is_some() {
+                if self.generator_ty.is_some() {
                     child.generator_data.as_ref().unwrap().borrow_mut().is_para = false;
                 }
                 // emit body
@@ -1007,7 +984,7 @@ impl FuncDefNode {
                     child.init_global(builder);
                     child.position_at_end(entry, builder);
                 }
-                if self.generator.is_none() {
+                if self.generator_ty.is_none() {
                     child.rettp = Some(fnvalue.fntype.ret_pltype.get_type(child, builder, true)?);
                 }
 
@@ -1035,7 +1012,7 @@ impl FuncDefNode {
                         .emit(child, builder)?
                         .get_term())
                 })?;
-                if !terminator.is_return() && self.generator.is_none() {
+                if !terminator.is_return() && self.generator_ty.is_none() {
                     return Err(child.add_diag(
                         self.range
                             .end
@@ -1043,7 +1020,7 @@ impl FuncDefNode {
                             .new_err(ErrorCode::FUNCTION_MUST_HAVE_RETURN),
                     ));
                 }
-                if self.generator.is_some() {
+                if self.generator_ty.is_some() {
                     return generator::end_generator(
                         child,
                         builder,
@@ -1052,6 +1029,7 @@ impl FuncDefNode {
                         funcvalue,
                         generator_alloca_b,
                         allocab,
+                        false,
                     );
                 }
                 child.position_at_end(allocab, builder);
@@ -1134,6 +1112,7 @@ impl Node for FuncDefNode {
 pub struct ClosureNode {
     pub paralist: Vec<(Box<VarNode>, Option<Box<TypeNodeEnum>>)>,
     pub body: StatementsNode,
+    pub generator_ty: GeneratorType,
     pub ret: Option<Box<TypeNodeEnum>>,
     pub ret_id: Option<TyVariable>,
 }
@@ -1265,9 +1244,9 @@ impl Node for ClosureNode {
         let cur = builder.get_cur_basic_block();
         ctx.try_set_closure_alloca_bb(builder.get_first_basic_block(ctx.function.unwrap()));
 
-        let closure_fn_handle =
+        let mut closure_fn_handle =
             builder.create_closure_fn(ctx, &closure_name, &defined_param_tps, &ret_tp.borrow());
-
+        let origin_f = closure_fn_handle;
         // captured_collection is a collection for all captured variables stored together in a structure
         let captured_collection =
             Arc::new(RefCell::new(PLType::Struct(struct_captured_typs.clone())));
@@ -1283,6 +1262,34 @@ impl Node for ClosureNode {
         child.ctx_flag = CtxFlag::Normal;
         child.generator_data = None;
         child.function = Some(closure_fn_handle);
+        let mut sttp_opt = None;
+        let mut generator_alloca_b = 0;
+
+        let closure_tp = ClosureType {
+            arg_types: defined_param_tps.clone(),
+            ret_type: ret_tp.clone(),
+            range: self.range,
+        };
+        let closure_f_tp = PLType::Closure(closure_tp);
+        let closure_tp = ClosureType {
+            arg_types: all_param_typs.clone(),
+            ret_type: ret_tp.clone(),
+            range: self.range,
+        };
+        if self.generator_ty.is_some() {
+            // eprintln!("ret_tp: {:?}", ret_tp);
+            generator::init_generator(
+                child,
+                &i8ptr,
+                &closure_tp,
+                builder,
+                &mut closure_fn_handle,
+                &mut generator_alloca_b,
+                &mut sttp_opt,
+                self.generator_ty,
+                true,
+            )?;
+        }
 
         // create the debug program
         builder.build_sub_program_by_pltp(
@@ -1297,17 +1304,26 @@ impl Node for ClosureNode {
         // add block
         let allocab = builder.append_basic_block(closure_fn_handle, "alloc");
         let entry = builder.append_basic_block(closure_fn_handle, "entry");
+        if self.generator_ty.is_some() {
+            builder.tag_generator_ctx_as_root(closure_fn_handle, child);
+            generator::save_generator_init_block(builder, child, entry);
+        }
+
         let return_block = builder.append_basic_block(closure_fn_handle, "return");
         builder.rm_curr_debug_location();
 
         // emit the return statement for a closure
         child.position_at_end(entry, builder);
-        let ret_value_ptr = match &*ret_tp.borrow() {
-            PLType::Void => None,
-            other => {
-                builder.rm_curr_debug_location();
-                let retv = builder.alloc("retvalue4", other, child, None);
-                Some(retv)
+        let ret_value_ptr = if self.generator_ty.is_some() {
+            generator::build_generator_ret(builder, child, &closure_tp, entry, allocab)?
+        } else {
+            match &*ret_tp.borrow() {
+                PLType::Void => None,
+                other => {
+                    builder.rm_curr_debug_location();
+                    let retv = builder.alloc("retvalue4", other, child, None);
+                    Some(retv)
+                }
             }
         };
         child.position_at_end(return_block, builder);
@@ -1329,10 +1345,40 @@ impl Node for ClosureNode {
         // handle the captured data as the first parameter of all_param_typs
         child.position_at_end(allocab, builder);
         // the first paramemter of a closure function is an i8 pointer,
-        //which points to a structure for all captured variables
-        let data_raw = builder.get_nth_param(closure_fn_handle, 0);
-        let casted_data_pointer = builder.bitcast(child, data_raw, &ptr_tp, "casted_data");
+        // which points to a structure for all captured variables
+        let casted_data_pointer = if self.generator_ty.is_none() {
+            let data_raw = builder.get_nth_param(closure_fn_handle, 0);
+            builder.bitcast(child, data_raw, &ptr_tp, "casted_data")
+        } else {
+            let ctx_handle = builder.get_nth_param(closure_fn_handle, 0);
+            let para_ptr = builder
+                .build_struct_gep(
+                    ctx_handle,
+                    4_u32,
+                    "closure",
+                    &child
+                        .generator_data
+                        .clone()
+                        .unwrap()
+                        .borrow_mut()
+                        .ctx_tp
+                        .as_ref()
+                        .unwrap()
+                        .borrow(),
+                    child,
+                )
+                .unwrap();
+            builder.build_load(para_ptr, "load_closure", &ptr_tp, child)
+        };
         child.position_at_end(entry, builder);
+        if self.generator_ty.is_some() {
+            // 设置flag，该flag影响alloc逻辑
+            child.ctx_flag = CtxFlag::InGeneratorYield;
+            child.generator_data.as_ref().unwrap().borrow_mut().is_para = true;
+        } else {
+            child.ctx_flag = CtxFlag::Normal;
+            child.generator_data = None;
+        }
         child.closure_data = Some(Arc::new(RefCell::new(ClosureCtxData {
             table: LinkedHashMap::default(),
             data_handle: casted_data_pointer,
@@ -1344,52 +1390,40 @@ impl Node for ClosureNode {
         for (i, tp) in defined_param_tps.iter().enumerate() {
             let b = tp.clone();
 
-            if matches!(
-                &*get_type_deep(b.clone()).borrow(),
-                PLType::Pointer(_) | PLType::Primitive(_)
-            ) {
-                let basetype = b.borrow();
-                let alloca = builder.alloc(
-                    &self.paralist[i].0.name,
-                    &basetype,
-                    child,
-                    Some(self.paralist[i].0.range.start),
-                );
+            let basetype = b.borrow();
+            let alloca = builder.alloc(
+                &self.paralist[i].0.name,
+                &basetype,
+                child,
+                Some(self.paralist[i].0.range.start),
+            );
 
-                let parapltype = tp;
-                builder.create_closure_parameter_variable(
-                    i as u32 + 1,
-                    closure_fn_handle,
+            let parapltype = tp;
+            builder.create_closure_parameter_variable(
+                i as u32 + 1,
+                closure_fn_handle,
+                alloca,
+                allocab,
+                &parapltype.borrow(),
+                child,
+            );
+            child
+                .add_symbol(
+                    self.paralist[i].0.name,
                     alloca,
-                    allocab,
-                    &parapltype.borrow(),
-                );
-                child
-                    .add_symbol(
-                        self.paralist[i].0.name,
-                        alloca,
-                        parapltype.to_owned(),
-                        self.paralist[i].0.range,
-                        false,
-                        false,
-                    )
-                    .unwrap();
-            } else {
-                let p = builder.get_nth_param(closure_fn_handle, 1 + i as u32);
-                child
-                    .add_symbol(
-                        self.paralist[i].0.name,
-                        p,
-                        tp.clone(),
-                        self.paralist[i].0.range,
-                        false,
-                        false,
-                    )
-                    .unwrap();
-            }
+                    parapltype.to_owned(),
+                    self.paralist[i].0.range,
+                    false,
+                    false,
+                )
+                .unwrap();
         }
-        child.rettp = Some(ret_tp.clone());
-
+        if self.generator_ty.is_none() {
+            child.rettp = Some(ret_tp.clone());
+        }
+        if self.generator_ty.is_some() {
+            child.generator_data.as_ref().unwrap().borrow_mut().is_para = false;
+        }
         // emit closure body
         // during the body emitting, the captured data inside the body are inserted into the context
         let terminator = self.body.emit(child, builder)?.get_term();
@@ -1402,7 +1436,19 @@ impl Node for ClosureNode {
             ));
         }
 
-        child.position_at_end(allocab, builder);
+        if self.generator_ty.is_some() {
+            generator::end_generator(
+                child,
+                builder,
+                i8ptr.clone(),
+                sttp_opt,
+                closure_fn_handle,
+                generator_alloca_b,
+                allocab,
+                true,
+            )?;
+        }
+
         let mut i = 1;
         // captured_data_typs stores every type of captured variables
         let mut captured_data_typs = vec![];
@@ -1426,27 +1472,24 @@ impl Node for ClosureNode {
         let ptr_tp = PLType::Pointer(Arc::new(RefCell::new(PLType::Struct(
             struct_captured_typs.clone(),
         ))));
-        builder.create_closure_variable_dbg(
-            &ptr_tp,
-            self.range.start,
-            0,
-            child,
-            casted_data_pointer,
-            allocab,
-            "captured_closure_data",
-        );
-        builder.build_unconditional_branch(entry);
+        if self.generator_ty.is_none() {
+            child.position_at_end(allocab, builder);
+            builder.create_closure_variable_dbg(
+                &ptr_tp,
+                self.range.start,
+                0,
+                child,
+                casted_data_pointer,
+                allocab,
+                "captured_closure_data",
+            );
+            builder.build_unconditional_branch(entry);
+        }
 
         let closure_data = child.closure_data.as_ref().unwrap();
         ctx.position_at_end(cur, builder);
         builder.try_set_fn_dbg(self.range.start, ctx.function.unwrap());
         builder.gen_st_visit_function(ctx, &struct_captured_typs, &captured_data_typs);
-        let closure_f_tp = ClosureType {
-            arg_types: defined_param_tps,
-            ret_type: ret_tp,
-            range: self.range,
-        };
-        let closure_f_tp = PLType::Closure(closure_f_tp);
         let closure_alloca = builder.alloc("closure", &closure_f_tp, ctx, None);
         let captured_data_alloc = builder.alloc(
             "closure_data",
@@ -1477,7 +1520,7 @@ impl Node for ClosureNode {
         let f_field = builder
             .build_struct_gep(closure_alloca, 0, "closure_f", &closure_f_tp, ctx)
             .unwrap();
-        builder.build_store(f_field, closure_fn_handle);
+        builder.build_store(f_field, origin_f);
         let d_field = builder
             .build_struct_gep(closure_alloca, 1, "closure_d", &closure_f_tp, ctx)
             .unwrap();

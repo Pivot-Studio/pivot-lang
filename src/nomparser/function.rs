@@ -148,7 +148,7 @@ pub fn function_def(input: Span) -> IResult<Span, Box<TopLevel>> {
                 is_method: false,
                 target_range: Default::default(),
                 in_trait_def: false,
-                generator: match g {
+                generator_ty: match g {
                     Some((TokenType::ASYNC_MARKER, _)) => GeneratorType::Async,
                     Some((TokenType::GENERATOR_MARKER, _)) => GeneratorType::Iter,
                     _ => GeneratorType::None,

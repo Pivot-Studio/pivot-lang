@@ -479,6 +479,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder<'a, 'ctx> {
         _alloca: ValueHandle,
         _allocab: super::BlockHandle,
         _tp: &PLType,
+        _child: &mut Ctx<'a>,
     ) {
     }
 

@@ -2,7 +2,7 @@ use ustr::Ustr;
 
 use super::{
     node::types::CustomTypeNode,
-    pltype::{FNValue, PlaceHolderType, STType, UnionType},
+    pltype::{ClosureType, FNValue, PlaceHolderType, STType, UnionType},
 };
 
 pub trait CustomType {
@@ -38,3 +38,15 @@ macro_rules! impl_custom_type {
 }
 use crate::ast::range::Range;
 impl_custom_type!(UnionType, STType, FNValue, PlaceHolderType, CustomTypeNode);
+
+impl CustomType for ClosureType {
+    fn get_path(&self) -> Ustr {
+        Ustr::from("")
+    }
+    fn get_name(&self) -> Ustr {
+        Ustr::from("closure")
+    }
+    fn get_range(&self) -> Range {
+        self.range
+    }
+}
