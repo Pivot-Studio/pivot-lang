@@ -3,6 +3,7 @@ use std::string;
 use std::math::F64Ext;
 use std::task::Task;
 use std::io;
+use project1::test::iter;
 
 
 
@@ -37,6 +38,7 @@ impl Task<i64> for CustomTask {
 
 
 pub fn test_std() void {
+    iter::test_generator();
     let re = "abcde".index_of("cde");
     let chars = [1,2,3];
     let subchars = [3];

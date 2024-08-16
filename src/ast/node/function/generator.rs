@@ -248,7 +248,7 @@ pub(crate) fn init_generator<'a, T: Callable + CustomType>(
             modifier: None,
         },
     );
-    if generator_type == GeneratorType::Async {
+    let para_offset = if generator_type == GeneratorType::Async {
         m.insert(
             "task".into(),
             Field {
@@ -280,21 +280,19 @@ pub(crate) fn init_generator<'a, T: Callable + CustomType>(
                     modifier: None,
                 },
             );
-            child
-                .generator_data
-                .as_ref()
-                .unwrap()
-                .borrow_mut()
-                .para_offset = 5;
+            5
         } else {
-            child
-                .generator_data
-                .as_ref()
-                .unwrap()
-                .borrow_mut()
-                .para_offset = 4;
+            4
         }
-    }
+    } else {
+        2
+    };
+    child
+        .generator_data
+        .as_ref()
+        .unwrap()
+        .borrow_mut()
+        .para_offset = para_offset;
     let name =
         "__generator_ctx".to_string() + &GLOB_COUNTER.fetch_add(1, Ordering::SeqCst).to_string();
     let st_tp = STType {
