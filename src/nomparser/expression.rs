@@ -102,7 +102,7 @@ fn mul_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
 #[test_parser("~a")]
 #[test_parser("await a")]
 #[test_parser_error("+a")]
-fn unary_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
+pub fn unary_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
     // todo: consider to aligh the implementation with UnaryExp EBNF
     delspace(alt((
         pointer_exp,
