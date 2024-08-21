@@ -81,6 +81,7 @@ pub fn statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
         semi_stmt(pointer_exp, pointer_exp),
         empty_statement,
         comment,
+        semi_stmt(await_statement, await_statement),
         terminated(
             except(
                 "\n\r})",
@@ -90,6 +91,24 @@ pub fn statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
             anychar,
         ),
     )))(input)
+}
+
+#[test_parser("await a")]
+fn await_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
+    map(
+        pair(tag_modifier(TokenType::AWAIT), general_exp),
+        |((op, r), e)| {
+            let range = r.start.to(e.range().end);
+            Box::new(
+                UnaryOpNode {
+                    op: (op, r),
+                    exp: e,
+                    range,
+                }
+                .into(),
+            )
+        },
+    )(input)
 }
 
 #[test_parser("let a = 1")]
