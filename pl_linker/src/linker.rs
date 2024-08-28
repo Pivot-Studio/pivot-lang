@@ -133,6 +133,7 @@ impl Linker for LdLinker {
             "-lunwind",
             "--no-as-needed",
             "-ldl",
+            "-lgcc",
             // "/usr/lib/gcc/x86_64-linux-gnu/<version>/crtendS.o",
             "/lib/x86_64-linux-gnu/crtn.o",
         ]
@@ -318,6 +319,11 @@ impl Linker for MsvcLinker {
         self.push_args("ntdll.lib");
         self.push_args("psapi.lib");
         self.push_args("PowrProf.lib");
+        self.push_args("user32.lib");  // Add user32.lib
+        self.push_args("dbghelp.lib"); // Add dbghelp.lib
+        self.push_args("ole32.lib");   // Add ole32.lib
+        self.push_args("shell32.lib"); // Add shell32.lib
+        self.push_args("iphlpapi.lib");// Add iphlpapi.lib
 
         self.args.insert(0, "lld-link".to_owned());
         lld_rs::link(lld_rs::LldFlavor::Coff, &self.args)
