@@ -100,6 +100,22 @@ fn get_linux_lib_paths() -> Vec<String> {
     paths
 }
 
+// fn get_libgcc_path() -> Result<String, String> {
+//     let base_path = "/usr/lib/gcc/x86_64-linux-gnu";
+//     let entries = std::fs::read_dir(base_path).map_err(|e| format!("Failed to read directory {}: {}", base_path, e))?;
+    
+//     for entry in entries {
+//         let entry = entry.map_err(|e| format!("Failed to read directory entry: {}", e))?;
+//         if entry.path().is_dir() {
+//             let version = entry.file_name().into_string().map_err(|e| format!("Failed to convert OsString to String: {:?}", e))?;
+//             return Ok(format!("{}/{}", base_path, version));
+//         }
+//     }
+
+//     Err("No valid gcc version directory found".to_string())
+// }
+
+
 impl Linker for LdLinker {
     fn add_object(&mut self, path: &Path) -> Result<(), LinkerError> {
         let path_str = path
@@ -115,9 +131,21 @@ impl Linker for LdLinker {
         paths.iter().for_each(|lib| {
             self.push_args(&format!("-L{}", lib.as_str()));
         });
+        // // Add the path to the libgcc library
+        // match get_libgcc_path() {
+        //     Ok(libgcc_dir) => {
+        //         self.push_args(&format!("-L{}", libgcc_dir));
+        //     }
+        //     Err(e) => {
+        //         return Err(LinkerError::LinkError(format!(
+        //             "Failed to get libgcc path: {}",
+        //             e
+        //         )));
+        //     }
+        // }
         // libs and link args
         [
-            "-pie",
+            "-no-pie",
             "-zrelro",
             "--hash-style=gnu",
             "--build-id",
@@ -133,7 +161,7 @@ impl Linker for LdLinker {
             "-lunwind",
             "--no-as-needed",
             "-ldl",
-            "-lgcc",
+            // "-lgcc",
             // "/usr/lib/gcc/x86_64-linux-gnu/<version>/crtendS.o",
             "/lib/x86_64-linux-gnu/crtn.o",
         ]
