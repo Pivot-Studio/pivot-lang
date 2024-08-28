@@ -45,8 +45,6 @@ use std::process::Command;
 //     format!("{}.{}.0", &LIBUV_VERSION[..dotidx], next_minor_version)
 // }
 
-
-
 fn build<P: AsRef<Path>>(source_path: &P) {
     let src_path = source_path.as_ref().join("src");
     let unix_path = src_path.join("unix");
@@ -298,9 +296,7 @@ fn main() {
     let mut uv_src = PathBuf::from(out_dir);
     uv_src.push(LIBUV_DIR);
     if !uv_src.exists() {
-        run("git", |cmd| {
-            cmd.arg("clone").arg(LIBUV_REPO).arg(&uv_src)
-        });
+        run("git", |cmd| cmd.arg("clone").arg(LIBUV_REPO).arg(&uv_src));
 
         // run("git", |cmd| {
         //     cmd.arg("clone")
@@ -316,7 +312,8 @@ fn main() {
     }
 
     build(&uv_src);
-
+    #[cfg(target_os = "linux")]
+    cc::Build::new().file("dso_handle.c").compile("dso_handle");
 
     // println!("cargo:rustc-link-lib=static:+whole-archive=uv");
 }

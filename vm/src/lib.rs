@@ -344,3 +344,10 @@ fn millitime() -> i64 {
 
 #[cfg(all(windows, feature = "jitdylib"))]
 mod compiler_rt;
+
+// (.data._rust_extern_with_linkage___dso_handle+0x0): undefined reference to `__dso_handle'
+//  I want to define it manually
+#[cfg(target_os = "linux")]
+extern "C" {
+    pub static __dso_handle: *const u8;
+}

@@ -2280,6 +2280,31 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         self.builder.position_at(v.get_parent().unwrap(), &v);
     }
     fn finalize_debug(&self) {
+        #[cfg(target_os = "linux")]
+        {
+            // add __dso_handle defination
+            let dso = self.module.add_global(
+                self.context.i8_type().array_type(0),
+                Some(AddressSpace::from(0)),
+                "__dso_handle",
+            );
+            dso.set_initializer(&self.context.i8_type().array_type(0).const_zero());
+            dso.set_linkage(Linkage::WeakAny);
+            let dso = self.module.add_global(
+                self.context.i8_type().array_type(0),
+                Some(AddressSpace::from(0)),
+                "_dso_handle",
+            );
+            dso.set_initializer(&self.context.i8_type().array_type(0).const_zero());
+            dso.set_linkage(Linkage::WeakAny);
+            let dso = self.module.add_global(
+                self.context.i8_type().array_type(0),
+                Some(AddressSpace::from(0)),
+                "dso_handle",
+            );
+            dso.set_initializer(&self.context.i8_type().array_type(0).const_zero());
+            dso.set_linkage(Linkage::WeakAny);
+        }
         self.dibuilder.finalize();
     }
     fn print_to_file(&self, file: &Path) -> Result<(), String> {
