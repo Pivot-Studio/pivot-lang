@@ -14,7 +14,6 @@ pub mod libcwrap;
 pub mod logger;
 pub mod mutex;
 pub mod time;
-pub use libuv_sys2::*;
 
 #[is_runtime]
 fn test_vm_link() -> i64 {
