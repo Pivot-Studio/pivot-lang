@@ -2245,6 +2245,7 @@ dependencies = [
  "libc",
  "log",
  "rand",
+ "vm",
  "winapi",
 ]
 
