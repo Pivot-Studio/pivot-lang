@@ -103,7 +103,7 @@ fn get_linux_lib_paths() -> Vec<String> {
 // fn get_libgcc_path() -> Result<String, String> {
 //     let base_path = "/usr/lib/gcc/x86_64-linux-gnu";
 //     let entries = std::fs::read_dir(base_path).map_err(|e| format!("Failed to read directory {}: {}", base_path, e))?;
-    
+
 //     for entry in entries {
 //         let entry = entry.map_err(|e| format!("Failed to read directory entry: {}", e))?;
 //         if entry.path().is_dir() {
@@ -114,7 +114,6 @@ fn get_linux_lib_paths() -> Vec<String> {
 
 //     Err("No valid gcc version directory found".to_string())
 // }
-
 
 impl Linker for LdLinker {
     fn add_object(&mut self, path: &Path) -> Result<(), LinkerError> {
@@ -347,11 +346,11 @@ impl Linker for MsvcLinker {
         self.push_args("ntdll.lib");
         self.push_args("psapi.lib");
         self.push_args("PowrProf.lib");
-        self.push_args("user32.lib");  // Add user32.lib
+        self.push_args("user32.lib"); // Add user32.lib
         self.push_args("dbghelp.lib"); // Add dbghelp.lib
-        self.push_args("ole32.lib");   // Add ole32.lib
+        self.push_args("ole32.lib"); // Add ole32.lib
         self.push_args("shell32.lib"); // Add shell32.lib
-        self.push_args("iphlpapi.lib");// Add iphlpapi.lib
+        self.push_args("iphlpapi.lib"); // Add iphlpapi.lib
 
         self.args.insert(0, "lld-link".to_owned());
         lld_rs::link(lld_rs::LldFlavor::Coff, &self.args)
