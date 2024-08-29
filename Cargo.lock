@@ -2238,6 +2238,7 @@ dependencies = [
  "backtrace",
  "bytecount",
  "cc",
+ "cmake",
  "context",
  "immix",
  "internal_macro",
