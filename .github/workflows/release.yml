@@ -32,6 +32,7 @@ jobs:
             RUSTFLAGS: ""
             libvm: "libvm.a"
             libvm_dylib: "libvm.dylib"
+            libuv_dylib: "libuv.dylib"
           - os: "ubuntu-latest"
             dir: linux64
             debdir: pivot-lang_0.1.0-1_amd64
@@ -40,12 +41,14 @@ jobs:
             RUSTFLAGS: ""
             libvm: "libvm.a"
             libvm_dylib: "libvm.so"
+            libuv_dylib: "libuv.so"
           - os: "windows-latest"
             dir: win64
             artifacts: "plc.exe"
             RUSTFLAGS: "-Dwarnings -Ctarget-feature=+crt-static"
             libvm: "vm.lib"
             libvm_dylib: "vm.dll"
+            libuv_dylib: "uv.dll"
             arch: windows-amd64
     steps:
       - uses: actions/checkout@v4
@@ -116,6 +119,20 @@ jobs:
       - name: Move libvm dylib
         env:
           ARTIFACTS: ${{ matrix.config.libvm_dylib }}
+          OUT_DIR: ${{ matrix.config.dir }}
+          OS: ${{ matrix.config.os }}
+        run: |
+          import os
+          import shutil
+          artifacts = os.environ['ARTIFACTS'].split()
+          for artifact in artifacts:
+            src = "target/release/%s" % artifact
+            dst = os.environ['OUT_DIR'] + "/" + artifact
+            shutil.copy(src, dst)
+        shell: python
+      - name: Move libuv dylib
+        env:
+          ARTIFACTS: ${{ matrix.config.libuv_dylib }}
           OUT_DIR: ${{ matrix.config.dir }}
           OS: ${{ matrix.config.os }}
         run: |

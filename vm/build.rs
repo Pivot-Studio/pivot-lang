@@ -81,7 +81,6 @@ fn main() {
         // only take largest static lib and dylib
         // only take largest static lib and dylib
         let mut largest_static_lib: Option<&DirEntry> = None;
-        let mut largest_dylib: Option<&DirEntry> = None;
 
         for dir in &dirs_filtered {
             let path = dir.path();
@@ -89,17 +88,13 @@ fn main() {
                 if extension == "a" || extension == "lib" {
                     largest_static_lib = Some(dir);
                 } else if extension == "so" || extension == "dylib" || extension == "dll" {
-                    largest_dylib = Some(dir);
+                    cp_to_out_dir(dir, target_dir);
                 }
             }
         }
 
         if let Some(static_lib) = largest_static_lib {
             cp_to_out_dir(static_lib, target_dir);
-        }
-
-        if let Some(dylib) = largest_dylib {
-            cp_to_out_dir(dylib, target_dir);
         }
 
         // add lib_path to library search path
