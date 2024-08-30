@@ -2913,12 +2913,17 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             .unwrap()
             .as_basic_value_enum();
 
+        self.position_at_end_block(cubb);
+
         let mut nv_handle = self.get_llvm_value_handle(&nv.as_any_value_enum());
         if !is_by_val {
+            // the load must be done in the current block, or it may break JIT
+            // I don't know exactly why, but it seems to be related to gc failed to replace the moved pointer
+            // in the loaded value. Since it works perfectly in the static compilation, maybe the loaded
+            // value is stored somewhere other than the stack, or maybe it's misaligned?
             nv_handle = self.build_load(nv_handle, "load", tp, child);
         }
 
-        self.position_at_end_block(cubb);
         self.build_store(alloca, nv_handle);
     }
     fn get_cur_basic_block(&self) -> BlockHandle {
