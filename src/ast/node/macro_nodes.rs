@@ -314,8 +314,9 @@ impl Node for MacroCallNode {
                     }
                     let mut b = rule.clone().body;
                     let mut child = ctx.new_child(self.range.start, builder);
-                    let re = child
-                        .with_diag_src(&src, |ctx| ctx.with_macro_emit(|ctx| b.emit(ctx, builder)));
+                    let re = child.with_diag_src(&src, |ctx| {
+                        ctx.with_macro_emit(self.range(), |ctx| b.emit(ctx, builder))
+                    });
                     match re {
                         Ok(_) => {
                             return Ok(Default::default());

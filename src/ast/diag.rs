@@ -179,6 +179,7 @@ define_diag!(
     SYNTAX_ERROR_FOR_CONDITION = "syntax error: for condition",
     ONLY_TASK_CAN_BE_AWAIT = "only Task can be awaited",
     GENERATOR_FUNCTION_CANNOT_RETURN_VOID = "generator function cannot return void",
+    MACRO_EXPANSION_FAILED = "macro expansion failed",
 );
 
 define_diag! {
@@ -242,6 +243,12 @@ pub struct PLDiag {
 }
 
 const PL_DIAG_SOURCE: &str = "plsp";
+
+impl PLLabel {
+    pub fn new(range: Range, file: Ustr, txt: Option<(Ustr, Vec<Ustr>)>) -> Self {
+        Self { file, txt, range }
+    }
+}
 
 impl Pos {
     pub fn utf8_offset(&self, doc: &Source) -> usize {
@@ -439,7 +446,11 @@ impl PLDiag {
         self
     }
     pub fn add_to_ctx(&self, ctx: &Ctx) -> PLDiag {
-        ctx.add_diag(self.clone())
+        let mut d = self.clone();
+        if ctx.in_macro {
+            d.raw.labels.push(ctx.macro_original_loc.clone().unwrap());
+        }
+        ctx.add_diag(d)
     }
 
     /// Add a label to the diagnostic

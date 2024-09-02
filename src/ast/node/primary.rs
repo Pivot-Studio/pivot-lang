@@ -166,6 +166,13 @@ impl Node for VarNode {
                             .add_to_ctx(ctx));
                     }
                     ctx.macro_skip_level += 1;
+                    if loop_var.len() <= ctx.macro_loop_idx {
+                        return Err(self
+                            .range
+                            .new_err(ErrorCode::MACRO_EXPANSION_FAILED)
+                            .add_help(&format!("macro input isn't complete",))
+                            .add_to_ctx(ctx));
+                    }
                     let re = loop_var[ctx.macro_loop_idx].emit(ctx, builder);
                     ctx.macro_skip_level -= 1;
                     ctx.macro_loop_len = loop_var.len();

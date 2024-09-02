@@ -4,6 +4,7 @@ use super::builder::ValueHandle;
 use super::diag::ErrorCode;
 use super::diag::PLDiag;
 
+use super::diag::PLLabel;
 use super::node::function::generator::ClosureCtxData;
 use super::node::function::generator::CtxFlag;
 use super::node::macro_nodes::MacroNode;
@@ -189,6 +190,7 @@ pub struct Ctx<'a> {
     pub macro_loop_idx: usize,
     pub macro_loop_len: usize,
     pub in_macro: bool,
+    pub macro_original_loc: Option<PLLabel>,
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -386,6 +388,7 @@ impl<'a, 'ctx> Ctx<'a> {
             macro_expand_depth: Default::default(),
             unify_table: Arc::new(RefCell::new(UnificationTable::new())),
             disable_diag: false,
+            macro_original_loc: None,
         }
     }
 
@@ -434,6 +437,7 @@ impl<'a, 'ctx> Ctx<'a> {
             macro_expand_depth: self.macro_expand_depth.clone(),
             unify_table: self.unify_table.clone(),
             disable_diag: self.disable_diag,
+            macro_original_loc: self.macro_original_loc.clone(),
         };
         add_primitive_types(&mut ctx);
         if start != Default::default() {
@@ -468,7 +472,11 @@ impl<'a, 'ctx> Ctx<'a> {
         self.macro_loop_idx = old_macro_loop_idx;
         result
     }
-    pub fn with_macro_emit(&mut self, f: impl FnOnce(&mut Self) -> NodeResult) -> NodeResult {
+    pub fn with_macro_emit(
+        &mut self,
+        r: Range,
+        f: impl FnOnce(&mut Self) -> NodeResult,
+    ) -> NodeResult {
         self.add_macro_depth();
         if self.get_macro_depth() > 30 {
             self.sub_macro_depth();
@@ -476,7 +484,16 @@ impl<'a, 'ctx> Ctx<'a> {
         }
         let old_in_macro = self.in_macro;
         self.in_macro = true;
+        let label = PLLabel::new(
+            r,
+            self.get_file(),
+            format_label!("original macro call from here"),
+        );
+        let old_macro_original_loc = self.macro_original_loc.clone();
+        self.macro_original_loc = Some(label);
         let result = f(self);
+        self.macro_original_loc = old_macro_original_loc;
+
         self.in_macro = old_in_macro;
         self.sub_macro_depth();
         result
