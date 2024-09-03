@@ -519,6 +519,18 @@ impl<'ctx> InferenceCtx<'ctx> {
         self.add_symbol(name, key);
     }
 
+    pub fn import_repl_symbols(&mut self) {
+        let guard = crate::repl::REPL_VARIABLES.lock().unwrap();
+        for (name, g) in guard.iter() {
+            let key = self.new_key();
+            _ = self
+                .unify_table
+                .borrow_mut()
+                .unify_var_value(key, TyInfer::Term(g.tp.clone()));
+            self.add_symbol(*name, key);
+        }
+    }
+
     pub fn import_global_symbols(&mut self, ctx: &Ctx) {
         let ctx = ctx.get_root_ctx();
         for (name, ty) in &ctx.plmod.global_table {
