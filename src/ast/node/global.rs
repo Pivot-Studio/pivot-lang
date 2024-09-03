@@ -76,8 +76,8 @@ impl Node for GlobalNode {
     ) -> NodeResult {
         builder.rm_curr_debug_location();
         let entry = builder.get_last_basic_block(ctx.init_func.unwrap());
-        let mut infer_ctx = InferenceCtx::new(ctx.unify_table.clone());
-        infer_ctx.inference(&mut self.exp, ctx, builder);
+        // let mut infer_ctx = InferenceCtx::new(ctx.unify_table.clone());
+        // infer_ctx.inference(&mut self.exp, ctx, builder);
         ctx.position_at_end(entry, builder);
         let exp_range = self.exp.range();
         ctx.push_semantic_token(self.var.range, SemanticTokenType::VARIABLE, 0);
@@ -104,6 +104,7 @@ impl GlobalNode {
         builder: &'b BuilderEnum<'a, '_>,
     ) -> Result<(), PLDiag> {
         let mut infer_ctx = InferenceCtx::new(ctx.unify_table.clone());
+        infer_ctx.import_repl_symbols();
         let ty = infer_ctx.inference(&mut self.exp, ctx, builder);
         if {
             #[cfg(feature = "repl")]
