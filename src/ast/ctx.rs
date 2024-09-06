@@ -48,6 +48,7 @@ use lsp_types::Url;
 use rustc_hash::FxHashMap;
 use rustc_hash::FxHashSet;
 use ustr::Ustr;
+use ustr::UstrMap;
 
 use std::cell::RefCell;
 
@@ -191,6 +192,13 @@ pub struct Ctx<'a> {
     pub macro_loop_len: usize,
     pub in_macro: bool,
     pub macro_original_loc: Option<PLLabel>,
+    /// Used to store the instance of the generic type
+    ///
+    /// Example:
+    ///
+    /// Suppose we have a generic type `Option<T>`, and we have a variable `let a = Option<i32>`.
+    /// Then the generic_instantiate_cache will store the instance of `Option<i32>`
+    pub generic_instantiate_cache: Arc<RefCell<UstrMap<GlobalType>>>,
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -389,6 +397,7 @@ impl<'a, 'ctx> Ctx<'a> {
             unify_table: Arc::new(RefCell::new(UnificationTable::new())),
             disable_diag: false,
             macro_original_loc: None,
+            generic_instantiate_cache: Default::default(),
         }
     }
 
@@ -438,6 +447,7 @@ impl<'a, 'ctx> Ctx<'a> {
             unify_table: self.unify_table.clone(),
             disable_diag: self.disable_diag,
             macro_original_loc: self.macro_original_loc.clone(),
+            generic_instantiate_cache: self.generic_instantiate_cache.clone(),
         };
         add_primitive_types(&mut ctx);
         if start != Default::default() {
@@ -888,6 +898,9 @@ impl<'a, 'ctx> Ctx<'a> {
                 self.send_if_go_to_def(range, pv.get_range().unwrap_or(range), self.plmod.path);
             }
             return Ok(pv.clone().into());
+        }
+        if let Some(ty) = self.generic_instantiate_cache.borrow().get(name) {
+            return Ok(ty.clone());
         }
         if let Ok(pv) = self.plmod.get_type(name, range, self) {
             return Ok(pv);
