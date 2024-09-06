@@ -5,6 +5,7 @@ use super::node::interface::MultiTraitNode;
 use super::node::tuple::TupleTypeNode;
 use super::node::types::ClosureTypeNode;
 use super::node::types::CustomTypeNode;
+use super::plmod::GlobalType;
 use super::plmod::Mod;
 use super::plmod::MutVec;
 use super::tokens::TokenType;
@@ -1556,7 +1557,15 @@ impl STType {
             }
             let mut res = self.clone();
             res.name = name;
-            ctx.add_type_without_check(Arc::new(RefCell::new(PLType::Struct(res.clone()))));
+            ctx.generic_instantiate_cache.borrow_mut().insert(
+                name,
+                GlobalType {
+                    typ: Arc::new(RefCell::new(PLType::Struct(res.clone()))),
+                    is_extern: false,
+                    re_export: false,
+                },
+            );
+            // ctx.add_type_without_check(Arc::new(RefCell::new(PLType::Struct(res.clone()))));
             let fields: Result<Vec<_>, _> = self
                 .fields
                 .values()

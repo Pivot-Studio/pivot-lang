@@ -621,7 +621,7 @@ impl TypeNode for FuncDefNode {
                 })
                 .for_each(|(g, tp)| match &mut *g.borrow_mut() {
                     PLType::Generic(g) => {
-                        g.curpltype = Some(tp);
+                        g.set_type(tp);
                     }
                     _ => unreachable!(),
                 });
@@ -811,7 +811,7 @@ impl FuncDefNode {
                         })
                         .for_each(|(g, tp)| match &mut *g.borrow_mut() {
                             PLType::Generic(g) => {
-                                g.curpltype = Some(tp);
+                                g.set_type(tp);
                             }
                             _ => unreachable!(),
                         });

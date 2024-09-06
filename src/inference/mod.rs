@@ -291,7 +291,7 @@ fn get_generic_ty_inner<'a, 'b, T: CanGenCode + Generic + CustomType + Clone>(
             partial = true;
         }
         match &mut *v.borrow_mut() {
-            PLType::Generic(g) => g.curpltype = Some(t),
+            PLType::Generic(g) => g.set_type(t),
             _ => unreachable!(),
         };
     }
