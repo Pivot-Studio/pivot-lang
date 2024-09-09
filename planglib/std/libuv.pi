@@ -4,11 +4,20 @@ var UV_RUN_NOWAIT = 2 as u32;
 var UV_ASYNC = 1 as u32;
 var UV_IDLE = 6 as u32;
 var UV_TIMER = 13 as u32;
+var UV_TCP = 12 as u32;
 
 pub struct uv_loop_t {}
 pub struct uv_idle_t {}
 pub struct uv_async_t {}
 pub struct uv_timer_t {}
+pub struct uv_tcp_t {}
+pub struct uv_stream_t {}
+pub struct sockaddr_in {
+    a:i64;
+    b:i64;
+    c:i64;
+    d:i64;
+}
 
 pub fn uv_default_loop() *uv_loop_t;
 
@@ -45,9 +54,27 @@ pub fn uv_async_init(loop:*uv_loop_t, handle:*uv_async_t, cb:* ()) i32;
 
 pub fn uv_async_send(handle:*uv_async_t) i32;
 
+pub fn uv_tcp_init(loop:*uv_loop_t, handle:*uv_tcp_t) i32;
+
+pub fn uv_ip4_addr(ip:*u8, port:i32, addr:*sockaddr_in) i32;
+
+pub fn uv_tcp_bind(handle:*uv_tcp_t, addr:*sockaddr_in, flags:u32) i32;
+
+pub fn uv_listen(handle:*uv_stream_t, backlog:i32, cb:*()) i32;
+
+pub fn uv_accept(server:*uv_stream_t, client:*uv_stream_t) i32;
+
+pub fn uv_read_start(stream:*uv_stream_t, alloc_cb:*(), read_cb:*()) i32;
+
+
 pub fn new_uv_idle_t() *uv_idle_t {
     let re = gc::malloc_pinned(uv_handle_size(UV_IDLE) as i64);
     return unsafe_cast<uv_idle_t>(re);
+}
+
+pub fn new_uv_tcp_t() *uv_tcp_t {
+    let re = gc::malloc_pinned(uv_handle_size(UV_TCP) as i64);
+    return unsafe_cast<uv_tcp_t>(re);
 }
 
 pub fn new_uv_async_t() *uv_async_t {
