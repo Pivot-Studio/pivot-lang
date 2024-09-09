@@ -62,6 +62,12 @@ pub fn main() i64 {
         return;
     });
     executor::GLOBAL_EXECUTOR.spawn(async_1());
+    reactor::GLOBAL_REACTOR.new_tcp_listener(libuv::new_uv_tcp_t(), "0.0.0.0", 8899 as i32, ||=>{
+        println!("on connect");
+        return;
+    }, ||=>{
+        return;
+    });
     executor::GLOBAL_EXECUTOR.start_exec_loop();
     return 0;
 }

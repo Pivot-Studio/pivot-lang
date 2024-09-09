@@ -138,6 +138,13 @@ impl string {
         return arr_from_raw(self.data, self._byte_len);
     }
 
+    pub fn cstr() *u8 {
+        let arr = [u8*self._byte_len + 1;];
+        memcpy(&arr[0], self.data, self._byte_len);
+        arr[self._byte_len] = 0 as u8;
+        return &arr[0];
+    }
+
     pub fn chars() [char] {
         let bytes = arr_from_raw(self.data, self._byte_len);
         let chars = [char*self._len;];

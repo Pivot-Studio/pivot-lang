@@ -1,6 +1,7 @@
 use std::libuv;
 use std::chan;
 
+
 struct UVReactor {
     async_t: *libuv::uv_async_t;
     idle_t: *libuv::uv_idle_t;
@@ -9,12 +10,31 @@ struct UVReactor {
 }
 
 
-type EV = TimerEV;
+
+
+type EV =   TCPListenEV | TimerEV | TCPReadEV;
+
+
+
 
 struct TimerEV {
     wake: ||=>void;
     timeout_ms: u64;
     repeat_ms: u64;
+}
+
+struct TCPListenEV {
+    wake: ||=>void;
+    handle: *libuv::uv_tcp_t;
+    addr: libuv::sockaddr_in;
+    on_connect: ||=>void;
+
+}
+
+struct TCPReadEV {
+    wake: ||=>void;
+    buff: [u8];
+    
 }
 
 var GLOBAL_REACTOR = new_uv_reactor();
@@ -35,7 +55,14 @@ fn close_cb(handle:*()) void {
 }
 
 
+fn conn_cb(server:*libuv::uv_stream_t, status:u32) void {
+    let on_conn = libuv::get_data_for_handle<libuv::uv_stream_t|||=>void>(server);
+    (*on_conn)();
+    return;
+}
+
 use std::io;
+
 
 
 fn async_cb(async_t:*libuv::uv_async_t) void {
@@ -50,6 +77,21 @@ fn async_cb(async_t:*libuv::uv_async_t) void {
             libuv::uv_timer_init(libuv::uv_default_loop(), timer);
             libuv::set_data_for_handle(timer, &ev);
             libuv::uv_timer_start(timer, cb, ev.timeout_ms, ev.repeat_ms);
+
+        }
+        TCPListenEV(ev) => {
+            gc::keep_alive_pinned(ev.handle);
+            libuv::uv_tcp_init(reactor.loop, ev.handle);
+            libuv::uv_tcp_bind(ev.handle, &ev.addr, 0 as u32);
+            libuv::set_data_for_handle(ev.handle, &ev.on_connect);
+            let cb = unsafe_cast<()>(&conn_cb);
+            
+            libuv::uv_listen(unsafe_cast<libuv::uv_stream_t>(ev.handle), 128 as i32, cb);
+            
+
+        }
+        TCPReadEV(ev) => {
+
 
         }
         _ => {
@@ -103,6 +145,21 @@ impl UVReactor {
             wake: wake,
             timeout_ms: timeout_ms,
             repeat_ms: repeat_ms,
+        };
+        let e = ev as EV;
+        self.ch.send(e);
+        libuv::uv_async_send(self.async_t);
+        return;
+    }
+
+    pub fn new_tcp_listener(tcp_h:*libuv::uv_tcp_t, ip:string, port:i32, on_conn:||=>void, wake: ||=>void) void {
+        let addr = libuv::sockaddr_in{};
+        libuv::uv_ip4_addr(ip.cstr(), port, &addr);
+        let ev = TCPListenEV{
+            wake: wake,
+            handle: tcp_h,
+            addr: addr,
+            on_connect: on_conn,
         };
         let e = ev as EV;
         self.ch.send(e);
