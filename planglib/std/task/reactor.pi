@@ -56,7 +56,10 @@ fn close_cb(handle:*()) void {
 
 
 fn conn_cb(server:*libuv::uv_stream_t, status:u32) void {
-    let on_conn = libuv::get_data_for_handle<libuv::uv_stream_t|||=>void>(server);
+    let client = libuv::new_uv_tcp_t();
+    libuv::uv_tcp_init(GLOBAL_REACTOR.loop, unsafe_cast<libuv::uv_tcp_t>(client));
+    libuv::uv_accept(server, unsafe_cast<libuv::uv_stream_t>(client));
+    let on_conn = libuv::get_data_for_handle_raw<libuv::uv_stream_t|||=>void>(server);
     (*on_conn)();
     return;
 }

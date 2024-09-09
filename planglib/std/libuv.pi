@@ -114,12 +114,26 @@ pub fn set_data_for_handle<H|T> (handle:*H, data:*T) void {
 /// # get_data_for_handle
 /// 
 /// This function is used to get the data of the handle.
-/// It will undo the pinning and keep-alive of the data
+/// It will undo the keep-alive of the data
 /// 
 /// For more information, see the `set_data_for_handle` function.
 pub fn get_data_for_handle<H|T> (handle:*H) *T {
     let re = uv_handle_get_data(unsafe_cast<()>(handle));
     gc::rm_alive_pinned(re);
+    return unsafe_cast<T>(re);
+}
+
+
+/// # get_data_for_handle_raw
+/// 
+/// This function is used to get the data of the handle.
+/// 
+/// Unlike the `get_data_for_handle` function, this function
+/// has no side effect, can be used to get the data without
+/// undoing the keep-alive.
+pub fn get_data_for_handle_raw<H|T> (handle:*H) *T {
+    let re = uv_handle_get_data(unsafe_cast<()>(handle));
+    // gc::rm_alive_pinned(re);
     return unsafe_cast<T>(re);
 }
 
