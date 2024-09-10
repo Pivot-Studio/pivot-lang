@@ -1,5 +1,7 @@
 use std::libuv;
 use std::chan;
+use std::task::Task;
+use std::task::executor;
 
 
 struct UVReactor {
@@ -24,10 +26,9 @@ struct TimerEV {
 }
 
 struct TCPListenEV {
-    wake: ||=>void;
     handle: *libuv::uv_tcp_t;
     addr: libuv::sockaddr_in;
-    on_connect: ||=>void;
+    on_connect: |*libuv::uv_tcp_t|=>Task<()>;
 
 }
 
@@ -59,8 +60,9 @@ fn conn_cb(server:*libuv::uv_stream_t, status:u32) void {
     let client = libuv::new_uv_tcp_t();
     libuv::uv_tcp_init(GLOBAL_REACTOR.loop, unsafe_cast<libuv::uv_tcp_t>(client));
     libuv::uv_accept(server, unsafe_cast<libuv::uv_stream_t>(client));
-    let on_conn = libuv::get_data_for_handle_raw<libuv::uv_stream_t|||=>void>(server);
-    (*on_conn)();
+    let on_conn = libuv::get_data_for_handle_raw<libuv::uv_stream_t||*libuv::uv_tcp_t|=>Task<()>>(server);
+    let tk = (*on_conn)(client);
+    executor::GLOBAL_EXECUTOR.spawn(tk);
     return;
 }
 
@@ -155,11 +157,10 @@ impl UVReactor {
         return;
     }
 
-    pub fn new_tcp_listener(tcp_h:*libuv::uv_tcp_t, ip:string, port:i32, on_conn:||=>void, wake: ||=>void) void {
+    pub fn new_tcp_listener(tcp_h:*libuv::uv_tcp_t, ip:string, port:i32, on_conn:|*libuv::uv_tcp_t|=>Task<()>) void {
         let addr = libuv::sockaddr_in{};
         libuv::uv_ip4_addr(ip.cstr(), port, &addr);
         let ev = TCPListenEV{
-            wake: wake,
             handle: tcp_h,
             addr: addr,
             on_connect: on_conn,
