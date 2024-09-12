@@ -1,8 +1,82 @@
 use std::task::Task;
 use std::task::reactor;
 use std::task::executor;
+use std::libuv;
+use std::slice::SliceExt;
 
-
+use std::io;
 
 pub struct TCPServer {
+}
+
+
+
+pub struct TCPStream {
+    handle:*libuv::uv_tcp_t;
+}
+
+pub fn new_stream_from_tcp(handle:*libuv::uv_tcp_t) TCPStream {
+    
+    return TCPStream{
+        handle:handle,
+    };
+}
+
+impl TCPStream {
+    pub fn read_async(buf:[u8]) Task<i64> {
+        // pin the buffer
+        let buf_ptr = &buf[0];
+        gc::pin(buf_ptr);
+        let read_task = ReadTask{
+            first:true,
+            ready:false,
+            handle: unsafe_cast<libuv::uv_stream_t>(self.handle),
+            read_len:0,
+            buf:buf,
+        };
+
+        return read_task as Task<i64>;
+    }
+}
+
+
+struct ReadTask {
+    first:bool;
+    ready:bool;
+    handle:*libuv::uv_stream_t;
+    read_len:i64;
+    buf: [u8];
+}
+
+
+impl Task<i64> for ReadTask {
+    fn poll(wk:||=>void) Option<i64> {
+        if self.first {
+            self.first = false;
+            let read_cb = |nread| => {
+                if self.ready {
+                    return;
+                }
+                if nread<0 {
+                    // error
+                    self.ready = true;
+                    wk();
+                    return;
+                }
+                self.read_len = nread + self.read_len;
+                if self.read_len >= self.buf.len() {
+                    self.ready = true;
+                    wk();
+                    libuv::uv_read_stop(self.handle);
+                }
+                return;
+            };
+            reactor::GLOBAL_REACTOR.new_stream_read(self.handle, self.buf, read_cb);
+            
+        }
+        if self.ready {
+            return self.read_len as Option<i64>;
+        }
+        return None{} as Option<i64>;
+    }
 }
