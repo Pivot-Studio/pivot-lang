@@ -2,6 +2,7 @@ use std::libuv;
 use std::chan;
 use std::task::Task;
 use std::task::executor;
+use std::slice::SliceExt;
 
 
 struct UVReactor {
@@ -14,7 +15,7 @@ struct UVReactor {
 
 
 
-type EV =   TCPListenEV | TimerEV | TCPReadEV;
+type EV =   TCPListenEV | TimerEV | StreamReadEV | ReadStopEV;
 
 
 
@@ -25,6 +26,10 @@ struct TimerEV {
     repeat_ms: u64;
 }
 
+struct ReadStopEV {
+    handle: *libuv::uv_stream_t;
+}
+
 struct TCPListenEV {
     handle: *libuv::uv_tcp_t;
     addr: libuv::sockaddr_in;
@@ -32,10 +37,11 @@ struct TCPListenEV {
 
 }
 
-struct TCPReadEV {
-    wake: ||=>void;
-    buff: [u8];
-    
+struct StreamReadEV {
+    read_cb: |i64|=>void;
+    handle: *libuv::uv_stream_t;
+    total_read: i64;
+    buf: [u8];
 }
 
 var GLOBAL_REACTOR = new_uv_reactor();
@@ -56,7 +62,7 @@ fn close_cb(handle:*()) void {
 }
 
 
-fn conn_cb(server:*libuv::uv_stream_t, status:u32) void {
+fn conn_cb(server:*libuv::uv_stream_t, _status:u32) void {
     let client = libuv::new_uv_tcp_t();
     libuv::uv_tcp_init(GLOBAL_REACTOR.loop, unsafe_cast<libuv::uv_tcp_t>(client));
     libuv::uv_accept(server, unsafe_cast<libuv::uv_stream_t>(client));
@@ -65,6 +71,27 @@ fn conn_cb(server:*libuv::uv_stream_t, status:u32) void {
     executor::GLOBAL_EXECUTOR.spawn(tk);
     return;
 }
+
+fn alloc_cb(handle:*(), _suggested_size:i64, buf:*libuv::uv_buf_t) void {
+    let ev = libuv::get_data_for_handle<_| StreamReadEV>(handle);
+    let ptr = &ev.buf[ev.total_read];
+    let l = ev.buf.len() - ev.total_read;
+    if l<=0 {
+        l = 0;
+    }
+    * buf = libuv::uv_buf_init(ptr, l as u32);
+
+    return;
+}
+
+fn read_cb(stream:*libuv::uv_stream_t, nread:i64, _buf:*libuv::uv_buf_t) void {
+
+    let ev = libuv::get_data_for_handle<libuv::uv_stream_t|StreamReadEV>(stream);
+    ev.total_read = nread + ev.total_read;
+    ev.read_cb(nread);
+    return;
+}
+
 
 use std::io;
 
@@ -95,9 +122,16 @@ fn async_cb(async_t:*libuv::uv_async_t) void {
             
 
         }
-        TCPReadEV(ev) => {
+        StreamReadEV(ev) => {
+            gc::keep_alive_pinned(ev.handle);
+            let cb = unsafe_cast<()>(&read_cb);
+            let alloc_cb = unsafe_cast<()>(&alloc_cb);
+            libuv::uv_read_start(ev.handle, alloc_cb, cb);
+            libuv::set_data_for_handle(ev.handle, &ev);
 
-
+        }
+        ReadStopEV(ev) => {
+            libuv::uv_read_stop(ev.handle);
         }
         _ => {
         }
@@ -171,6 +205,28 @@ impl UVReactor {
         return;
     }
 
+
+    pub fn new_stream_read(stream:*libuv::uv_stream_t, buf:[u8], readcb:|i64|=>void) void {
+        let ev = StreamReadEV{
+            handle: stream,
+            read_cb: readcb,
+            buf:buf,
+        };
+        let e = ev as EV;
+        self.ch.send(e);
+        libuv::uv_async_send(self.async_t);
+        return;
+    }
+
+    pub fn stream_read_stop(stream:*libuv::uv_stream_t) void {
+        let ev = ReadStopEV{
+            handle: stream,
+        };
+        let e = ev as EV;
+        self.ch.send(e);
+        libuv::uv_async_send(self.async_t);
+        return;
+    }
     
 }
 

@@ -45,6 +45,7 @@ use std::task::reactor;
 use std::task::executor;
 use std::task::delay;
 use std::task::Task;
+use std::task::tcp;
 
 
 async fn async_1() Task<()> {
@@ -64,6 +65,11 @@ pub fn main() i64 {
     executor::GLOBAL_EXECUTOR.spawn(async_1());
     reactor::GLOBAL_REACTOR.new_tcp_listener(libuv::new_uv_tcp_t(), "0.0.0.0", 8899 as i32, async |c:* libuv::uv_tcp_t|=>{
         println!("on connect");
+        let stream = tcp::new_stream_from_tcp(c);
+        let buf = [u8* 10;];
+        let l = await stream.read_async(buf);
+        let s = gc::string_from_bytes(buf);
+        println!("read len ", l, " data: ", s);
         return ();
     });
     executor::GLOBAL_EXECUTOR.start_exec_loop();

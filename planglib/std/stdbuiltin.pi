@@ -131,11 +131,11 @@ macro println {
         print!($start, "\n");
     };
     ($start:@expr$(,$expr:@expr)*) => {
-        let s = sprint($start);
+        let _______s = sprint($start);
         $(
-            s.append(sprint($expr));
+            _______s.append(sprint($expr));
         )*
-        print!(s, "\n");
+        print!(_______s, "\n");
     };
 }
 
@@ -144,10 +144,10 @@ macro print {
         print($start);
     };
     ($start:@expr$(,$expr:@expr)*) => {
-        let s = sprint($start);
+        let _______s = sprint($start);
         $(
-            s.append(sprint($expr));
+            _______s.append(sprint($expr));
         )*
-        print_s(s);
+        print_s(_______s);
     };
 }

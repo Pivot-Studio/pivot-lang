@@ -12,6 +12,10 @@ pub struct uv_async_t {}
 pub struct uv_timer_t {}
 pub struct uv_tcp_t {}
 pub struct uv_stream_t {}
+pub struct uv_buf_t {
+    pub base:i64;
+    pub len:i64;
+}
 pub struct sockaddr_in {
     a:i64;
     b:i64;
@@ -20,6 +24,10 @@ pub struct sockaddr_in {
 }
 
 pub fn uv_default_loop() *uv_loop_t;
+
+pub fn uv_buf_init(base:*u8, len:u32) uv_buf_t;
+
+pub fn uv_read_stop(stream:*uv_stream_t) i32;
 
 fn uv_handle_get_data(handle:*()) *u8;
 
