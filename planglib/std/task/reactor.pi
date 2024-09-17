@@ -13,9 +13,15 @@ struct UVReactor {
 }
 
 
+struct WriteEV {
+    handle: *libuv::uv_stream_t;
+    buf: [u8];
+    write_cb: |i32|=>void;
+}
 
 
-type EV =   TCPListenEV | TimerEV | StreamReadEV | ReadStopEV;
+
+type EV =   TCPListenEV | TimerEV | StreamReadEV | ReadStopEV | WriteEV;
 
 
 
@@ -93,6 +99,15 @@ fn read_cb(stream:*libuv::uv_stream_t, nread:i64, _buf:*libuv::uv_buf_t) void {
 }
 
 
+fn write_cb(req:*libuv::uv_write_t, status:i32) void {
+    let ev = libuv::get_data_for_handle<libuv::uv_write_t|WriteEV>(req);
+    ev.write_cb(status);
+    let handle = unsafe_cast<()>(req);
+    let cb = unsafe_cast<()>(&close_cb);
+    libuv::uv_close(handle,cb);
+    return;
+}
+
 use std::io;
 
 
@@ -132,6 +147,21 @@ fn async_cb(async_t:*libuv::uv_async_t) void {
         }
         ReadStopEV(ev) => {
             libuv::uv_read_stop(ev.handle);
+        }
+        WriteEV(ev) => {
+            let req = libuv::new_uv_write_t();
+            gc::keep_alive_pinned(req);
+
+            let raw_slice_p = &ev.buf[0];
+            gc::pin(raw_slice_p);
+            let buf = libuv::uv_buf_init(&ev.buf[0], ev.buf.len() as u32);
+            let buf_p = &buf;
+            gc::pin(buf_p);
+            libuv::set_data_for_handle(req, &ev);
+            
+            let cb = unsafe_cast<()>(&write_cb);
+            libuv::uv_write(req, ev.handle, &buf, 1 as u32, cb);
+            libuv::set_data_for_handle(req, &ev);
         }
         _ => {
         }
@@ -223,6 +253,19 @@ impl UVReactor {
             handle: stream,
         };
         let e = ev as EV;
+        self.ch.send(e);
+        libuv::uv_async_send(self.async_t);
+        return;
+    }
+
+    pub fn stream_write(stream:*libuv::uv_stream_t,buf:[u8], writecb:|i32|=>void) void {
+        let ev = WriteEV{
+            handle: stream,
+            buf: buf,
+            write_cb: writecb,
+        };
+        let e = ev as EV;
+
         self.ch.send(e);
         libuv::uv_async_send(self.async_t);
         return;
