@@ -67,11 +67,13 @@ pub fn main() i64 {
         println!("on connect");
         let stream = tcp::new_stream_from_tcp(c);
         let buf = [u8* 10;];
-        let l = await stream.read_async(buf);
-        let s = gc::string_from_bytes(buf);
-        println!("read len ", l, " data: ", s);
-        let stat = await stream.write_async(buf);
-        println!("write status ", stat);
+        while true {
+            let l = await stream.read_async(buf);
+            let s = gc::string_from_bytes(buf);
+            println!("read len ", l, " data: ", s);
+            let stat = await stream.write_async(buf);
+            println!("write status ", stat);    
+        }
         return ();
     });
     executor::GLOBAL_EXECUTOR.start_exec_loop();

@@ -102,9 +102,7 @@ fn read_cb(stream:*libuv::uv_stream_t, nread:i64, _buf:*libuv::uv_buf_t) void {
 fn write_cb(req:*libuv::uv_write_t, status:i32) void {
     let ev = libuv::get_data_for_handle<libuv::uv_write_t|WriteEV>(req);
     ev.write_cb(status);
-    let handle = unsafe_cast<()>(req);
-    let cb = unsafe_cast<()>(&close_cb);
-    libuv::uv_close(handle,cb);
+    
     return;
 }
 
