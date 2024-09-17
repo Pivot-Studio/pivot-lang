@@ -37,8 +37,50 @@ impl TCPStream {
 
         return read_task as Task<i64>;
     }
+
+    pub fn write_async(buf:[u8]) Task<i32> {
+        let write_task = WriteTask{
+            first:true,
+            ready:false,
+            handle: unsafe_cast<libuv::uv_stream_t>(self.handle),
+            buf:buf,
+            status:0 as i32,
+        };
+        return write_task as Task<i32>;
+    }
 }
 
+struct WriteTask {
+    first:bool;
+    ready:bool;
+    handle:*libuv::uv_stream_t;
+    buf: [u8];
+    status:i32;
+}
+
+
+impl Task<i32> for WriteTask {
+    fn poll(wk:||=>void) Option<i32> {
+        if self.first {
+            self.first = false;
+            let write_cb = |status| => {
+                if self.ready {
+                    return;
+                }
+                self.status = status;
+                self.ready = true;
+                wk();
+                return;
+            };
+            reactor::GLOBAL_REACTOR.stream_write(self.handle, self.buf, write_cb);
+        }
+
+        if self.ready {
+            return self.status as Option<i32>;
+        }
+        return None{} as Option<i32>;
+    }
+}
 
 struct ReadTask {
     first:bool;

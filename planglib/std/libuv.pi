@@ -6,12 +6,18 @@ var UV_IDLE = 6 as u32;
 var UV_TIMER = 13 as u32;
 var UV_TCP = 12 as u32;
 
+
+// below are request types
+var UV_WRITE = 3 as u32;
+
 pub struct uv_loop_t {}
 pub struct uv_idle_t {}
 pub struct uv_async_t {}
 pub struct uv_timer_t {}
 pub struct uv_tcp_t {}
 pub struct uv_stream_t {}
+pub struct uv_write_t {}
+
 pub struct uv_buf_t {
     pub base:i64;
     pub len:i64;
@@ -50,6 +56,8 @@ pub fn uv_close(handle:*(), cb:*()) void;
 
 pub fn uv_handle_size(tp:u32) u64;
 
+pub fn uv_req_size(tp:u32) u64;
+
 pub fn uv_idle_init(loop:*uv_loop_t, handle:*uv_idle_t) i32;
 
 pub fn uv_idle_start(handle:*uv_idle_t, cb:* ()) i32;
@@ -74,6 +82,7 @@ pub fn uv_accept(server:*uv_stream_t, client:*uv_stream_t) i32;
 
 pub fn uv_read_start(stream:*uv_stream_t, alloc_cb:*(), read_cb:*()) i32;
 
+pub fn uv_write(req:*uv_write_t, stream:*uv_stream_t, bufs:*uv_buf_t, nbufs:u32, cb:*()) i32;
 
 pub fn new_uv_idle_t() *uv_idle_t {
     let re = gc::malloc_pinned(uv_handle_size(UV_IDLE) as i64);
@@ -93,6 +102,11 @@ pub fn new_uv_async_t() *uv_async_t {
 pub fn new_uv_timer_t() *uv_timer_t {
     let re = gc::malloc_pinned(uv_handle_size(UV_TIMER) as i64);
     return unsafe_cast<uv_timer_t>(re);
+}
+
+pub fn new_uv_write_t() *uv_write_t {
+    let re = gc::malloc_pinned(uv_req_size(UV_WRITE) as i64);
+    return unsafe_cast<uv_write_t>(re);
 }
 
 /// # uv_handle_set_data
