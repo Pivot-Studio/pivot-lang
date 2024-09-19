@@ -154,9 +154,9 @@
 <p>此项目目前处于早期开发阶段，不建议用于生产环境。<br />
 <a href="https://github.com/Pivot-Studio/pivot-lang">项目地址</a></p>
 <h2 id="安装"><a class="header" href="#安装">安装</a></h2>
-<p>见<a href="https://lang.pivotstudio.cn/docs/tutorial/installation.html">此处</a></p>
+<p>见<a href="https://pivotlang.tech/docs/tutorial/installation.html">此处</a></p>
 <h2 id="官网"><a class="header" href="#官网">官网</a></h2>
-<p><a href="https://lang.pivotstudio.cn">https://lang.pivotstudio.cn</a></p>
+<p><a href="https://pivotlang.tech">https://pivotlang.tech</a></p>
 <h2 id="contributing"><a class="header" href="#contributing">CONTRIBUTING</a></h2>
 <p>中文见<a href="./CONTRIBUTING-CN.html">此处</a><br />
 欢迎加入<a href="http://qm.qq.com/cgi-bin/qm/qr?_wv=1027&amp;k=vjKI1nbRHAIz1UbmDOjttLurEw93mLhA&amp;authKey=U6cUmnIxiptTskr9trZZ9vc2p291uWht8TlzPSOEPXliihLC9vAYMaRwDI0%2FolR8&amp;noverify=0&amp;group_code=688301255">qq群</a></p>
@@ -295,15 +295,15 @@ scoop install plc
 首先你需要添加我们的apt源的gpg key：</p>
 <pre><code class="language-bash">sudo apt update
 sudo apt install wget gnupg
-wget -O -  https://lang.pivotstudio.cn/apt/public.key | sudo apt-key add -
+wget -O -  https://pivotlang.tech/apt/public.key | sudo apt-key add -
 </code></pre>
 <p>然后添加我们的apt源：</p>
 <pre><code class="language-bash">sudo touch chmod +777 /etc/apt/sources.list.d/pl.list
 sudo chmod +777 /etc/apt/sources.list.d/pl.list
-sudo echo &quot;deb [arch=amd64] https://lang.pivotstudio.cn/apt/repo focal main
-# deb-src [arch=amd64] https://lang.pivotstudio.cn/apt/repo focal main
-deb [arch=amd64] https://lang.pivotstudio.cn/apt/repo jammy main
-# deb-src [arch=amd64] https://lang.pivotstudio.cn/apt/repo jammy main&quot;&gt;/etc/apt/sources.list.d/pl.list
+sudo echo &quot;deb [arch=amd64] https://pivotlang.tech/apt/repo focal main
+# deb-src [arch=amd64] https://pivotlang.tech/apt/repo focal main
+deb [arch=amd64] https://pivotlang.tech/apt/repo jammy main
+# deb-src [arch=amd64] https://pivotlang.tech/apt/repo jammy main&quot;&gt;/etc/apt/sources.list.d/pl.list
 sudo apt update
 </code></pre>
 <p>最后安装pivot lang编译器：</p>
@@ -389,7 +389,7 @@ pub fn main() i64 {
 </div>
 <div>
 <p>您可能也注意到了，我们的语言服务器可以被编译成webassembly并直接运行在浏览器中。如果你想只在在浏览器中体验
-pivot-lang，可以访问<a href="https://lang.pivotstudio.cn">https://lang.pivotstudio.cn</a>。</p>
+pivot-lang，可以访问<a href="https://pivotlang.tech">https://pivotlang.tech</a>。</p>
 </div>
 </div>
 <h2 id="vsc插件安装"><a class="header" href="#vsc插件安装">vsc插件安装</a></h2>
@@ -2437,7 +2437,7 @@ GC在触发的时候可能会移动堆中的对象，这主要是为了解决内
 <p>接下来一段时间的首要任务是完善泛型功能，让impl快能加泛型，接口也支持泛型。然后，就是代数类型和模式匹配，这些任务预计寒假能搞完。之后的高级功能就是闭包和协程支持，然后需要完善系统库，gc支持多线程。如果非常顺利的话，寒假结束前有机会完成到协程。<br />
 项目现在非常缺人，如果你对开发pl感兴趣，请联系我们。</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="代码分析和差量计算"><a class="header" href="#代码分析和差量计算">代码分析和差量计算</a></h1>
-<p>在<a href="https://lang.pivotstudio.cn/lsp/design.html">lsp的文档</a>中我简单介绍了差量计算在lsp模块中起到的优化作用，这里我将会详细介绍一下这个过程，希望能帮没接触过差量计算的小伙伴了解为何差量计算对于lsp的计算任务来说如此重要，以及什么情况下适合使用差量计算。</p>
+<p>在<a href="https://pivotlang.tech/lsp/design.html">lsp的文档</a>中我简单介绍了差量计算在lsp模块中起到的优化作用，这里我将会详细介绍一下这个过程，希望能帮没接触过差量计算的小伙伴了解为何差量计算对于lsp的计算任务来说如此重要，以及什么情况下适合使用差量计算。</p>
 <h2 id="纯函数"><a class="header" href="#纯函数">纯函数</a></h2>
 <p>差量计算中的基础对象一般是纯函数，纯函数的定义是：对于给定的输入，总是会有相同的输出，而且<strong>不会有任何副作用</strong>。<br />
 请注意其中<strong>不会有任何副作用</strong>这一点，如果要建立一个正确工作差量计算模型，必须要保证这一点。</p>

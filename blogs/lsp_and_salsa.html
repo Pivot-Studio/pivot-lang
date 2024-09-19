@@ -149,7 +149,7 @@
                 <div id="content" class="content">
                     <main>
                         <h1 id="代码分析和差量计算"><a class="header" href="#代码分析和差量计算">代码分析和差量计算</a></h1>
-<p>在<a href="https://lang.pivotstudio.cn/lsp/design.html">lsp的文档</a>中我简单介绍了差量计算在lsp模块中起到的优化作用，这里我将会详细介绍一下这个过程，希望能帮没接触过差量计算的小伙伴了解为何差量计算对于lsp的计算任务来说如此重要，以及什么情况下适合使用差量计算。</p>
+<p>在<a href="https://pivotlang.tech/lsp/design.html">lsp的文档</a>中我简单介绍了差量计算在lsp模块中起到的优化作用，这里我将会详细介绍一下这个过程，希望能帮没接触过差量计算的小伙伴了解为何差量计算对于lsp的计算任务来说如此重要，以及什么情况下适合使用差量计算。</p>
 <h2 id="纯函数"><a class="header" href="#纯函数">纯函数</a></h2>
 <p>差量计算中的基础对象一般是纯函数，纯函数的定义是：对于给定的输入，总是会有相同的输出，而且<strong>不会有任何副作用</strong>。<br />
 请注意其中<strong>不会有任何副作用</strong>这一点，如果要建立一个正确工作差量计算模型，必须要保证这一点。</p>
