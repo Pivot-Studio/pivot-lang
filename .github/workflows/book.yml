@@ -83,4 +83,4 @@ jobs:
         # Default: true
         ignore_source_map: true
 
-        refresh_dirs: '["https://lang.pivotstudio.cn/docs/"]'
+        refresh_dirs: '["https://pivotlang.tech/docs/"]'

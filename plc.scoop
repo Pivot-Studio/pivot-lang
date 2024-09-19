@@ -1,6 +1,6 @@
 {{
     "version": "{0}",
-    "homepage": "https://lang.pivotstudio.cn",
+    "homepage": "https://pivotlang.tech",
     "license": "MIT",
     "description": "Pivot Lang Compiler",
     "bin": [

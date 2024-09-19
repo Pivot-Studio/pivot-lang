@@ -11,11 +11,11 @@
 
 ## 安装
 
-见[此处](https://lang.pivotstudio.cn/docs/tutorial/installation.html)
+见[此处](https://pivotlang.tech/docs/tutorial/installation.html)
 
 ## 官网
 
-[https://lang.pivotstudio.cn](https://lang.pivotstudio.cn)
+[https://pivotlang.tech](https://pivotlang.tech)
 
 ## CONTRIBUTING
 

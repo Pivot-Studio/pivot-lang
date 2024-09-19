@@ -66,7 +66,7 @@
 
 参见 [文档][d1] 网站。对应源码在 [book](https://github.com/Pivot-Studio/pivot-lang/tree/master/book) 目录中，欢迎帮助我们完善文档。
 
-[d1]: https://lang.pivotstudio.cn/
+[d1]: https://pivotlang.tech/
 
 ## 风格
 

@@ -51,7 +51,7 @@ running it weekly, is welcome as well.
 
 See the [documentation][d1] site.
 
-[d1]: https://lang.pivotstudio.cn/
+[d1]: https://pivotlang.tech/
 
 ## Style
 

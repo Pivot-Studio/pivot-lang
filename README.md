@@ -11,15 +11,15 @@
 
 ## 安装
 
-见[此处](https://lang.pivotstudio.cn/docs/tutorial/installation.html)
+见[此处](https://pivotlang.tech/docs/tutorial/installation.html)
 
 ## 官网
 
-[https://lang.pivotstudio.cn](https://lang.pivotstudio.cn)
+[https://pivotlang.tech](https://pivotlang.tech)
 
 ## CONTRIBUTING
 
-[CONTRIBUTING](CONTRIBUTING.md)｜[贡献代码](https://lang.pivotstudio.cn/docs/CONTRIBUTING-CN.html)
+[CONTRIBUTING](CONTRIBUTING.md)｜[贡献代码](https://pivotlang.tech/docs/CONTRIBUTING-CN.html)
 
 欢迎加入: [QQ群](http://qm.qq.com/cgi-bin/qm/qr?_wv=1027&k=nlRLeRcRfr0SxXcLYsjsXobP6X7EeV_c&authKey=rdyEXtc0uMqjYS4i%2FJapoi7CUdwtKgtK5V8Xv0WKgIIb9n4ZkFaIo9mgkflqV%2Frf&noverify=0&group_code=688301255) [discord](https://discord.gg/ZYNhYu6sW9)
 

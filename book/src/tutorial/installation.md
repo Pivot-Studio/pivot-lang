@@ -23,16 +23,16 @@ scoop install plc
 ```bash
 sudo apt update
 sudo apt install wget gnupg
-wget -O -  https://lang.pivotstudio.cn/apt/public.key | sudo apt-key add -
+wget -O -  https://pivotlang.tech/apt/public.key | sudo apt-key add -
 ```
 然后添加我们的apt源：
 ```bash
 sudo touch chmod +777 /etc/apt/sources.list.d/pl.list
 sudo chmod +777 /etc/apt/sources.list.d/pl.list
-sudo echo "deb [arch=amd64] https://lang.pivotstudio.cn/apt/repo focal main
-# deb-src [arch=amd64] https://lang.pivotstudio.cn/apt/repo focal main
-deb [arch=amd64] https://lang.pivotstudio.cn/apt/repo jammy main
-# deb-src [arch=amd64] https://lang.pivotstudio.cn/apt/repo jammy main">/etc/apt/sources.list.d/pl.list
+sudo echo "deb [arch=amd64] https://pivotlang.tech/apt/repo focal main
+# deb-src [arch=amd64] https://pivotlang.tech/apt/repo focal main
+deb [arch=amd64] https://pivotlang.tech/apt/repo jammy main
+# deb-src [arch=amd64] https://pivotlang.tech/apt/repo jammy main">/etc/apt/sources.list.d/pl.list
 sudo apt update
 ```
 最后安装pivot lang编译器：

@@ -5,7 +5,7 @@
 
 ```admonish note
 您可能也注意到了，我们的语言服务器可以被编译成webassembly并直接运行在浏览器中。如果你想只在在浏览器中体验
-pivot-lang，可以访问[https://lang.pivotstudio.cn](https://lang.pivotstudio.cn)。  
+pivot-lang，可以访问[https://pivotlang.tech](https://pivotlang.tech)。  
 
 ```
 
