@@ -170,7 +170,7 @@ impl Node for VarNode {
                         return Err(self
                             .range
                             .new_err(ErrorCode::MACRO_EXPANSION_FAILED)
-                            .add_help(&format!("macro input isn't complete",))
+                            .add_help("macro input isn't complete")
                             .add_to_ctx(ctx));
                     }
                     let re = loop_var[ctx.macro_loop_idx].emit(ctx, builder);
@@ -194,7 +194,11 @@ impl Node for VarNode {
                     0
                 },
             );
-            ctx.save_if_var_hover(self.range, &symbol.get_data_ref().pltype.borrow());
+            ctx.save_if_var_hover(
+                self.range,
+                &symbol.get_data_ref().pltype.borrow(),
+                self.name,
+            );
 
             let is_global = symbol.is_global();
             let symbol_data = symbol.get_data();

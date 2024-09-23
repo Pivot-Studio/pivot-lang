@@ -828,7 +828,7 @@ impl<'a, 'ctx> Ctx<'a> {
         }
 
         // add basic hover infomation for defs
-        self.save_if_var_hover(range, &pltype.borrow());
+        self.save_if_var_hover(range, &pltype.borrow(), name);
         self.add_symbol_without_check(name, pv, real_tp(pltype), range, is_glob, is_extern)
     }
     pub fn add_symbol_without_check(
