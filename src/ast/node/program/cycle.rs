@@ -11,7 +11,7 @@ use crate::ast::plmod::Mod;
 use crate::format_label;
 
 use rustc_hash::FxHashMap;
-use salsa::plumbing::LookupId;
+use salsa::plumbing::FromId;
 use salsa::Accumulator;
 // use salsa::AsId;
 use ustr::ustr;
@@ -36,7 +36,7 @@ pub fn cycle_deps_recover<'db>(
             let name = db.ingredient_debug_name(key.ingredient_index());
             name != "compile_dry_file"
         })
-        .map(|(_, k)| Program::lookup_id(k.key_index(), db.as_dyn_database()))
+        .map(|(_, k)| Program::from_id(k.key_index()))
         .last()
         .unwrap();
     let src_file_path = params.params(db).file(db);
@@ -57,7 +57,7 @@ pub fn cycle_deps_recover<'db>(
                 let name = db.ingredient_debug_name(key.ingredient_index());
                 name != "compile_dry_file"
             })
-            .map(|(u, k)| (u, Program::lookup_id(k.key_index(), db.as_dyn_database())))
+            .map(|(u, k)| (u, Program::from_id(k.key_index())))
         {
             let prog = match_node(p, db);
             if let Some(r) = prev_use_map.get(p.params(db).file(db)) {
