@@ -20,8 +20,12 @@ struct WriteEV {
 }
 
 
+struct StopEV {
+    
+}
 
-type EV =   TCPListenEV | TimerEV | StreamReadEV | ReadStopEV | WriteEV;
+
+type EV =   TCPListenEV | TimerEV | StreamReadEV | ReadStopEV | WriteEV |StopEV;
 
 
 
@@ -161,6 +165,9 @@ fn async_cb(async_t:*libuv::uv_async_t) void {
             libuv::uv_write(req, ev.handle, &buf, 1 as u32, cb);
             libuv::set_data_for_handle(req, &ev);
         }
+        StopEV(ev) => {
+            libuv::uv_stop(reactor.loop);
+        }
         _ => {
         }
     }
@@ -264,6 +271,14 @@ impl UVReactor {
         };
         let e = ev as EV;
 
+        self.ch.send(e);
+        libuv::uv_async_send(self.async_t);
+        return;
+    }
+
+    pub fn stop() void {
+        let ev = StopEV{};
+        let e = ev as EV;
         self.ch.send(e);
         libuv::uv_async_send(self.async_t);
         return;
