@@ -29,6 +29,9 @@ pub struct sockaddr_in {
     d:i64;
 }
 
+
+pub fn uv_stop(loop:*uv_loop_t) i32;
+
 pub fn uv_default_loop() *uv_loop_t;
 
 pub fn uv_buf_init(base:*u8, len:u32) uv_buf_t;
