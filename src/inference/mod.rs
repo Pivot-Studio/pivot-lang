@@ -518,7 +518,7 @@ impl<'ctx> InferenceCtx<'ctx> {
         let key = self.new_key();
         self.add_symbol(name, key);
     }
-
+    #[cfg(feature = "repl")]
     pub fn import_repl_symbols(&mut self) {
         let guard = crate::repl::REPL_VARIABLES.lock().unwrap();
         for (name, g) in guard.iter() {
