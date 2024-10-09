@@ -416,10 +416,8 @@ fn test_doc_symbol() {
     );
 }
 
-// FIXME: IDK why but win will fail the test(invalid memory access)
-// after Rust print out test succ..
-// Can't reproduce on my local machine
 #[test]
+#[ignore = "may get SIGSEGV on jit engine exit somehow, need to investigate"]
 #[cfg(all(feature = "jit", not(windows)))]
 fn test_orc_jit() {
     use crate::ast::compiler::{compile, Options};

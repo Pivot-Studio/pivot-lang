@@ -167,6 +167,7 @@ fn async_cb(async_t:*libuv::uv_async_t) void {
         }
         StopEV(ev) => {
             libuv::uv_stop(reactor.loop);
+            libuv::uv_loop_close(GLOBAL_REACTOR.loop);
         }
         _ => {
         }
