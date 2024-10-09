@@ -30,6 +30,8 @@ pub struct sockaddr_in {
 }
 
 
+pub fn uv_loop_close(loop:*uv_loop_t) i32;
+
 pub fn uv_stop(loop:*uv_loop_t) i32;
 
 pub fn uv_default_loop() *uv_loop_t;
