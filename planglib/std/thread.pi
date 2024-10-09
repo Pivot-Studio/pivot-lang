@@ -2,7 +2,9 @@ fn new_thread(f: *||=>void) void;
 
 
 pub fn spawn(f:||=>void) void {
-    new_thread(&f);
+    let p = &f;
+    // gc::pin(p);
+    new_thread(p);
     return;
 }
 

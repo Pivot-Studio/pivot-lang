@@ -2165,7 +2165,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         global.unwrap()
     }
     fn build_dbg_location(&self, pos: Pos) {
-        assert_ne!(pos.line, 0, "debug location's line number should not be 0");
+        // assert_ne!(pos.line, 0, "debug location's line number should not be 0");
         if self
             .builder
             .get_insert_block()

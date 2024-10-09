@@ -2,6 +2,10 @@ pub use std::io::*;
 pub use std::slice::SliceExt;
 pub use std::string::StringExt;
 pub use std::task::Task;
+pub use std::task::reactor::*;
+pub use std::task::executor::*;
+pub use std::task::helper::*;
+
 
 fn print_i64(i:i64) void;
 fn print_i128(i:i128) void;

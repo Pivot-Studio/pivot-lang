@@ -20,5 +20,6 @@ use std::task;
 use std::libuv;
 use std::task::reactor;
 use std::task::executor;
+use std::task::helper;
 use std::task::delay;
 use std::task::tcp;
