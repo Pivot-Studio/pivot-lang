@@ -2,13 +2,23 @@ use std::task::Task;
 use std::task::executor;
 use std::task::reactor;
 use std::thread;
+use std::io;
 
 
 pub fn spawn_async_main<T>(t:Task<T>) void {
     // let tk = f();
+    let sadasdasdas = 1;
     thread::spawn(||=>{
-        let t = t; // FIXME: remove this line cause bus error
+        // let t = t; // FIXME: remove this line cause bus error
         let f = async || => {
+                        io::printi64ln(sadasdasdas);
+            let ddd =async || => {
+                io::printi64ln(sadasdasdas);
+                sadasdasdas = 101110;
+                return ();
+            };
+            await ddd();
+            io::printi64ln(sadasdasdas);
             await t;
             reactor::stop_global_reactor();
             return ();
@@ -18,5 +28,6 @@ pub fn spawn_async_main<T>(t:Task<T>) void {
         return;
     });
     reactor::start_global_reactor();
+    // io::printi64ln(sadasdasdas);
     return;
 }

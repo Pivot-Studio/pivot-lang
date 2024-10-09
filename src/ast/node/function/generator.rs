@@ -62,7 +62,7 @@ pub enum CtxFlag {
 #[derive(Clone, Default)]
 pub struct ClosureCtxData {
     // only the capture lists
-    pub table: LinkedHashMap<Ustr, (PLSymbolData, ValueHandle)>,
+    pub table: LinkedHashMap<Ustr, (PLSymbolData, ValueHandle, bool)>,
 
     // the logic of the closure
     pub data_handle: ValueHandle,

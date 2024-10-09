@@ -71,7 +71,9 @@ pub enum PLSymbol {
     Local(PLSymbolData),
     /// Global refers the symbol exists in the global scope of current module
     Global(PLSymbolData),
-    /// Captured refers a symbol exists in another module
+    /// Captured refers a symbol is captured by a closure
+    AlreadyCaptured(PLSymbolData),
+    /// Captured refers a symbol is captured by a closure
     Captured(PLSymbolData),
 }
 
@@ -80,7 +82,10 @@ impl PLSymbol {
         matches!(self, PLSymbol::Global(_))
     }
     pub fn is_captured(&self) -> bool {
-        matches!(self, PLSymbol::Captured(_))
+        matches!(self, PLSymbol::AlreadyCaptured(_)|PLSymbol::Captured(_))
+    }
+    pub fn is_already_captured(&self) -> bool {
+        matches!(self, PLSymbol::AlreadyCaptured(_))
     }
     /// # get_data_ref
     ///
@@ -89,6 +94,7 @@ impl PLSymbol {
         match self {
             PLSymbol::Local(d) => d,
             PLSymbol::Global(d) => d,
+            PLSymbol::AlreadyCaptured(d) => d,
             PLSymbol::Captured(d) => d,
         }
     }
@@ -100,6 +106,7 @@ impl PLSymbol {
         match self {
             PLSymbol::Local(d) => d,
             PLSymbol::Global(d) => d,
+            PLSymbol::AlreadyCaptured(d) => d,
             PLSymbol::Captured(d) => d,
         }
     }
@@ -679,7 +686,7 @@ impl<'a, 'ctx> Ctx<'a> {
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> Option<PLSymbol> {
         let reference = unsafe { (self as *mut Self).as_ref().unwrap() };
-        self.get_symbol_parent(name, builder, reference)
+        self.get_symbol_parent(name, builder, reference,false)
     }
 
     /// # get_symbol_parent
@@ -690,6 +697,7 @@ impl<'a, 'ctx> Ctx<'a> {
         name: &Ustr,
         builder: &'b BuilderEnum<'a, 'ctx>,
         parent: &'b Ctx<'a>,
+        rec_closure: bool,
     ) -> Option<PLSymbol> {
         let v = parent.table.get(name);
         if let Some(symbol) = v {
@@ -697,11 +705,11 @@ impl<'a, 'ctx> Ctx<'a> {
         }
         if let Some(data) = &parent.closure_data {
             let mut data = data.borrow_mut();
-            if let Some((symbol, _)) = data.table.get(name) {
-                return Some(PLSymbol::Captured(symbol.clone()));
+            if let Some((symbol, _,_)) = data.table.get(name) {
+                return Some(PLSymbol::AlreadyCaptured(symbol.clone()));
             }
             if let Some(p) = parent.parent {
-                let re = self.get_symbol_parent(name, builder, p);
+                let re = self.get_symbol_parent(name, builder, p,true);
                 if let Some(s) = &re {
                     let symbol = s.get_data_ref();
                     if !s.is_global() {
@@ -735,7 +743,7 @@ impl<'a, 'ctx> Ctx<'a> {
                                 self,
                             )
                             .unwrap();
-                        if self.generator_data.is_none() {
+                        if self.generator_data.is_none() || rec_closure || s.is_already_captured() {
                             gep = builder.build_load(
                                 gep,
                                 "closure_loaded",
@@ -747,7 +755,7 @@ impl<'a, 'ctx> Ctx<'a> {
                             value: gep,
                             ..new_symbol
                         };
-                        data.table.insert(*name, (new_symbol.clone(), symbol.value));
+                        data.table.insert(*name, (new_symbol.clone(), symbol.value,self.generator_data.is_some()));
                         builder.position_at_end_block(cur);
                         return Some(PLSymbol::Captured(new_symbol));
                     }
@@ -757,7 +765,7 @@ impl<'a, 'ctx> Ctx<'a> {
         }
         if !parent.as_root {
             if let Some(father) = parent.parent {
-                let re = self.get_symbol_parent(name, builder, father);
+                let re = self.get_symbol_parent(name, builder, father,rec_closure);
                 return re;
             }
         }

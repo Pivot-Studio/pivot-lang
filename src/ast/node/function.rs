@@ -1260,7 +1260,6 @@ impl Node for ClosureNode {
         let child = &mut ctx.new_child(self.range.start, builder);
         child.generator_data = None;
         child.ctx_flag = CtxFlag::Normal;
-        child.generator_data = None;
         child.function = Some(closure_fn_handle);
         let mut sttp_opt = None;
         let mut generator_alloca_b = 0;
@@ -1453,7 +1452,7 @@ impl Node for ClosureNode {
         // captured_data_typs stores every type of captured variables
         let mut captured_data_typs = vec![];
         // finalize the capture variables' types
-        for (captured_identifier, (v, _)) in &child.closure_data.as_ref().unwrap().borrow().table {
+        for (captured_identifier, (v, _,_)) in &child.closure_data.as_ref().unwrap().borrow().table {
             let v_typ = PLType::Pointer(v.pltype.to_owned());
             struct_captured_typs.fields.insert(
                 *captured_identifier,
@@ -1498,7 +1497,7 @@ impl Node for ClosureNode {
             None,
         );
         // fill the data into the structure captured_data_alloc
-        for (k, (_, ori_v)) in &closure_data.borrow().table {
+        for (k, (_, ori_v, prev_gen)) in &closure_data.borrow().table {
             let field = struct_captured_typs.fields.get(k).unwrap();
             let alloca: usize = builder
                 .build_struct_gep(
@@ -1510,10 +1509,14 @@ impl Node for ClosureNode {
                 )
                 .unwrap();
             let mut ori_v = *ori_v;
-            if ctx.generator_data.is_some() {
+            if ctx.generator_data.is_some() && !*prev_gen {
                 // load it before store it
+                if *k == "sadasdasdas" {
+                    eprintln!("load_generator_data {}", prev_gen);
+                    
+                }
                 ori_v =
-                    builder.build_load(ori_v, "load_generator_data", &PLType::new_i8_ptr(), ctx);
+                    builder.build_load(ori_v, &format!("load_generator_data{}", k), &PLType::new_i8_ptr(), ctx);
             }
             builder.build_store(alloca, ori_v);
         }
