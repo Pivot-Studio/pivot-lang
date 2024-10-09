@@ -104,6 +104,7 @@ impl GlobalNode {
         builder: &'b BuilderEnum<'a, '_>,
     ) -> Result<(), PLDiag> {
         let mut infer_ctx = InferenceCtx::new(ctx.unify_table.clone());
+        #[cfg(feature = "repl")]
         infer_ctx.import_repl_symbols();
         let ty = infer_ctx.inference(&mut self.exp, ctx, builder);
         if {
