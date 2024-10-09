@@ -1,0 +1,22 @@
+use std::task::Task;
+use std::task::executor;
+use std::task::reactor;
+use std::thread;
+
+
+pub fn spawn_async_main<T>(t:Task<T>) void {
+    // let tk = f();
+    thread::spawn(||=>{
+        let t = t; // FIXME: remove this line cause bus error
+        let f = async || => {
+            await t;
+            reactor::stop_global_reactor();
+            return ();
+        };
+        executor::GLOBAL_EXECUTOR.spawn(f());
+        executor::GLOBAL_EXECUTOR.start_exec_loop();
+        return;
+    });
+    reactor::start_global_reactor();
+    return;
+}

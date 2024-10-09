@@ -3,12 +3,19 @@ use nom::{
     combinator::{eof, map, map_res},
     IResult,
 };
+use ret::RetNode;
 
-use crate::nomparser::Span;
 use crate::{
     ast::node::types::TypedIdentifierNode,
     ast::range::Range,
     ast::{diag::ErrorCode, fmt::FmtBuilder, node::types::PointerTypeNode},
+};
+use crate::{
+    ast::{
+        node::{function::FuncCallNode, pkg::ExternIdNode},
+        pltype::{PLType, PriType},
+    },
+    nomparser::Span,
 };
 
 use super::{implement::impl_def, macro_parse::macro_parser, union::union_stmt, *};
@@ -37,8 +44,92 @@ pub fn program(input: Span) -> IResult<Span, Box<NodeEnum>> {
         if let Ok((i, t)) = top {
             match *t {
                 TopLevel::FuncType(f) => {
-                    fntypes.push(f.clone());
-                    nodes.push(Box::new(f.into()));
+                    // if it's async main, we need to generate a new main function wrapping the async main
+                    if f.id.name == "main" && f.generator_ty.is_async() {
+                        let mut new_f = f.clone();
+                        new_f.id.name = "__main_async".into();
+                        let call_main_async = FuncCallNode {
+                            generic_params: None,
+                            callee: Box::new(NodeEnum::ExternIdNode(ExternIdNode {
+                                namespace: vec![],
+                                id: Box::new(VarNode {
+                                    name: "__main_async".into(),
+                                    range: Default::default(),
+                                    id: None,
+                                }),
+                                complete: true,
+                                singlecolon: false,
+                                range: Default::default(),
+                            })),
+                            paralist: vec![],
+                            generic_infer: None,
+                            comments: vec![vec![]],
+                            range: Default::default(),
+                        };
+                        let call_spawn_async_main = FuncCallNode {
+                            generic_params: None,
+                            callee: Box::new(NodeEnum::ExternIdNode(ExternIdNode {
+                                namespace: vec![],
+                                id: Box::new(VarNode {
+                                    name: "spawn_async_main".into(),
+                                    range: Default::default(),
+                                    id: None,
+                                }),
+                                complete: true,
+                                singlecolon: false,
+                                range: Default::default(),
+                            })),
+                            paralist: vec![Box::new(NodeEnum::FuncCall(call_main_async))],
+                            generic_infer: None,
+                            comments: vec![vec![]],
+                            range: Default::default(),
+                        };
+                        let ret_zero = RetNode {
+                            value: Some(Box::new(NodeEnum::Num(NumNode {
+                                value: Num::Int(0),
+                                range: Default::default(),
+                            }))),
+                            yield_identifier: None,
+                            comments: vec![vec![]],
+                            range: Default::default(),
+                        };
+                        let real_main_def = FuncDefNode {
+                            id: Box::new(VarNode {
+                                name: "main".into(),
+                                range: Default::default(),
+                                id: None,
+                            }),
+                            paralist: vec![],
+                            ret: PLType::Primitive(PriType::I64).get_typenode(&"".into()),
+                            doc: Default::default(),
+                            pre_comments: Default::default(),
+                            is_declaration_only: false,
+                            generics: Default::default(),
+                            body: Some(StatementsNode {
+                                statements: vec![
+                                    Box::new(NodeEnum::FuncCall(call_spawn_async_main)),
+                                    Box::new(NodeEnum::Ret(ret_zero)),
+                                ],
+                                range: Default::default(),
+                            }),
+                            modifier: None,
+                            generics_size: 0,
+                            trait_bounds: None,
+                            impl_trait: None,
+                            is_method: false,
+                            in_trait_def: false,
+                            target_range: Default::default(),
+                            generator_ty: crate::ast::node::function::GeneratorType::None,
+                            range: Default::default(),
+                        };
+                        fntypes.push(real_main_def.clone());
+                        nodes.push(Box::new(real_main_def.into()));
+                        fntypes.push(new_f.clone());
+                        nodes.push(Box::new(new_f.into()));
+                    } else {
+                        fntypes.push(f.clone());
+                        nodes.push(Box::new(f.into()));
+                    }
                 }
                 TopLevel::StructDef(s) => {
                     structs.push(s.clone());

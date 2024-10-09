@@ -38,4 +38,15 @@ impl SingleThreadExecutor {
 }
 
 
+pub fn start_exec_loop() void {
+    GLOBAL_EXECUTOR.start_exec_loop();
+    return;
+}
+
+
+pub fn spawn_task<T>(task:Task<T>) void {
+    GLOBAL_EXECUTOR.spawn(task);
+    return;
+}
+
 

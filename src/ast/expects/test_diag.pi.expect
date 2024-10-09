@@ -874,13 +874,13 @@
             range: Range {
                 start: Pos {
                     line: 71,
-                    column: 21,
-                    offset: 746,
+                    column: 8,
+                    offset: 733,
                 },
                 end: Pos {
                     line: 71,
-                    column: 24,
-                    offset: 749,
+                    column: 18,
+                    offset: 743,
                 },
             },
         },
@@ -896,13 +896,13 @@
             range: Range {
                 start: Pos {
                     line: 140,
-                    column: 23,
-                    offset: 1501,
+                    column: 10,
+                    offset: 1488,
                 },
                 end: Pos {
                     line: 140,
-                    column: 27,
-                    offset: 1505,
+                    column: 20,
+                    offset: 1498,
                 },
             },
         },
@@ -959,7 +959,29 @@
                 MACRO_EXPAND_DEPTH_TOO_DEEP,
             ),
             help: None,
-            labels: [],
+            labels: [
+                PLLabel {
+                    file: u!(""),
+                    txt: Some(
+                        (
+                            u!("original macro call from here"),
+                            [],
+                        ),
+                    ),
+                    range: Range {
+                        start: Pos {
+                            line: 84,
+                            column: 9,
+                            offset: 887,
+                        },
+                        end: Pos {
+                            line: 84,
+                            column: 13,
+                            offset: 891,
+                        },
+                    },
+                },
+            ],
             source: None,
             range: Range {
                 start: Pos {

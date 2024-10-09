@@ -287,3 +287,14 @@ impl UVReactor {
 }
 
 
+
+
+pub fn start_global_reactor() void {
+    GLOBAL_REACTOR.start_ev_loop();
+    return;
+}
+
+pub fn stop_global_reactor() void {
+    GLOBAL_REACTOR.stop();
+    return;
+}

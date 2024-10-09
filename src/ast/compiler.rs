@@ -278,6 +278,7 @@ pub fn process_llvm_ir<'a>(
     };
 
     if !op.debug {
+        llvmmod.strip_debug_info();
         let obj_f = &format!("{}/{}", &ASSET_PATH.lock().unwrap(), "out.o");
         tm.write_to_file(
             &llvmmod,

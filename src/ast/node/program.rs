@@ -129,7 +129,13 @@ impl Node for ProgramNode {
 
         // emit information for all nodes
         self.nodes.iter_mut().for_each(|x| {
+            if x.range() == Default::default() {
+                *ctx.need_highlight.borrow_mut() = 1;
+                ctx.disable_diag = true;
+            }
             _ = x.emit(ctx, builder);
+            ctx.disable_diag = false;
+            *ctx.need_highlight.borrow_mut() = 0;
         });
         ctx.init_fn_ret(builder);
         Ok(Default::default())
