@@ -107,6 +107,76 @@ pub fn test_std() void {
     return;
 }
 
+async pub fn test_nested_async_closure() Task<()> {
+    let a = 1;
+    let f =async || => {
+        let f =async || => {
+            
+            panic::assert(a == 1);
+            a = 101110;
+            return ();
+        }; 
+        panic::assert(a == 1);
+
+        await f();
+        panic::assert(a == 101110);
+
+
+        a = 101111;
+        return ();
+    };
+    panic::assert(a == 1);
+    await f();
+    panic::assert(a == 101111);
+    return ();
+}
+
+
+pub fn test_nested_async_closure_in_normal_f() Task<()> {
+    let a = 1;
+    let f =async || => {
+        let f =async || => {
+            
+            panic::assert(a == 1);
+            a = 101110;
+            return ();
+        }; 
+        panic::assert(a == 1);
+
+        await f();
+        panic::assert(a == 101110);
+
+
+        a = 101111;
+        return ();
+    };
+    let re = f();
+    return re;
+}
+
+pub fn test_nested_async_closure_in_normal_f2() Task<()> {
+    let a = 1;
+    let f =async || => {
+        a = 1;
+        let f =async || => {
+            
+            panic::assert(a == 1);
+            a = 101110;
+            return ();
+        }; 
+        panic::assert(a == 1);
+
+        await f();
+        panic::assert(a == 101110);
+
+
+        a = 101111;
+        return ();
+    };
+    let re = f();
+    return re;
+}
+
 
 
 async fn async_f_1(a:i64, b :test) Task<()> {
