@@ -77,6 +77,7 @@ async fn main() Task<()> {
     println!("async 1");
     await delay::delay(2000 as u64);
     println!("async 1 end");
+
     await std_test::test_nested_async_closure();
     await std_test::test_nested_async_closure_in_normal_f();
     await std_test::test_nested_async_closure_in_normal_f2();
