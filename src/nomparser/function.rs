@@ -16,7 +16,7 @@ use super::*;
 #[test_parser(
     "
     /// this is a comment
-    gen pub fn f(  x: int, y  : int  ) int {
+    pub gen fn f(  x: int, y  : int  ) int {
         x = x+1;
         return 0;
     }
@@ -25,14 +25,14 @@ use super::*;
 #[test_parser(
     "
     /// this is a comment
-    async pub fn f(  x: int, y  : int  ) int {
+    pub async fn f(  x: int, y  : int  ) int {
         x = x+1;
         return 0;
     }
     "
 )]
 #[test_parser(
-    "gen pub fn f(  x: int, y  : int  ) int {
+    "pub gen fn f(  x: int, y  : int  ) int {
         x = x+1;
         return 0;
     }
@@ -79,11 +79,14 @@ pub fn function_def(input: Span) -> IResult<Span, Box<TopLevel>> {
     map_res(
         tuple((
             many0(del_newline_or_space!(comment)),
-            opt(alt((
-                tag_token_word(TokenType::GENERATOR_MARKER),
-                tag_token_word(TokenType::ASYNC_MARKER),
-            ))),
-            modifiable(tag_token_word(TokenType::FN), TokenType::PUB),
+            modifiable(
+                opt(alt((
+                    tag_token_word(TokenType::GENERATOR_MARKER),
+                    tag_token_word(TokenType::ASYNC_MARKER),
+                ))),
+                TokenType::PUB,
+            ),
+            tag_token_word(TokenType::FN),
             identifier,
             opt(generic_type_def),
             tag_token_symbol(TokenType::LPAREN),
@@ -109,8 +112,8 @@ pub fn function_def(input: Span) -> IResult<Span, Box<TopLevel>> {
         )),
         |(
             doc,
-            g,
-            (modifier, (_, start)),
+            (modifier, g),
+            (_, start),
             function_identifier,
             generics,
             _,

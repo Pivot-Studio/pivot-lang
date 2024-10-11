@@ -107,7 +107,7 @@ pub fn test_std() void {
     return;
 }
 
-async pub fn test_nested_async_closure() Task<()> {
+pub async fn test_nested_async_closure() Task<()> {
     let a = 1;
     let f =async || => {
         let f =async || => {
