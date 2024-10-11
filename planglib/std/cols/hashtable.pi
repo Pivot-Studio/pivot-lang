@@ -42,7 +42,7 @@ impl <K:Hash+Eq<K>|V> HashTable<K|V>  {
         }
         return;
     }
-    gen pub fn into_iter() Iterator<(K,V)> {
+    pub gen fn into_iter() Iterator<(K,V)> {
         for let i = 0; i < arr_len(self.buckets); i = i + 1 {
             let node = self.buckets[i];
             while node is *TableNode<K|V> {

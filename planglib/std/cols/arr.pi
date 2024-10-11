@@ -52,7 +52,7 @@ impl <T> Array<T> {
         return;
     }
 
-    gen pub fn iter() Iterator<T> {
+    pub gen fn iter() Iterator<T> {
         for let i = 0; i < self.len as i64; i = i + 1 {
             yield return self.data[i];
         }
