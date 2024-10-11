@@ -1452,7 +1452,8 @@ impl Node for ClosureNode {
         // captured_data_typs stores every type of captured variables
         let mut captured_data_typs = vec![];
         // finalize the capture variables' types
-        for (captured_identifier, (v, _,_)) in &child.closure_data.as_ref().unwrap().borrow().table {
+        for (captured_identifier, (v, _, _)) in &child.closure_data.as_ref().unwrap().borrow().table
+        {
             let v_typ = PLType::Pointer(v.pltype.to_owned());
             struct_captured_typs.fields.insert(
                 *captured_identifier,
@@ -1513,10 +1514,13 @@ impl Node for ClosureNode {
                 // load it before store it
                 if *k == "sadasdasdas" {
                     eprintln!("load_generator_data {}", prev_gen);
-                    
                 }
-                ori_v =
-                    builder.build_load(ori_v, &format!("load_generator_data{}", k), &PLType::new_i8_ptr(), ctx);
+                ori_v = builder.build_load(
+                    ori_v,
+                    &format!("load_generator_data{}", k),
+                    &PLType::new_i8_ptr(),
+                    ctx,
+                );
             }
             builder.build_store(alloca, ori_v);
         }

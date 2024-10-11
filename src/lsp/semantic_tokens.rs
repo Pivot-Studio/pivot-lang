@@ -191,7 +191,6 @@ impl SemanticTokensBuilder {
     pub fn set_modifier(&mut self, index: usize, modifier: u32) {
         if index >= self.data.len() {
             return;
-            
         }
         let token = &mut self.data[index];
         token.token_modifiers_bitset = modifier;
