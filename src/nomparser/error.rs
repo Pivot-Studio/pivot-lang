@@ -77,6 +77,23 @@ where
     alt((parser, except(ex, msg, code)))
 }
 
+pub fn eat_any_err_block_before<'a, E, F, R>(
+    parser: F,
+    parser2: F,
+    until: &'static str,
+    code: ErrorCode,
+    msg: &'static str,
+) -> impl FnMut(Span<'a>) -> IResult<Span<'a>, R, E>
+where
+    E: ParseError<Span<'a>> + FromExternalError<Span<'a>, std::fmt::Error>,
+    F: FnMut(Span<'a>) -> IResult<Span<'a>, R, E>,
+{
+    alt((
+        parser,
+        preceded(match_paired_until(until, code, msg), parser2),
+    ))
+}
+
 /// match all token with paired `(` or `{` or `[` until find given token out of the paired token
 ///
 /// will report an error

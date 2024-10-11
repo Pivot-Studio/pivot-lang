@@ -329,7 +329,7 @@ impl Node for FuncCallNode {
             ctx.save_if_comment_doc_hover(id_range, Some(fnvalue.doc.clone()));
             handle_ret(ret, rettp, fnvalue.is_declare && skip == 0, ctx, builder)
         });
-        ctx.set_if_refs_tp(pltype, id_range);
+        // ctx.set_if_refs_tp(pltype, id_range);
         ctx.emit_comment_highlight(&self.comments[0]);
         res
     }

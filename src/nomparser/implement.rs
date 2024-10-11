@@ -1,4 +1,5 @@
 use crate::ast::{node::implement::ImplNode, tokens::TokenType};
+use error::eat_any_err_block_before;
 use nom::{
     combinator::{map_res, opt},
     multi::many0,
@@ -70,9 +71,21 @@ pub fn impl_def(input: Span) -> IResult<Span, Box<TopLevel>> {
             opt(pair(type_name, tag_token_word(TokenType::FOR))),
             type_name,
             del_newline_or_space!(tag_token_symbol(TokenType::LBRACE)),
-            many0(del_newline_or_space!(function_def)),
+            many0(eat_any_err_block_before(
+                function_def,
+                function_def,
+                "\n",
+                crate::ast::diag::ErrorCode::SYNTAX_ERROR_TOP_STATEMENT,
+                "failed to parse",
+            )),
             many0(comment),
-            del_newline_or_space!(tag_token_symbol(TokenType::RBRACE)),
+            eat_any_err_block_before(
+                del_newline_or_space!(tag_token_symbol(TokenType::RBRACE)),
+                del_newline_or_space!(tag_token_symbol(TokenType::RBRACE)),
+                "}",
+                crate::ast::diag::ErrorCode::SYNTAX_ERROR_TOP_STATEMENT,
+                "failed to parse",
+            ),
         )),
         |(_, generics, impl_trait, structure, (_, start), func_def, comment0, (_, end))| {
             res_box(Box::new(TopLevel::ImplDef(ImplNode {

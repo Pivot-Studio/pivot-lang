@@ -88,7 +88,13 @@ impl Node for UnaryOpNode {
                             .map(|(_, v)| v.clone())
                             .unwrap_or(Arc::new(RefCell::new(PLType::Unknown)))
                     }
-                    _ => Arc::new(RefCell::new(PLType::Unknown)),
+                    _ => {
+                        return Err(self
+                            .range
+                            .new_err(ErrorCode::ONLY_TASK_CAN_BE_AWAIT)
+                            .add_label(exp_range, ctx.get_file(), None)
+                            .add_to_ctx(ctx));
+                    }
                 };
                 let awaited = builder.await_task(ctx, rv.get_value());
                 return Ok(NodeOutput::new_value(NodeValue::new(awaited, poll_ty)));

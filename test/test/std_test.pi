@@ -33,7 +33,6 @@ impl Task<i64> for CustomTask {
         }
         return 100 as Option<i64>;
     }
-    
 }
 
 
