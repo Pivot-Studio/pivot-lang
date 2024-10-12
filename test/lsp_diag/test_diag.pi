@@ -148,3 +148,20 @@ use std::task::Task;
 async fn async_f1() Task<()> {
     return 1;
 }
+
+
+fn test_f_diag1(a,) void {
+    
+    return;
+}
+
+fn test_f_diag2(,) void {
+    
+    return;
+}
+
+fn test_f_diag3(a, b:i64) void {
+    
+    return;
+}
+

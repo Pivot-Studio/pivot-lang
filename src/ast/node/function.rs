@@ -1512,9 +1512,6 @@ impl Node for ClosureNode {
             let mut ori_v = *ori_v;
             if ctx.generator_data.is_some() && !*prev_gen {
                 // load it before store it
-                if *k == "sadasdasdas" {
-                    eprintln!("load_generator_data {}", prev_gen);
-                }
                 ori_v = builder.build_load(
                     ori_v,
                     &format!("load_generator_data{}", k),

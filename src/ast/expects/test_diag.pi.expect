@@ -476,6 +476,72 @@
     PLDiag {
         raw: PLDiagRaw {
             code: Err(
+                SYNTAX_ERROR_UNEXPECTED_TOKEN,
+            ),
+            help: None,
+            labels: [],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 153,
+                    column: 17,
+                    offset: 1616,
+                },
+                end: Pos {
+                    line: 153,
+                    column: 18,
+                    offset: 1617,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
+                SYNTAX_ERROR_UNEXPECTED_TOKEN,
+            ),
+            help: None,
+            labels: [],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 158,
+                    column: 17,
+                    offset: 1663,
+                },
+                end: Pos {
+                    line: 158,
+                    column: 17,
+                    offset: 1663,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
+                SYNTAX_ERROR_UNEXPECTED_TOKEN,
+            ),
+            help: None,
+            labels: [],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 163,
+                    column: 17,
+                    offset: 1709,
+                },
+                end: Pos {
+                    line: 163,
+                    column: 18,
+                    offset: 1710,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
                 INVALID_UNION_CAST,
             ),
             help: Some(
@@ -1049,6 +1115,30 @@
     PLDiag {
         raw: PLDiagRaw {
             code: Err(
+                SYNTAX_ERROR_REDUNDENT_SYMBOL,
+            ),
+            help: Some(
+                "remove this redundant symbol",
+            ),
+            labels: [],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 158,
+                    column: 17,
+                    offset: 1663,
+                },
+                end: Pos {
+                    line: 158,
+                    column: 18,
+                    offset: 1664,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
                 SYNTAX_ERROR_IF_CONDITION,
             ),
             help: Some(
@@ -1112,6 +1202,30 @@
                     line: 133,
                     column: 9,
                     offset: 1434,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
+                SYNTAX_ERROR_FUNC_PARAM,
+            ),
+            help: Some(
+                "cannot recognize function parameters",
+            ),
+            labels: [],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 153,
+                    column: 17,
+                    offset: 1616,
+                },
+                end: Pos {
+                    line: 153,
+                    column: 19,
+                    offset: 1618,
                 },
             },
         },
@@ -1388,6 +1502,52 @@
                     line: 136,
                     column: 10,
                     offset: 1452,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Warn(
+                UNUSED_VARIABLE,
+            ),
+            help: None,
+            labels: [
+                PLLabel {
+                    file: u!(""),
+                    txt: Some(
+                        (
+                            u!("Unused variable `{}`"),
+                            [
+                                u!("b"),
+                            ],
+                        ),
+                    ),
+                    range: Range {
+                        start: Pos {
+                            line: 163,
+                            column: 20,
+                            offset: 1712,
+                        },
+                        end: Pos {
+                            line: 163,
+                            column: 21,
+                            offset: 1713,
+                        },
+                    },
+                },
+            ],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 163,
+                    column: 20,
+                    offset: 1712,
+                },
+                end: Pos {
+                    line: 163,
+                    column: 21,
+                    offset: 1713,
                 },
             },
         },

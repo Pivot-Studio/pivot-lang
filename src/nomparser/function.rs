@@ -1,18 +1,20 @@
+use error::{err_tolerable_seplist0, match_paired_until};
 use nom::{
     branch::alt,
-    combinator::{map_res, opt},
+    combinator::{map, map_res, opt, peek},
     multi::{many0, separated_list0},
-    sequence::{preceded, tuple},
+    sequence::{preceded, terminated, tuple},
     IResult,
 };
 
-use crate::{ast::node::function::FuncDefNode, ast::tokens::TokenType};
+use crate::ast::{diag::ErrorCode, node::function::FuncDefNode, tokens::TokenType};
 use crate::{ast::node::function::GeneratorType, nomparser::Span};
 
 use internal_macro::{test_parser, test_parser_error};
 
 use super::*;
 
+#[test_parser("fn f(a,) int;")]
 #[test_parser(
     "
     /// this is a comment
@@ -90,21 +92,36 @@ pub fn function_def(input: Span) -> IResult<Span, Box<TopLevel>> {
             identifier,
             opt(generic_type_def),
             tag_token_symbol(TokenType::LPAREN),
-            del_newline_or_space!(separated_list0(
-                tag_token_symbol(TokenType::COMMA),
-                del_newline_or_space!(typed_identifier),
+            alt((
+                terminated(
+                    del_newline_or_space!(err_tolerable_seplist0(
+                        del_newline_or_space!(typed_identifier),
+                        del_newline_or_space!(typed_identifier),
+                        TokenType::COMMA,
+                    )),
+                    peek(tag_token_symbol(TokenType::RPAREN)),
+                ),
+                map(
+                    match_paired_until(
+                        ")",
+                        ErrorCode::SYNTAX_ERROR_FUNC_PARAM,
+                        "cannot recognize function parameters",
+                    ),
+                    |_| vec![],
+                ),
             )),
             tag_token_symbol(TokenType::RPAREN),
             type_name,
             opt(del_newline_or_space!(preceded(
                 tag_token_symbol(TokenType::WHERE),
-                separated_list0(
-                    tag_token_symbol(TokenType::COMMA),
+                err_tolerable_seplist0(
                     del_newline_or_space!(trait_bound),
-                ),
+                    del_newline_or_space!(trait_bound),
+                    TokenType::COMMA
+                )
             ))),
             alt((
-                map_res(statement_block, |b| Ok::<_, ()>((Some(b.clone()), b.range))),
+                map(statement_block, |b| (Some(b.clone()), b.range)),
                 map_res(tag_token_symbol(TokenType::SEMI), |(_, range)| {
                     Ok::<_, ()>((None, range))
                 }),

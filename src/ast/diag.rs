@@ -180,6 +180,7 @@ define_diag!(
     ONLY_TASK_CAN_BE_AWAIT = "only Task can be awaited",
     GENERATOR_FUNCTION_CANNOT_RETURN_VOID = "generator function cannot return void",
     MACRO_EXPANSION_FAILED = "macro expansion failed",
+    SYNTAX_ERROR_FUNC_PARAM = "syntax error: function parameter",
 );
 
 define_diag! {
