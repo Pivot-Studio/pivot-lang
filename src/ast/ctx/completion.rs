@@ -222,11 +222,12 @@ impl Ctx<'_> {
     pub(crate) fn get_keyword_completions(&self, vmap: &mut FxHashMap<Ustr, CompletionItem>) {
         let keywords = vec![
             "if", "else", "while", "for", "return", "struct", "let", "true", "false", "as", "is",
-            "gen", "yield", "match",
+            "gen", "yield", "match", "async", "await",
         ];
         let loopkeys = vec!["break", "continue"];
         let toplevel = vec![
             "fn", "struct", "const", "var", "use", "impl", "trait", "pub", "type", "gen", "where",
+            "async",
         ];
         if self.parent.is_none() {
             for k in toplevel {

@@ -50,9 +50,7 @@
             code: Err(
                 SYNTAX_ERROR_UNEXPECTED_TOKEN,
             ),
-            help: Some(
-                "",
-            ),
+            help: None,
             labels: [],
             source: None,
             range: Range {
@@ -74,9 +72,7 @@
             code: Err(
                 SYNTAX_ERROR_UNEXPECTED_TOKEN,
             ),
-            help: Some(
-                "",
-            ),
+            help: None,
             labels: [],
             source: None,
             range: Range {

@@ -44,9 +44,12 @@ impl State {
     }
 
     pub fn raise_error(&self, err: ErrorNode) {
-        self.errors
-            .borrow_mut()
-            .push(err.range.new_err(err.code).add_help(&err.msg).clone());
+        let e = if !err.msg.is_empty() {
+            err.range.new_err(err.code).add_help(&err.msg).clone()
+        } else {
+            err.range.new_err(err.code).clone()
+        };
+        self.errors.borrow_mut().push(e);
     }
 }
 
