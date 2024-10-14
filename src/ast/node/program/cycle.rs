@@ -20,10 +20,21 @@ use crate::lsp::mem_docs::FileCompileInput;
 
 use crate::Db;
 
+pub fn cycle_deps_recover_emit<'db>(
+    db: &'db dyn Db,
+    _: &salsa::Cycle,
+    p: Program<'db>,
+) -> ModWrapper<'db> {
+    ModWrapper::new(
+        db,
+        Mod::new(ustr(p.params(db).file(db)), Default::default()),
+    )
+}
+
 pub fn cycle_deps_recover<'db>(
     db: &'db dyn Db,
     cycle: &salsa::Cycle,
-    _: FileCompileInput,
+    i: FileCompileInput,
 ) -> Option<ModWrapper<'db>> {
     let key = cycle.all_participants(db.as_dyn_database());
     let mut files = FxHashMap::default();
@@ -39,7 +50,8 @@ pub fn cycle_deps_recover<'db>(
         .map(|(_, k)| Program::from_id(k.key_index()))
         .last()
         .unwrap();
-    let src_file_path = params.params(db).file(db);
+
+    let src_file_path = i.file(db);
     let mut prev_file = src_file_path;
     build_init_params(params, db, &mut prev_use_map);
     let filtered = cycle.participant_keys().enumerate().filter(|(i, _)| {

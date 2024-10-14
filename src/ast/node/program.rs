@@ -428,7 +428,7 @@ impl<'db> Program<'db> {
     /// `emit` function analyzes all submodules used by the current program,
     /// resolves all symbols from submodules into the current one,
     /// and compiles the current module with all sub-modules into LLVM IR or does some LSP works
-    #[salsa::tracked]
+    #[salsa::tracked(recovery_fn=cycle_deps_recover_emit)]
     pub fn emit(self, db: &'db dyn Db) -> ModWrapper<'db> {
         #[cfg(not(target_arch = "wasm32"))]
         let (job, pb) = if self.params(db).action(db) == ActionType::Compile {
