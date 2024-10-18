@@ -161,7 +161,7 @@ fn test_f_diag2(,) {
 }
 
 fn test_f_diag3(a, b:i64) void {
-    
+    await test_f_diag2();
     return;
 }
 

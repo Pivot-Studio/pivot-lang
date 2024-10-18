@@ -1,4 +1,3 @@
-use super::node::program::cycle_deps_recover;
 use super::node::program::ModWrapper;
 use super::node::program::ASSET_PATH;
 #[cfg(feature = "llvm")]
@@ -151,7 +150,7 @@ pub fn compile_dry<'db>(db: &'db dyn Db, docs: MemDocsInput) -> Result<ModWrappe
 
 /// compile_dry_file parses the file inside parser_entry into AST,
 /// and then emit the llvm IR code represented by Mod according to the entry file AST.
-#[salsa::tracked(recovery_fn=cycle_deps_recover)]
+#[salsa::tracked]
 pub fn compile_dry_file<'db>(
     db: &'db dyn Db,
     parser_entry: FileCompileInput<'db>,

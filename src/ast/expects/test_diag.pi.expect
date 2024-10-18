@@ -1209,6 +1209,45 @@
     PLDiag {
         raw: PLDiagRaw {
             code: Err(
+                ONLY_TASK_CAN_BE_AWAIT,
+            ),
+            help: None,
+            labels: [
+                PLLabel {
+                    file: u!(""),
+                    txt: None,
+                    range: Range {
+                        start: Pos {
+                            line: 164,
+                            column: 11,
+                            offset: 1731,
+                        },
+                        end: Pos {
+                            line: 164,
+                            column: 23,
+                            offset: 1743,
+                        },
+                    },
+                },
+            ],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 164,
+                    column: 5,
+                    offset: 1725,
+                },
+                end: Pos {
+                    line: 164,
+                    column: 23,
+                    offset: 1743,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
                 SYNTAX_ERROR_FUNC_PARAM,
             ),
             help: Some(
@@ -1226,6 +1265,45 @@
                     line: 153,
                     column: 19,
                     offset: 1618,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
+                ONLY_AWAIT_IN_ASYNC_FN,
+            ),
+            help: None,
+            labels: [
+                PLLabel {
+                    file: u!(""),
+                    txt: None,
+                    range: Range {
+                        start: Pos {
+                            line: 164,
+                            column: 11,
+                            offset: 1731,
+                        },
+                        end: Pos {
+                            line: 164,
+                            column: 23,
+                            offset: 1743,
+                        },
+                    },
+                },
+            ],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 164,
+                    column: 5,
+                    offset: 1725,
+                },
+                end: Pos {
+                    line: 164,
+                    column: 23,
+                    offset: 1743,
                 },
             },
         },
