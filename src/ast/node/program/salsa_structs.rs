@@ -7,7 +7,7 @@ use crate::utils::read_config::Config;
 
 use crate::ast::plmod::{GlobalType, Mod};
 
-use crate::lsp::mem_docs::{EmitParams, MemDocsInput};
+use crate::lsp::mem_docs::{EmitParams, MemDocsInput, ParentMods};
 use rustc_hash::FxHashMap;
 use std::cell::RefCell;
 use std::sync::Arc;
@@ -108,4 +108,5 @@ pub struct Program<'db> {
     /// config is all neccessary information to represent a program
     pub config: Config,
     pub opt: HashOptimizationLevel,
+    pub parent_mods: ParentMods,
 }

@@ -1,16 +1,18 @@
 use std::{
+    cell::RefCell,
     fs::read_to_string,
     path::PathBuf,
     sync::{Arc, Mutex},
 };
 
+use linked_hash_map::LinkedHashMap;
 use log::debug;
 use rustc_hash::FxHashMap;
 
 use crate::{
     ast::{
         compiler::{ActionType, HashOptimizationLevel, Options},
-        range::Pos,
+        range::{Pos, Range},
     },
     nomparser::SourceProgram,
     utils::read_config::{prepare_build_envs, search_config_file, Config},
@@ -51,6 +53,9 @@ pub struct MemDocsInput {
     pub edit_pos: Option<Pos>,
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
+pub struct ParentMods(pub LinkedHashMap<String, Range>);
+
 /// FileCompileInput holds the information to parse a program through the entry of file,
 /// with processed dependencies required by the file according to its kagari.toml
 #[salsa::tracked]
@@ -65,13 +70,14 @@ pub struct FileCompileInput<'db> {
     pub docs: MemDocsInput,
     pub config: Config,
     pub opt: HashOptimizationLevel,
+    pub parent_mods: ParentMods,
 }
 
 #[salsa::tracked]
 impl<'db> FileCompileInput<'db> {
     #[salsa::tracked]
     // get_file_content gets the file content from cache or reads from file with the self.file
-    pub fn get_file_content(self, db: &dyn Db) -> Option<SourceProgram> {
+    pub fn get_file_content(self, db: &'db dyn Db) -> Option<SourceProgram> {
         // let f = self.file(db);
         // eprintln!("get_file_content {}", f);
         let re = self
@@ -125,6 +131,10 @@ impl<'db> FileCompileInput<'db> {
     }
 }
 
+thread_local! {
+    pub static COMPILE_INPUT_CACHE: RefCell<FxHashMap<String,ParentMods>> = Default::default();
+}
+
 #[salsa::tracked]
 impl MemDocsInput {
     #[salsa::tracked]
@@ -155,6 +165,7 @@ impl MemDocsInput {
         db: &dyn Db,
         entry_file: String,
         override_with_kagari_entry: bool,
+        parent_mods: ParentMods,
     ) -> Option<FileCompileInput<'_>> {
         let mut final_entry_file: String;
         let re_entry_file = crate::utils::canonicalize(entry_file);
@@ -194,6 +205,23 @@ impl MemDocsInput {
                 if override_with_kagari_entry {
                     final_entry_file = config.entry.clone();
                 }
+                if let Some(cached) =
+                    COMPILE_INPUT_CACHE.with(|cache| cache.borrow().get(&final_entry_file).cloned())
+                {
+                    if cached != parent_mods {
+                        return self.finalize_parser_input(
+                            db,
+                            final_entry_file,
+                            override_with_kagari_entry,
+                            cached,
+                        );
+                    }
+                }
+                COMPILE_INPUT_CACHE.with(|cache| {
+                    cache
+                        .borrow_mut()
+                        .insert(final_entry_file.clone(), parent_mods.clone());
+                });
                 let buf = crate::utils::canonicalize(PathBuf::from(kagari_path.clone())).unwrap();
                 let parant = buf.parent().unwrap();
                 Some(FileCompileInput::new(
@@ -203,6 +231,7 @@ impl MemDocsInput {
                     self,
                     config,
                     self.op(db).optimization,
+                    parent_mods,
                 ))
             }
         }

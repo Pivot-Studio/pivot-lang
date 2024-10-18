@@ -3,7 +3,7 @@ pub struct Chan<T> {
     buffer: Queue<T>;
     count: u64;
     capacity: u64;
-    mtx: *Mutex;
+    mtx: **MutexHandle;
     condvar: *CondVar;
 }
 struct Node<T> {
@@ -47,16 +47,17 @@ pub fn channel<T>(sz: u64) Chan<T> {
     ch.buffer = Queue<T>{};
     ch.count = 0;
     ch.capacity = sz;
-    create_mutex(&ch.mtx);
+    ch.mtx = &&MutexHandle{};
+    create_mutex(ch.mtx);
     create_condvar(&ch.condvar);
     return ch;
 }
 use std::io;
 impl <S>Chan<S> {
     pub fn send(s: S) void {
-        lock_mutex(self.mtx);
+        lock_mutex(*self.mtx);
         while self.count == self.capacity {
-            condvar_wait(self.condvar, self.mtx);
+            condvar_wait(self.condvar, *self.mtx);
         }
         self.buffer.push(s);
         // io::printi64ln(self.count as i64);
@@ -64,13 +65,13 @@ impl <S>Chan<S> {
         if self.count == 1 {
             condvar_notify(self.condvar);
         }
-        unlock_mutex(self.mtx);
+        unlock_mutex(*self.mtx);
         return;
     }
     pub fn recv() S {
-        lock_mutex(self.mtx);
+        lock_mutex(*self.mtx);
         while self.count == 0 {
-            condvar_wait(self.condvar, self.mtx);
+            condvar_wait(self.condvar, *self.mtx);
         }
         let s = self.buffer.pop();
         self.count = self.count - 1;
@@ -79,7 +80,7 @@ impl <S>Chan<S> {
             condvar_notify(self.condvar);
         }
         
-        unlock_mutex(self.mtx);
+        unlock_mutex(*self.mtx);
         return s;
     }
     pub fn len() u64 {

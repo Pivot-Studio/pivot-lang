@@ -213,6 +213,7 @@ impl Node for UseNode {
 ///
 /// TODO: 区分该节点与ExternTypeName节点，该节点不生成类型，只生成函数与变量/常量
 #[node]
+#[derive(Default)]
 pub struct ExternIdNode {
     /// namespace refers to the namespace of an identifier
     /// it might be empty

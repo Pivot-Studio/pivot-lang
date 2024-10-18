@@ -155,7 +155,7 @@ fn test_f_diag1(a,) void {
     return;
 }
 
-fn test_f_diag2(,) void {
+fn test_f_diag2(,) {
     
     return;
 }
