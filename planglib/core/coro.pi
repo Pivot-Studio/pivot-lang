@@ -31,8 +31,8 @@ pub fn new_coro(f: ||=>void) Coroutine {
     return Coroutine{ctx:ctx, stack:p, f:f};
 }
 
-fn create_mutex() *mutex::Mutex {
-    let m :*mutex::Mutex ;
+fn create_mutex() *mutex::MutexHandle {
+    let m :*mutex::MutexHandle ;
     let mm = &m;
     mutex::create_mutex(mm);
     return *mm;
