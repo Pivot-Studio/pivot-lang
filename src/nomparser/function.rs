@@ -7,7 +7,11 @@ use nom::{
     IResult,
 };
 
-use crate::ast::{diag::ErrorCode, node::function::FuncDefNode, tokens::TokenType};
+use crate::ast::{
+    diag::ErrorCode,
+    node::{function::FuncDefNode, pkg::ExternIdNode, types::TypeNameNode},
+    tokens::TokenType,
+};
 use crate::{ast::node::function::GeneratorType, nomparser::Span};
 
 use internal_macro::{test_parser, test_parser_error};
@@ -111,7 +115,7 @@ pub fn function_def(input: Span) -> IResult<Span, Box<TopLevel>> {
                 ),
             )),
             tag_token_symbol(TokenType::RPAREN),
-            type_name,
+            opt(type_name),
             opt(del_newline_or_space!(preceded(
                 tag_token_symbol(TokenType::WHERE),
                 err_tolerable_seplist0(
@@ -151,6 +155,19 @@ pub fn function_def(input: Span) -> IResult<Span, Box<TopLevel>> {
                     precoms.push(Box::new(NodeEnum::Comment(com)));
                 }
             }
+            let ret = ret.unwrap_or(Box::new(TypeNodeEnum::Basic(TypeNameNode {
+                id: Some(ExternIdNode {
+                    id: Box::new(VarNode {
+                        name: "void".into(),
+                        ..Default::default()
+                    }),
+                    complete: true,
+                    ..Default::default()
+                }),
+                range: Range::default(),
+                generic_params: None,
+                generic_infer: None,
+            })));
             let node = FuncDefNode {
                 id: function_identifier,
                 paralist: paras,

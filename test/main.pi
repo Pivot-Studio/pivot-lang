@@ -35,7 +35,6 @@ use project1::test::_hashtable;
 use project1::test::_io;
 use project1::test::future_test;
 use project1::test::std_test;
-use std::task::delay;
 
 
 
@@ -74,13 +73,11 @@ async fn main() Task<()> {
     _io::test_io();
     future_test::test_future();
     std_test::test_std();
-    println!("async 1");
-    await delay::delay(2000 as u64);
-    println!("async 1 end");
 
     await std_test::test_nested_async_closure();
     await std_test::test_nested_async_closure_in_normal_f();
     await std_test::test_nested_async_closure_in_normal_f2();
+    await std_test::test_delay();
 
     return ();
 }

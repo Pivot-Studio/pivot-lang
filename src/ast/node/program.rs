@@ -21,6 +21,7 @@ use crate::ast::pltype::add_primitive_types;
 use crate::ast::pltype::FNValue;
 use crate::ast::tokens::TokenType;
 use crate::flow::display::Dot;
+use crate::format_label;
 use crate::lsp::semantic_tokens::SemanticTokensBuilder;
 use crate::lsp::text;
 #[cfg(feature = "repl")]
@@ -274,8 +275,13 @@ impl<'db> Program<'db> {
         } else {
             ("检查", &CHECK_PROGRESS as &ProgressBar)
         };
+        let parents = self.parent_mods(db);
         // parse all dependencies into modules and process symbols into the main module symbol table
         for (i, u) in entry_node.uses.iter().enumerate() {
+            let mut parents = parents.clone();
+            parents
+                .0
+                .insert(self.params(db).file(db).to_string(), u.range());
             #[cfg(not(target_arch = "wasm32"))]
             pb.set_message(format!(
                 "正在{}包{}的依赖项{}/{}",
@@ -312,9 +318,23 @@ impl<'db> Program<'db> {
             let mut mod_id = wrapper.use_node(db).get_last_id();
 
             let dep_path_str = dep_path.to_str().unwrap().to_string();
-            let mut dep_parser_entry =
-                self.docs(db)
-                    .finalize_parser_input(db, dep_path_str.clone(), false);
+            if parents.0.contains_key(&dep_path_str) {
+                let mut diag = u.range().new_err(ErrorCode::CYCLE_DEPENDENCY);
+                diag.set_source(&dep_path_str);
+                for (f, r) in parents.0.iter() {
+                    let msg = "import in cycle here";
+                    diag.add_label(*r, ustr(f), format_label!(msg));
+                }
+                Diagnostics((dep_path_str.clone(), vec![diag])).accumulate(db);
+                continue;
+            }
+            parents.0.insert(dep_path_str.clone(), u.range());
+            let mut dep_parser_entry = self.docs(db).finalize_parser_input(
+                db,
+                dep_path_str.clone(),
+                false,
+                parents.clone(),
+            );
 
             #[cfg(target_arch = "wasm32")]
             if dep_path_str.starts_with("core") || dep_path_str.starts_with("std") {
@@ -329,7 +349,9 @@ impl<'db> Program<'db> {
                 if let Some(p) = dep_path.parent() {
                     mod_id = Some(p.file_name().unwrap().to_str().unwrap().to_string().into());
                     let file = p.with_extension("pi").to_str().unwrap().to_string();
-                    dep_parser_entry = self.docs(db).finalize_parser_input(db, file, false);
+                    dep_parser_entry = self
+                        .docs(db)
+                        .finalize_parser_input(db, file, false, parents);
                     symbol_opt = Some(
                         dep_path
                             .with_extension("")

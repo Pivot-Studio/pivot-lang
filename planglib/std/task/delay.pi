@@ -4,7 +4,7 @@ use std::task::executor;
 
 
 
-pub struct DelayTask {
+struct DelayTask {
     first:bool;
     ready:bool;
     delay:u64;

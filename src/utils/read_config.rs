@@ -107,7 +107,7 @@ impl<'db> ConfigWrapper<'db> {
     /// ```
     /// we will use `project1` to resolve the path of the project
     #[salsa::tracked]
-    pub(crate) fn resolve_dep_path(self, db: &dyn Db) -> PathBuf {
+    pub(crate) fn resolve_dep_path(self, db: &'db dyn Db) -> PathBuf {
         let u = self.use_node(db);
         let mut path = PathBuf::from(self.config(db).root.clone());
         if let Some(cm) = &self.config(db).deps {

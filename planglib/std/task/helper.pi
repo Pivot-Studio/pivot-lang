@@ -2,6 +2,7 @@ use std::task::Task;
 use std::task::executor;
 use std::task::reactor;
 use std::thread;
+use std::mutex;
 
 
 pub fn spawn_async_main<T>(t:Task<T>) void {
@@ -19,3 +20,65 @@ pub fn spawn_async_main<T>(t:Task<T>) void {
     reactor::start_global_reactor();
     return;
 }
+
+
+struct AdapterTask<T> {
+    task:Task<T>;
+    wk:||=>void;
+    ready:bool;
+    mtx:mutex::Mutex;
+}
+
+impl<T> Task<T> for AdapterTask<T> {
+    fn poll(wk:||=>void) Option<T> {
+        if self.ready {
+            let r = self.task.poll(|| => {
+                return;
+            });
+            return r;
+        }
+        self.mtx.lock();
+        if !self.ready {
+            self.wk = ||=>{
+                self.mtx.unlock();
+                wk();
+                return;
+            };
+        } else {
+            self.mtx.unlock();
+            wk();
+            let r = self.task.poll(|| => {
+                return;
+            });
+            return r;
+        }
+        self.mtx.unlock();
+        let r = self.task.poll(|| => {
+            return;
+        });
+        return r;
+    }
+}
+
+
+pub fn spawn<T>(tk:Task<T>) Task<T> {
+    let t = AdapterTask<T> {
+        task:tk,
+        ready:false,
+        mtx:mutex::new_mutex(),
+    };
+    t.wk = ||=>{ 
+        t.mtx.unlock();
+        return;
+    };
+    tk.poll(||=>{
+        t.mtx.lock();
+        t.ready = true;
+        t.wk();
+
+        return;
+    });
+    return t as Task<T>;
+}
+
+

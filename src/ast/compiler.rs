@@ -3,6 +3,7 @@ use super::node::program::ModWrapper;
 use super::node::program::ASSET_PATH;
 #[cfg(feature = "llvm")]
 use crate::ast::jit_config::IS_JIT;
+use crate::lsp::mem_docs::COMPILE_INPUT_CACHE;
 use crate::{
     ast::{accumulators::ModBuffer, node::program::Program},
     lsp::mem_docs::{FileCompileInput, MemDocsInput},
@@ -122,8 +123,11 @@ pub fn compile_dry<'db>(db: &'db dyn Db, docs: MemDocsInput) -> Result<ModWrappe
         return Err("project config file not found".to_string());
     }
 
+    COMPILE_INPUT_CACHE.with(|cache| {
+        cache.borrow_mut().clear();
+    });
     let parser_entry = docs
-        .finalize_parser_input(db, docs.file(db).clone(), true)
+        .finalize_parser_input(db, docs.file(db).clone(), true, Default::default())
         .unwrap();
 
     log::trace!("entering compile_dry_file");
@@ -183,6 +187,7 @@ pub fn compile_dry_file<'db>(
                 parser_entry.docs(db),
                 parser_entry.config(db),
                 parser_entry.opt(db),
+                parser_entry.parent_mods(db),
             );
             log::trace!("entering emit");
             Some(program.emit(db))
