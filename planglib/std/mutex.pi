@@ -1,21 +1,40 @@
-pub struct Mutex{}
-
-pub fn create_mutex(mutex: **Mutex) u64;
-
-pub fn lock_mutex(mutex: *Mutex) u64;
+pub struct MutexHandle{}
 
 
+pub struct Mutex{
+    handle: **MutexHandle;
+}
+
+pub fn create_mutex(mutex: **MutexHandle) u64;
+
+pub fn lock_mutex(mutex: *MutexHandle) u64;
+
+pub fn new_mutex() Mutex{
+    let m = Mutex{};
+    m.handle = &&MutexHandle{};
+    create_mutex(m.handle);
+    return m;
+}
+
+impl Mutex{
+    pub fn lock() u64{
+        return lock_mutex(*self.handle);
+    }
+
+    pub fn unlock() u64{
+        return unlock_mutex(*self.handle);
+    }
+}
 
 
-pub fn unlock_mutex(mutex: *Mutex) u64;
+pub fn unlock_mutex(mutex: *MutexHandle) u64;
 
-pub fn drop_mutex(mutex: *Mutex) u64;
 
 pub struct CondVar{}
 
 pub fn create_condvar(condvar: **CondVar) u64;
 
-pub fn condvar_wait(condvar: *CondVar, mutex: *Mutex) u64;
+pub fn condvar_wait(condvar: *CondVar, mutex: *MutexHandle) u64;
 
 pub fn condvar_notify(condvar: *CondVar) u64;
 

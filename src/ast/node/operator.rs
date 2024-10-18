@@ -74,6 +74,17 @@ impl Node for UnaryOpNode {
                 .new_output(pltype.clone()),
             (_, TokenType::BIT_NOT) => builder.build_bit_not(exp).new_output(pltype.clone()),
             (_, TokenType::AWAIT) => {
+                if !ctx
+                    .generator_data
+                    .as_ref()
+                    .map(|x| x.borrow().generator_type == GeneratorType::Async)
+                    .unwrap_or_default()
+                {
+                    self.range
+                        .new_err(ErrorCode::ONLY_AWAIT_IN_ASYNC_FN)
+                        .add_label(exp_range, ctx.get_file(), None)
+                        .add_to_ctx(ctx);
+                }
                 let poll_ty = match &*pltype.borrow() {
                     PLType::Trait(st) => {
                         if !st.name.starts_with("Task") {

@@ -21,6 +21,12 @@ fn create_mutex(mutex: *mut *mut OpaqueMutex) -> u64 {
         guard: Cell::new(None),
     }))
     .cast();
+    fn drop_mutex_f(mutex: *mut u8) {
+        unsafe {
+            drop(Box::from_raw(mutex.cast::<MutexContainer>()));
+        }
+    }
+    immix::gc_register_finalizer(mutex as _, (*mutex) as _, drop_mutex_f);
     0
 }
 
@@ -42,13 +48,6 @@ fn unlock_mutex(mutex: *mut OpaqueMutex) -> u64 {
     } else {
         container.guard.set(None);
     }
-    0
-}
-
-#[is_runtime]
-fn drop_mutex(mutex: *mut OpaqueMutex) -> u64 {
-    unlock_mutex(mutex);
-    drop(Box::from_raw(mutex.cast::<MutexContainer>()));
     0
 }
 

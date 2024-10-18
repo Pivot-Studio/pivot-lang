@@ -181,6 +181,7 @@ define_diag!(
     GENERATOR_FUNCTION_CANNOT_RETURN_VOID = "generator function cannot return void",
     MACRO_EXPANSION_FAILED = "macro expansion failed",
     SYNTAX_ERROR_FUNC_PARAM = "syntax error: function parameter",
+    ONLY_AWAIT_IN_ASYNC_FN = "await is only expected in async functions",
 );
 
 define_diag! {

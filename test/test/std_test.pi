@@ -4,6 +4,7 @@ use std::math::F64Ext;
 use std::task::Task;
 use std::io;
 use project1::test::iter;
+use std::task::delay;
 
 
 
@@ -101,8 +102,7 @@ pub fn test_std() void {
         return;
     });
     panic::assert(b == 100);
-    fn1(test{a:9999});    
-
+    fn1(test{a:9999});
     return;
 }
 
@@ -191,4 +191,14 @@ struct test {
 fn fn1(t:test) void {
     panic::assert(t.a == 9999);
     return;
+}
+
+pub async fn test_delay() Task<()> {
+    println!("async 1");
+    let d = spawn(delay::delay(2000 as u64));
+    await delay::delay(2000 as u64);
+    println!("async 1 end");
+    await d;
+    println!("async 2 end");
+    return ();
 }
