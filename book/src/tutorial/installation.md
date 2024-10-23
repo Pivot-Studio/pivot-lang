@@ -65,5 +65,5 @@ brew install pivot-lang
 
 使用下方命令可以启动一个docker容器，然后在容器中使用pivot lang编译器：
 ```bash
-docker run -it --rm registry.cn-hangzhou.aliyuncs.com/pivot_studio/pivot_lang:latest /bin/bash
+docker run -it --rm registry.cn-hangzhou.aliyuncs.com/pivot_lang/pivot_lang:latest /bin/bash
 ```

@@ -179,7 +179,7 @@ jobs:
           context: .
           push: true
           file: ./Dockerfile
-          tags: registry.cn-hangzhou.aliyuncs.com/pivot_studio/pivot_lang:latest
+          tags: registry.cn-hangzhou.aliyuncs.com/pivot_lang/pivot_lang:latest
       - name: prepare deb
         if: ${{ matrix.config.os == 'ubuntu-latest' }}
         run: |

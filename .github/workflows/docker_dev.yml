@@ -41,4 +41,4 @@ jobs:
           context: .
           push: true
           file: ./Dockerfile.dev
-          tags: registry.cn-hangzhou.aliyuncs.com/pivot_studio/pivot_lang_dev:latest
+          tags: registry.cn-hangzhou.aliyuncs.com/pivot_lang/pivot_lang_dev:latest
