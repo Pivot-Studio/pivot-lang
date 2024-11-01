@@ -58,12 +58,13 @@ pub use _match::*;
 }"
 )]
 pub fn if_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
-    map_res(
+    map(
         delspace(tuple((
             tag_token_word(TokenType::IF),
             parse_with_ex(
                 alt((
                     general_exp,
+                    new_variable,
                     map(
                         match_paired_until(
                             "{",
@@ -100,7 +101,7 @@ pub fn if_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
             } else {
                 vec![vec![]]
             };
-            res_enum(
+            Box::new(
                 IfNode {
                     cond,
                     then: Box::new(then),

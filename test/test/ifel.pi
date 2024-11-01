@@ -1,11 +1,35 @@
+use core::panic;
+
 pub fn test_if_else() void {
     test_if_only(true);
     test_if_else_ret(true);
     test_if_ret_only(true);
     test_else_ret_only(true);
     test_not_ret(true);
+    test_if_let(23456);
     return;
 }
+fn test_if_let<T>(t:T) void {
+    let d= 1234 as Option<i64>;
+    if let a = d as i64 {
+        panic::assert(a == 1234);
+    }else {
+        panic::pl_panic();
+    }
+
+    if false {
+        panic::pl_panic();
+    } else if let tt = t as i64 {
+        panic::assert(tt == 23456);
+    } else {
+        panic::pl_panic();
+    }
+
+    return;
+}
+
+
+
 
 fn test_not_equal() void {
     if 1 != 2 {
@@ -51,4 +75,5 @@ pub fn test_not_ret(judge: bool) void {
     }
     return;
 }
+
 

@@ -136,7 +136,7 @@ define_diag!(
     INVALID_DIRECT_UNION_CAST = "invalid direct union cast",
     INVALID_DIRECT_TRAIT_CAST = "invalid direct trait cast",
     UNION_DOES_NOT_CONTAIN_TYPE = "union does not contain type",
-    INVALID_IS_EXPR = "invalid `is` expression",
+    INVALID_SRC_TY = "invalid source type",
     INVALID_CAST = "invalid cast",
     METHOD_NOT_FOUND = "method not found",
     DERIVE_TRAIT_NOT_IMPL = "derive trait not impl",
@@ -182,6 +182,8 @@ define_diag!(
     MACRO_EXPANSION_FAILED = "macro expansion failed",
     SYNTAX_ERROR_FUNC_PARAM = "syntax error: function parameter",
     ONLY_AWAIT_IN_ASYNC_FN = "await is only expected in async functions",
+    IF_LET_AS_DOES_NOT_EXPECT_TAIL = "`if let .. as ...` does not expect `?` or `!` tail",
+    EXPECT_IF_LET_AS = "`if let .. as ...` is expected here",
 );
 
 define_diag! {

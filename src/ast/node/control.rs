@@ -5,6 +5,7 @@ use crate::ast::builder::{BlockHandle, IntPredicate, ValueHandle};
 use crate::ast::ctx::Ctx;
 use crate::ast::diag::ErrorCode;
 use crate::ast::pltype::{PriType, STType};
+use crate::ast::tokens::TokenType;
 use crate::ast::traits::CustomType;
 use crate::format_label;
 use crate::inference::unknown_arc;
@@ -55,30 +56,64 @@ impl Node for IfNode {
         let merge_block = builder.append_basic_block(ctx.function.unwrap(), "if.after");
         builder.build_unconditional_branch(cond_block);
         ctx.position_at_end(cond_block, builder);
-
+        let mut gen_def = None;
         let cond_range = self.cond.range();
-        _ = self.cond.emit(ctx, builder).and_then(|o| {
-            let cond_val = o.get_value();
-            check_bool(
-                &cond_val,
-                ctx,
-                cond_range,
-                ErrorCode::IF_CONDITION_MUST_BE_BOOL,
-            )?;
-
-            let v = cond_val.unwrap();
-            let cond = v.get_value();
-            let cond = ctx.try_load2var(cond_range, cond, builder, &v.get_ty().borrow())?;
-            let cond = builder.build_int_truncate(cond, &PriType::BOOL, "trunctemp");
-
-            builder.build_conditional_branch(cond, then_block, else_block);
-            Ok(())
-        });
+        if let NodeEnum::Def(def) = &*self.cond {
+            // check if it is a `let ... = ... as ...`
+            if let Some(e) = &def.value_expression {
+                if let NodeEnum::AsNode(a) = &**e {
+                    if let Some((_, r)) = &a.tail {
+                        // tail not allowed in `if let .. as ..`
+                        ctx.add_diag(
+                            r.new_err(ErrorCode::IF_LET_AS_DOES_NOT_EXPECT_TAIL)
+                                .add_help("remove the tailling symbol")
+                                .clone(),
+                        );
+                    }
+                    let mut transformed_is = NodeEnum::IsNode(IsNode {
+                        expr: a.expr.clone(),
+                        target_type: a.target_type.clone(),
+                        range: a.range(),
+                    });
+                    build_cond(
+                        &mut transformed_is,
+                        ctx,
+                        builder,
+                        cond_range,
+                        then_block,
+                        else_block,
+                    );
+                    ctx.position_at_end(then_block, builder);
+                    let transformed_as = NodeEnum::AsNode(AsNode {
+                        expr: a.expr.clone(),
+                        target_type: a.target_type.clone(),
+                        range: a.range(),
+                        tail: Some((TokenType::NOT, Default::default())),
+                    });
+                    let mut def = def.clone();
+                    def.value_expression = Some(Box::new(transformed_as));
+                    gen_def = Some(def);
+                }
+            }
+            if gen_def.is_none() {
+                def.range()
+                    .new_err(ErrorCode::EXPECT_IF_LET_AS)
+                    .add_help("adding as expression might be a solution")
+                    .add_to_ctx(ctx);
+            }
+        } else {
+            let cond = &mut *self.cond;
+            build_cond(cond, ctx, builder, cond_range, then_block, else_block);
+        }
 
         // emit the else logic into the then block
         ctx.position_at_end(then_block, builder);
         // emit the code inside a child context because it belongs to a sub-block
-        let then_terminator = self.then.emit_child(ctx, builder)?.get_term();
+        let mut child = ctx.new_child(self.then.range().start, builder);
+        if let Some(mut def) = gen_def {
+            def.emit(&mut child, builder)?;
+        }
+        let then_terminator = self.then.emit(&mut child, builder)?.get_term();
         if then_terminator.is_none() {
             // there is no terminator(like return, yield and so forth) in the statement
             // create an unconditional branch to merge block to finish off the "then" block
@@ -117,6 +152,33 @@ impl Node for IfNode {
         NodeOutput::default().with_term(terminator).to_result()
     }
     // ANCHOR_END: emit
+}
+
+fn build_cond<'a>(
+    cond: &mut NodeEnum,
+    ctx: &mut Ctx<'a>,
+    builder: &BuilderEnum<'a, '_>,
+    cond_range: Range,
+    then_block: usize,
+    else_block: usize,
+) {
+    _ = cond.emit(ctx, builder).and_then(|o| {
+        let cond_val = o.get_value();
+        check_bool(
+            &cond_val,
+            ctx,
+            cond_range,
+            ErrorCode::IF_CONDITION_MUST_BE_BOOL,
+        )?;
+
+        let v = cond_val.unwrap();
+        let cond = v.get_value();
+        let cond = ctx.try_load2var(cond_range, cond, builder, &v.get_ty().borrow())?;
+        let cond = builder.build_int_truncate(cond, &PriType::BOOL, "trunctemp");
+
+        builder.build_conditional_branch(cond, then_block, else_block);
+        Ok(())
+    });
 }
 
 /// # check_bool

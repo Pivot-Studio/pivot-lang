@@ -165,3 +165,16 @@ fn test_f_diag3(a, b:i64) void {
     return;
 }
 
+fn test_if_let_diag() void {
+    if let a = 1 {
+        
+    }
+    if let a = 1 as i64 {
+        
+    }
+    let d= 1234 as Option<i64>;
+    if let a = d as i64! {
+        let a = a;
+    }
+    return;
+}
