@@ -5,7 +5,7 @@ use crate::{ast::range::Range, ast::tokens::TokenType};
 use nom::branch::alt;
 use nom::character::complete::space1;
 use nom::character::is_alphanumeric;
-use nom::combinator::{opt, recognize};
+use nom::combinator::{map, opt, recognize};
 
 use nom::error::FromExternalError;
 use nom::multi::many0;
@@ -146,7 +146,7 @@ pub fn res_box<T: ?Sized>(i: Box<T>) -> Result<Box<T>, ()> {
     Ok::<_, ()>(i)
 }
 
-pub fn create_bin((mut left, rights): PLBin) -> Result<Box<NodeEnum>, ()> {
+pub fn create_bin((mut left, rights): PLBin) -> Box<NodeEnum> {
     for ((op, op_range), right) in rights {
         let range = left.range().start.to(right.range().end);
 
@@ -160,7 +160,7 @@ pub fn create_bin((mut left, rights): PLBin) -> Result<Box<NodeEnum>, ()> {
             .into(),
         );
     }
-    res_box(left)
+    left
 }
 type PLBin = (Box<NodeEnum>, Vec<((TokenType, Range), Box<NodeEnum>)>);
 
@@ -173,7 +173,7 @@ where
 {
     alt((
         terminated(p, tag_token_symbol(TokenType::SEMI)),
-        map_res(
+        map(
             tuple((
                 p2,
                 recognize(many0(alt((
@@ -186,7 +186,7 @@ where
             |(node, e)| {
                 let range = node.range();
                 let r = Range::new(&e, &e);
-                res_enum(
+                Box::new(
                     StErrorNode {
                         range,
                         st: node,

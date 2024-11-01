@@ -2,7 +2,7 @@ use nom::{
     branch::alt,
     bytes::complete::tag,
     character::complete::{alpha1, alphanumeric1, one_of},
-    combinator::{map_res, opt, recognize},
+    combinator::{map, map_res, opt, recognize},
     multi::{many0_count, many1, separated_list1},
     sequence::{pair, tuple},
     IResult, InputTake,
@@ -36,7 +36,7 @@ use super::*;
 #[test_parser("a:")]
 #[test_parser("a::")]
 pub fn extern_identifier(input: Span) -> IResult<Span, Box<NodeEnum>> {
-    delspace(map_res(
+    delspace(map(
         tuple((
             separated_list1(
                 tag_token_symbol(TokenType::DOUBLE_COLON),
@@ -57,9 +57,8 @@ pub fn extern_identifier(input: Span) -> IResult<Span, Box<NodeEnum>> {
                 range = range.start.to(opt2.1.end);
             }
             identifier_with_namespace.pop();
-            res_enum(
+            Box::new(
                 ExternIdNode {
-                    // after poping, only namespaces are left
                     namespace: identifier_with_namespace,
                     id: lastid,
                     range,

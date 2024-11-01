@@ -23,7 +23,7 @@ macro_rules! del_newline_or_space {
 /// the exp type separated by one of ops.
 macro_rules! parse_bin_ops {
     ($exp:ident, $($op:ident),*) => {
-        delspace(map_res(
+        delspace(map(
             tuple((
                 $exp,
                 many0(tuple((

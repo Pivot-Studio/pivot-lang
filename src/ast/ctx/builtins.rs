@@ -48,7 +48,8 @@ lazy_static! {
         mp.insert(usize::MAX - 12, emit_if_arr);
         mp.insert(usize::MAX - 13, emit_if_union);
         mp.insert(usize::MAX - 14, emit_arr_slice);
-        mp.insert(usize::MAX - 16, emit_asm_sp);
+        mp.insert(usize::MAX - 15, emit_asm_sp);
+        mp.insert(usize::MAX - 16, emit_is_struct);
         mp
     };
     pub static ref BUILTIN_FN_SNIPPET_MAP: HashMap<ValueHandle, String> = {
@@ -91,7 +92,8 @@ lazy_static! {
             usize::MAX - 14,
             r#"arr_slice(${1:from}, ${2:start}, ${3:len})$0"#.to_owned(),
         );
-        mp.insert(usize::MAX - 16, r#"asm_sp()$0"#.to_owned());
+        mp.insert(usize::MAX - 15, r#"asm_sp()$0"#.to_owned());
+        mp.insert(usize::MAX - 16, r#"is_struct<${1:T}>()$0"#.to_owned());
         mp
     };
     pub static ref BUILTIN_FN_NAME_MAP: HashMap<&'static str, ValueHandle> = {
@@ -110,7 +112,8 @@ lazy_static! {
         mp.insert("if_arr", usize::MAX - 12);
         mp.insert("if_union", usize::MAX - 13);
         mp.insert("arr_slice", usize::MAX - 14);
-        mp.insert("asm_sp", usize::MAX - 16);
+        mp.insert("asm_sp", usize::MAX - 15);
+        mp.insert("is_struct", usize::MAX - 16);
         mp
     };
 }
@@ -207,6 +210,57 @@ fn emit_is_ptr<'a, 'b>(
     let binding = binding.borrow();
     match &*binding {
         PLType::Pointer(_) => {
+            let b = builder.int_value(&PriType::BOOL, 1, false);
+            b.new_output(Arc::new(RefCell::new(PLType::Primitive(PriType::BOOL))))
+                .to_result()
+        }
+        _ => {
+            let b = builder.int_value(&PriType::BOOL, 0, false);
+            b.new_output(Arc::new(RefCell::new(PLType::Primitive(PriType::BOOL))))
+                .to_result()
+        }
+    }
+}
+
+fn emit_is_struct<'a, 'b>(
+    f: &mut FuncCallNode,
+    ctx: &'b mut Ctx<'a>,
+    builder: &'b BuilderEnum<'a, '_>,
+) -> NodeResult {
+    if !f.paralist.is_empty() {
+        return Err(f
+            .range
+            .new_err(crate::ast::diag::ErrorCode::PARAMETER_LENGTH_NOT_MATCH)
+            .add_to_ctx(ctx));
+    }
+    if f.generic_params.is_none() {
+        return Err(f
+            .range
+            .new_err(crate::ast::diag::ErrorCode::GENERIC_NOT_FOUND)
+            .add_to_ctx(ctx));
+    }
+    let generic = f.generic_params.as_ref().unwrap();
+    generic.emit_highlight(ctx);
+    if generic.generics.len() != 1 {
+        return Err(f
+            .range
+            .new_err(crate::ast::diag::ErrorCode::GENERIC_NOT_FOUND)
+            .add_to_ctx(ctx));
+    }
+    if generic.generics[0].is_none() {
+        return Err(f
+            .range
+            .new_err(crate::ast::diag::ErrorCode::GENERIC_NOT_FOUND)
+            .add_to_ctx(ctx));
+    }
+    let generic = generic.generics[0]
+        .as_ref()
+        .unwrap()
+        .get_type(ctx, builder, true)?;
+    let binding = get_type_deep(generic);
+    let binding = binding.borrow();
+    match &*binding {
+        PLType::Struct(_) => {
             let b = builder.int_value(&PriType::BOOL, 1, false);
             b.new_output(Arc::new(RefCell::new(PLType::Primitive(PriType::BOOL))))
                 .to_result()

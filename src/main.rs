@@ -40,7 +40,7 @@ use lsp::mem_docs::{self, MemDocsInput};
 #[cfg(not(target_arch = "wasm32"))]
 use lsp::start_lsp;
 
-use crate::ast::compiler::prepare_prgressbar;
+use crate::ast::compiler::prepare_progressbar;
 
 fn main() {
     #[cfg(target_arch = "wasm32")]
@@ -224,7 +224,7 @@ impl Cli {
             None,
         );
         let pb = &CHECK_PROGRESS;
-        prepare_prgressbar(pb, op, format!("{}[{:2}/{:2}]", CHECK, 1, 1));
+        prepare_progressbar(pb, op, format!("{}[{:2}/{:2}]", CHECK, 1, 1));
         if let Err(e) = compile_dry(&db, mem) {
             pb.abandon_with_message("check failed X".to_string().red().to_string());
             eprintln!("\n    Fatal error: {}", e.to_string().red());
