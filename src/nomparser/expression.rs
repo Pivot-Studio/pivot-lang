@@ -2,7 +2,7 @@ use nom::{
     branch::alt,
     bytes::complete::tag,
     character::complete::space1,
-    combinator::{map, map_res, not, opt, peek},
+    combinator::{map, not, opt, peek},
     multi::{many0, separated_list0},
     sequence::{delimited, pair, preceded, terminated, tuple},
     IResult,
@@ -63,7 +63,7 @@ fn bit_xor(input: Span) -> IResult<Span, Box<NodeEnum>> {
 #[test_parser("a&b")]
 #[test_parser_error("a&&b")]
 fn bit_and(input: Span) -> IResult<Span, Box<NodeEnum>> {
-    delspace(map_res(
+    delspace(map(
         tuple((
             bit_move,
             many0(tuple((
@@ -106,7 +106,7 @@ pub fn unary_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
     // todo: consider to aligh the implementation with UnaryExp EBNF
     delspace(alt((
         pointer_exp,
-        map_res(
+        map(
             tuple((
                 alt((
                     tag_token_symbol(TokenType::MINUS),
@@ -121,7 +121,8 @@ pub fn unary_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
             )),
             |((op, op_range), exp)| {
                 let range = op_range.start.to(exp.range().end);
-                res_enum(
+
+                Box::new(
                     UnaryOpNode {
                         op: (op, op_range),
                         exp,
@@ -137,7 +138,7 @@ pub fn unary_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
 #[test_parser("&&a{}.d")]
 #[test_parser("***ad")]
 pub fn pointer_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
-    map_res(
+    map(
         delspace(pair(
             many0(alt((
                 tag_token_symbol(TokenType::TAKE_PTR),
@@ -166,15 +167,15 @@ pub fn pointer_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
                     .into(),
                 );
             }
-            res_box(exp)
+            exp
         },
     )(input)
 }
 
 #[test_parser("adasda::c!(saddsada)")]
 fn macro_call_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
-    map_res(pair(extern_identifier, macro_call_op), |(name, op)| {
-        res_enum(
+    map(pair(extern_identifier, macro_call_op), |(name, op)| {
+        Box::new(
             MacroCallNode {
                 range: name.range(),
                 callee: name,
@@ -192,7 +193,7 @@ fn macro_call_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
 #[test_parser("a<i64>{}")]
 #[test_parser("1.xxx()")]
 pub fn complex_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
-    map_res(
+    map(
         pair(
             primary_exp,
             many0(alt((take_exp_op, array_element_op, call_function_op))),
@@ -251,13 +252,13 @@ pub fn complex_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
                     }
                 }
             }
-            res_enum(*res)
+            res
         },
     )(input)
 }
 
 fn primary_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
-    delspace(map_res(
+    delspace(map(
         tuple((
             many0(comment),
             alt((
@@ -276,7 +277,8 @@ fn primary_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
         )),
         |(lcoms, node, rcoms)| {
             let range = node.range();
-            res_enum(
+
+            Box::new(
                 PrimaryNode {
                     value: node,
                     comments: vec![lcoms, rcoms],
@@ -290,7 +292,7 @@ fn primary_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
 
 #[test_parser(".0")]
 fn take_exp_op(input: Span) -> IResult<Span, (ComplexOp, Vec<Box<NodeEnum>>)> {
-    delspace(map_res(
+    delspace(map(
         preceded(
             tag_token_symbol(TokenType::DOT),
             pair(
@@ -298,21 +300,21 @@ fn take_exp_op(input: Span) -> IResult<Span, (ComplexOp, Vec<Box<NodeEnum>>)> {
                 many0(comment),
             ),
         ),
-        |(idx, coms)| Ok::<_, ()>((ComplexOp::Field(idx), coms)),
+        |(idx, coms)| (ComplexOp::Field(idx), coms),
     ))(input)
 }
 
 #[test_parser("(a)")]
 #[test_parser("(a+a*b/c)")]
 fn parantheses_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
-    map_res(
+    map(
         delimited(
             tag_token_symbol(TokenType::LPAREN),
             parse_with_ex(general_exp, false),
             tag_token_symbol(TokenType::RPAREN),
         ),
         |exp| {
-            res_enum(
+            Box::new(
                 ParanthesesNode {
                     range: exp.range(),
                     node: exp,
@@ -328,7 +330,7 @@ fn parantheses_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
 #[test_parser("|a| =>{return a;}")]
 #[test_parser("async |a| =>{return a;}")]
 fn closure(input: Span) -> IResult<Span, Box<NodeEnum>> {
-    map_res(
+    map(
         tuple((
             tuple((
                 opt(tag_modifier(TokenType::ASYNC_MARKER)),
@@ -348,7 +350,8 @@ fn closure(input: Span) -> IResult<Span, Box<NodeEnum>> {
         )),
         |((modi, (_, sr), args, _), _, ret, body)| {
             let range = sr.start.to(body.range().end);
-            res_enum(
+
+            Box::new(
                 ClosureNode {
                     range,
                     paralist: args,

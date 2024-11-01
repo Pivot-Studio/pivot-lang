@@ -89,7 +89,7 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
     }
     let total_steps = 3;
     let pb = &COMPILE_PROGRESS;
-    prepare_prgressbar(
+    prepare_progressbar(
         pb,
         op,
         format!("{}[{:2}/{:2}]", LOOKING_GLASS, 1, total_steps),
@@ -208,7 +208,7 @@ pub fn process_llvm_ir<'a>(
 
     let total_steps = 3;
     let pb = ProgressBar::hidden();
-    prepare_prgressbar(&pb, op, format!("{}[{:2}/{:2}]", TRUCK, 2, total_steps));
+    prepare_progressbar(&pb, op, format!("{}[{:2}/{:2}]", TRUCK, 2, total_steps));
     pb.set_length(mods.len() as u64);
 
     let mut set = FxHashSet::default();
@@ -329,7 +329,7 @@ pub fn pl_link(llvmmod: Module, oxbjs: Vec<PathBuf>, out: String, op: Options) {
 
     let total_steps = 3;
     let pb = ProgressBar::hidden();
-    prepare_prgressbar(
+    prepare_progressbar(
         &pb,
         op,
         format!("{}[{:2}/{:2}]", CLIP, total_steps, total_steps),

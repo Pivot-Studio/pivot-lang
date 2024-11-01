@@ -32,7 +32,7 @@ lazy_static! {
 }
 
 #[cfg(feature = "llvm")]
-pub fn prepare_prgressbar(pb: &indicatif::ProgressBar, op: Options, prefix: String) {
+pub fn prepare_progressbar(pb: &indicatif::ProgressBar, op: Options, prefix: String) {
     pb.enable_steady_tick(Duration::from_millis(50));
     pb.set_style(PROGRESS_STYLE.clone());
 

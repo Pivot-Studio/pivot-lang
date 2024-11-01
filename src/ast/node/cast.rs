@@ -513,6 +513,39 @@ impl Node for IsNode {
         let binding = v.get_ty();
         let tp = &*binding.borrow();
         match tp {
+            PLType::Generic(g) => {
+                if let Some(tp) = g.curpltype.clone() {
+                    let inner = get_type_deep(tp);
+                    if target_tp == inner {
+                        builder
+                            .int_value(&PriType::BOOL, 1, false)
+                            .new_output(
+                                ctx.get_type(&"bool".into(), Default::default())
+                                    .unwrap()
+                                    .typ,
+                            )
+                            .to_result()
+                    } else {
+                        builder
+                            .int_value(&PriType::BOOL, 0, false)
+                            .new_output(
+                                ctx.get_type(&"bool".into(), Default::default())
+                                    .unwrap()
+                                    .typ,
+                            )
+                            .to_result()
+                    }
+                } else {
+                    builder
+                        .int_value(&PriType::BOOL, 0, false)
+                        .new_output(
+                            ctx.get_type(&"bool".into(), Default::default())
+                                .unwrap()
+                                .typ,
+                        )
+                        .to_result()
+                }
+            }
             PLType::Union(u) => {
                 if let Some(tag) = u.has_type(&target_tp.borrow(), ctx, builder) {
                     let tag_v = builder.build_struct_gep(val, 0, "tag", tp, ctx).unwrap();
