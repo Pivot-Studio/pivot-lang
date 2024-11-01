@@ -46,6 +46,28 @@
     PLDiag {
         raw: PLDiagRaw {
             code: Err(
+                REDECLARATION,
+            ),
+            help: None,
+            labels: [],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 177,
+                    column: 13,
+                    offset: 1937,
+                },
+                end: Pos {
+                    line: 177,
+                    column: 14,
+                    offset: 1938,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
                 TYPE_CANNOT_BE_FULLY_INFERRED,
             ),
             help: None,
@@ -730,10 +752,10 @@
     PLDiag {
         raw: PLDiagRaw {
             code: Err(
-                INVALID_IS_EXPR,
+                INVALID_SRC_TY,
             ),
             help: Some(
-                "`is` can only be used on union or trait types",
+                "Only expect union or generic or trait type",
             ),
             labels: [],
             source: None,
@@ -747,6 +769,30 @@
                     line: 27,
                     column: 22,
                     offset: 339,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
+                INVALID_SRC_TY,
+            ),
+            help: Some(
+                "Only expect union or generic or trait type",
+            ),
+            labels: [],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 172,
+                    column: 16,
+                    offset: 1840,
+                },
+                end: Pos {
+                    line: 172,
+                    column: 24,
+                    offset: 1848,
                 },
             },
         },
@@ -1310,6 +1356,54 @@
     },
     PLDiag {
         raw: PLDiagRaw {
+            code: Err(
+                IF_LET_AS_DOES_NOT_EXPECT_TAIL,
+            ),
+            help: Some(
+                "remove the tailling symbol",
+            ),
+            labels: [],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 176,
+                    column: 24,
+                    offset: 1921,
+                },
+                end: Pos {
+                    line: 176,
+                    column: 25,
+                    offset: 1922,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
+                EXPECT_IF_LET_AS,
+            ),
+            help: Some(
+                "adding as expression might be a solution",
+            ),
+            labels: [],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 169,
+                    column: 8,
+                    offset: 1798,
+                },
+                end: Pos {
+                    line: 169,
+                    column: 17,
+                    offset: 1807,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
             code: Warn(
                 UNUSED_VARIABLE,
             ),
@@ -1488,6 +1582,52 @@
                     line: 126,
                     column: 10,
                     offset: 1381,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Warn(
+                UNUSED_VARIABLE,
+            ),
+            help: None,
+            labels: [
+                PLLabel {
+                    file: u!(""),
+                    txt: Some(
+                        (
+                            u!("Unused variable `{}`"),
+                            [
+                                u!("a"),
+                            ],
+                        ),
+                    ),
+                    range: Range {
+                        start: Pos {
+                            line: 172,
+                            column: 12,
+                            offset: 1836,
+                        },
+                        end: Pos {
+                            line: 172,
+                            column: 13,
+                            offset: 1837,
+                        },
+                    },
+                },
+            ],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 172,
+                    column: 12,
+                    offset: 1836,
+                },
+                end: Pos {
+                    line: 172,
+                    column: 13,
+                    offset: 1837,
                 },
             },
         },

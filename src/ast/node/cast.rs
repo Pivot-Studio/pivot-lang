@@ -88,12 +88,31 @@ impl<'a, 'ctx> Ctx<'a> {
         node: &AsNode,
     ) -> Result<(ValueHandle, Arc<RefCell<PLType>>), PLDiag> {
         let target_rc = target_ty.clone();
-        match (ty, &*target_ty.clone().borrow()) {
-            (PLType::Primitive(tyi), PLType::Primitive(target_ty)) => {
+        match (ty, &*target_ty.clone().borrow(), node.tail) {
+            (PLType::Generic(g), _, Some((TokenType::NOT, _))) => {
+                if let Some(tp) = g.curpltype.clone() {
+                    let inner = get_type_deep(tp);
+                    if target_ty == inner {
+                        Ok((val, target_ty))
+                    } else {
+                        let re = builder.alloc("cast_result", &target_ty.borrow(), self, None);
+                        let cp = builder.get_or_insert_helper_fn_handle("__cast_panic");
+                        builder.build_call(cp, &[], &PLType::Void, self, None);
+                        Ok((re, target_ty))
+                    }
+                } else {
+                    // alloc a result to prevent llvm error
+                    let re = builder.alloc("cast_result", &target_ty.borrow(), self, None);
+                    let cp = builder.get_or_insert_helper_fn_handle("__cast_panic");
+                    builder.build_call(cp, &[], &PLType::Void, self, None);
+                    Ok((re, target_ty))
+                }
+            }
+            (PLType::Primitive(tyi), PLType::Primitive(target_ty), _) => {
                 let val = builder.try_load2var(node.expr.range(), val, ty, self)?;
                 Ok((builder.cast_primitives(val, tyi, target_ty), target_rc))
             }
-            (PLType::Union(union), target_ty) => {
+            (PLType::Union(union), target_ty, _) => {
                 if node.tail.is_none() {
                     let pos = node.target_type.range().end;
                     let end_range = Range {
@@ -142,7 +161,7 @@ impl<'a, 'ctx> Ctx<'a> {
                         .add_to_ctx(self))
                 }
             }
-            (PLType::Trait(t), target_ty) if !matches!(target_ty, PLType::Trait(_)) => {
+            (PLType::Trait(t), target_ty, _) if !matches!(target_ty, PLType::Trait(_)) => {
                 if node.tail.is_none() {
                     let pos = node.target_type.range().end;
                     let end_range = Range {
@@ -608,8 +627,8 @@ impl Node for IsNode {
             }
             _ => Err(self
                 .range()
-                .new_err(ErrorCode::INVALID_IS_EXPR)
-                .add_help("`is` can only be used on union or trait types")
+                .new_err(ErrorCode::INVALID_SRC_TY)
+                .add_help("Only expect union or generic or trait type")
                 .add_to_ctx(ctx)),
         }
     }
