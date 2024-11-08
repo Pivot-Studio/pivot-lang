@@ -78,8 +78,47 @@ async fn main() Task<()> {
     await std_test::test_nested_async_closure_in_normal_f();
     await std_test::test_nested_async_closure_in_normal_f2();
     await std_test::test_delay();
+    let a = test_s{};
 
+    let b = a impl test_t?;
+
+    println!(b);
+    // a.dosth();
+
+    test_g(a);
     return ();
 }
+
+trait test_t {
+    fn dosth();
+}
+
+struct test_s {
+    
+}
+
+impl test_t for test_s {
+    fn dosth() {
+        println!("hdhasdasdas");
+        return ;
+    }
+}
+
+struct test_s2 {
+    
+}
+
+fn test_g<T>(a:T) void {
+    if a impl test_t? {
+        let b = a impl test_t!;
+        b.dosth();
+    }
+    if let b = a impl test_t {
+        b.dosth();
+    }
+    
+    return;
+}
+
 
 

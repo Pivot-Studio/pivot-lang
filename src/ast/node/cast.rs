@@ -1,6 +1,6 @@
 use std::{cell::RefCell, sync::Arc};
 
-use super::super::builder::IntPredicate;
+use super::{super::builder::IntPredicate, interface::MultiTraitNode};
 use internal_macro::node;
 use ustr::ustr;
 
@@ -640,5 +640,103 @@ impl PrintTrait for IsNode {
         println!("IsNode");
         self.expr.print(tabs + 1, false, line.clone());
         self.target_type.print(tabs + 1, true, line.clone());
+    }
+}
+
+#[node]
+pub struct ImplCastNode {
+    /// expr is the expression which calculates a value as output
+    pub expr: Box<NodeEnum>,
+    /// target_type refers the desired type for the expr
+    pub target_type: Box<MultiTraitNode>,
+
+    pub tail: Option<(TokenType, Range)>,
+}
+
+impl Node for ImplCastNode {
+    fn emit<'a, 'b>(
+        &mut self,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b BuilderEnum<'a, '_>,
+    ) -> NodeResult {
+        let e = self.expr.emit(ctx, builder);
+        self.target_type.emit_highlight(ctx);
+        let t = self.target_type.get_types(ctx, builder)?;
+        let e = e?;
+        let v = e.get_value().unwrap();
+        let ori_ty = v.get_ty();
+        let ty = get_type_deep(ori_ty.clone());
+        let mut satisfy_bound = true;
+        for t in &t {
+            if let PLType::Trait(trait_ty) = &*t.borrow() {
+                if !ty.borrow().implements_trait(trait_ty, ctx) {
+                    satisfy_bound = false;
+                    break;
+                }
+            } else {
+                return Err(self
+                    .range()
+                    .new_err(ErrorCode::EXPECT_TRAIT_TYPE)
+                    .add_to_ctx(ctx));
+            }
+        }
+        match self.tail {
+            Some((TokenType::QUESTION, _)) => builder
+                .int_value(&PriType::BOOL, satisfy_bound as _, false)
+                .new_output(
+                    ctx.get_type(&"bool".into(), Default::default())
+                        .unwrap()
+                        .typ,
+                )
+                .to_result(),
+            Some((TokenType::NOT, _)) => {
+                if let PLType::Generic(g) = &*ori_ty.borrow() {
+                    if !satisfy_bound {
+                        let cp = builder.get_or_insert_helper_fn_handle("__cast_panic");
+                        builder.build_call(cp, &[], &PLType::Void, ctx, None);
+                    }
+                    let mut new_g = g.clone();
+                    new_g
+                        .trait_impl
+                        .as_mut()
+                        .map(|t| {
+                            t.merge(&self.target_type);
+                        })
+                        .or_else(|| {
+                            new_g.trait_impl = Some((*self.target_type).clone());
+                            Some(())
+                        });
+                    if let Some(g) = new_g.curpltype.clone() {
+                        if let PLType::PlaceHolder(_) = &*g.borrow() {
+                            new_g.set_type(new_g.set_place_holder(ctx, builder));
+                        }
+                    }
+                    v.get_value()
+                        .new_output(Arc::new(RefCell::new(PLType::Generic(new_g))))
+                        .to_result()
+                } else {
+                    Err(self
+                        .expr
+                        .range()
+                        .new_err(ErrorCode::EXPECT_GENERIC_TYPE)
+                        .add_to_ctx(ctx))
+                }
+            }
+            None => Err(self
+                .range()
+                .new_err(ErrorCode::EXPECT_TAILING_SYMBOL)
+                .add_to_ctx(ctx)),
+            _ => unreachable!(),
+        }
+    }
+}
+
+impl PrintTrait for ImplCastNode {
+    fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
+        deal_line(tabs, &mut line, end);
+        tab(tabs, line.clone(), end);
+        println!("ImplNode");
+        self.expr.print(tabs + 1, false, line.clone());
+        // self.target_type.print(tabs + 1, true, line.clone());
     }
 }

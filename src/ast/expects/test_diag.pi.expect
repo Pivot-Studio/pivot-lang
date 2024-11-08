@@ -1357,7 +1357,7 @@
     PLDiag {
         raw: PLDiagRaw {
             code: Err(
-                IF_LET_AS_DOES_NOT_EXPECT_TAIL,
+                IF_LET_DOES_NOT_EXPECT_TAIL,
             ),
             help: Some(
                 "remove the tailling symbol",

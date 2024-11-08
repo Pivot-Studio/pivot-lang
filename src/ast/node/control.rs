@@ -58,6 +58,7 @@ impl Node for IfNode {
         ctx.position_at_end(cond_block, builder);
         let mut gen_def = None;
         let cond_range = self.cond.range();
+
         if let NodeEnum::Def(def) = &*self.cond {
             // check if it is a `let ... = ... as ...`
             if let Some(e) = &def.value_expression {
@@ -65,7 +66,7 @@ impl Node for IfNode {
                     if let Some((_, r)) = &a.tail {
                         // tail not allowed in `if let .. as ..`
                         ctx.add_diag(
-                            r.new_err(ErrorCode::IF_LET_AS_DOES_NOT_EXPECT_TAIL)
+                            r.new_err(ErrorCode::IF_LET_DOES_NOT_EXPECT_TAIL)
                                 .add_help("remove the tailling symbol")
                                 .clone(),
                         );
@@ -85,6 +86,39 @@ impl Node for IfNode {
                     );
                     ctx.position_at_end(then_block, builder);
                     let transformed_as = NodeEnum::AsNode(AsNode {
+                        expr: a.expr.clone(),
+                        target_type: a.target_type.clone(),
+                        range: a.range(),
+                        tail: Some((TokenType::NOT, Default::default())),
+                    });
+                    let mut def = def.clone();
+                    def.value_expression = Some(Box::new(transformed_as));
+                    gen_def = Some(def);
+                } else if let NodeEnum::ImplCastNode(a) = &**e {
+                    if let Some((_, r)) = &a.tail {
+                        // tail not allowed in `if let .. impl ..`
+                        ctx.add_diag(
+                            r.new_err(ErrorCode::IF_LET_DOES_NOT_EXPECT_TAIL)
+                                .add_help("remove the tailling symbol")
+                                .clone(),
+                        );
+                    }
+                    let mut transformed_is = NodeEnum::ImplCastNode(ImplCastNode {
+                        expr: a.expr.clone(),
+                        target_type: a.target_type.clone(),
+                        range: a.range(),
+                        tail: Some((TokenType::QUESTION, Default::default())),
+                    });
+                    build_cond(
+                        &mut transformed_is,
+                        ctx,
+                        builder,
+                        cond_range,
+                        then_block,
+                        else_block,
+                    );
+                    ctx.position_at_end(then_block, builder);
+                    let transformed_as = NodeEnum::ImplCastNode(ImplCastNode {
                         expr: a.expr.clone(),
                         target_type: a.target_type.clone(),
                         range: a.range(),

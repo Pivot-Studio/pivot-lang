@@ -1,11 +1,11 @@
 use crate::ast::{
-    node::cast::{AsNode, IsNode},
+    node::cast::{AsNode, ImplCastNode, IsNode},
     tokens::TokenType,
 };
 use internal_macro::test_parser;
 use nom::{
     branch::alt,
-    combinator::{map_res, not, opt, peek},
+    combinator::{map, not, opt, peek},
     multi::many0,
     sequence::{pair, terminated, tuple},
     IResult,
@@ -33,7 +33,7 @@ use super::*;
  i128 as f32?"
 )]
 pub fn as_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
-    map_res(
+    map(
         tuple((
             complex_exp,
             many0(tuple((
@@ -49,8 +49,16 @@ pub fn as_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
                 ))),
             ))),
             opt(pair(tag_modifier(TokenType::IS), type_name)),
+            opt(tuple((
+                tag_modifier(TokenType::IMPL),
+                multi_trait,
+                opt(alt((
+                    tag_token_symbol_ex(TokenType::NOT),
+                    tag_token_symbol_ex(TokenType::QUESTION),
+                ))),
+            ))),
         )),
-        |(exp, casts, is)| {
+        |(exp, casts, is, _impl)| {
             let mut exp = exp;
             let start = exp.range().start;
 
@@ -74,7 +82,17 @@ pub fn as_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
                     range,
                 }));
             }
-            res_box(exp)
+            if let Some((_impl, traits, tail)) = _impl {
+                let range = start.to(traits.range().end);
+                exp = Box::new(NodeEnum::ImplCastNode(ImplCastNode {
+                    expr: exp,
+                    target_type: traits,
+                    range,
+                    tail,
+                }));
+            }
+
+            exp
         },
     )(input)
 }
