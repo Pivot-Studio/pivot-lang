@@ -2,7 +2,7 @@ use crate::{ast::node::Num, utils::read_config::enter};
 
 use super::{
     node::{
-        cast::{AsNode, IsNode},
+        cast::{AsNode, ImplCastNode, IsNode},
         comment::CommentNode,
         control::{BreakNode, ContinueNode, ForNode, IfNode, Literal, MatchNode, WhileNode},
         error::{ErrorNode, StErrorNode},
@@ -852,6 +852,23 @@ impl FmtBuilder {
         self.semicolon();
         // 顶层节点加空格
         self.enter();
+    }
+
+    pub fn parse_impl_cast_node(&mut self, node: &ImplCastNode) {
+        node.expr.format(self);
+        self.space();
+        self.token("impl");
+        self.space();
+        match node.tail {
+            Some((TokenType::NOT, _)) => {
+                self.token("!");
+            }
+            Some((TokenType::QUESTION, _)) => {
+                self.token("?");
+            }
+            None => {}
+            _ => unreachable!(),
+        }
     }
     pub fn parse_match_node(&mut self, node: &MatchNode) {
         self.token("match");

@@ -17,6 +17,9 @@ pub struct MultiTraitNode {
     pub traits: Vec<Box<TypeNodeEnum>>,
 }
 impl MultiTraitNode {
+    pub fn merge(&mut self, other: &MultiTraitNode) {
+        self.traits.extend(other.traits.clone());
+    }
     pub fn emit_highlight(&self, ctx: &mut Ctx) {
         for t in &self.traits {
             t.emit_highlight(ctx);

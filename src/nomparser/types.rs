@@ -13,6 +13,7 @@ use crate::{
     },
 };
 use internal_macro::{test_parser, test_parser_error};
+use nom::combinator::map;
 use nom::multi::separated_list0;
 use nom::sequence::{preceded, terminated};
 use nom::{
@@ -214,8 +215,8 @@ pub fn trait_bound(input: Span) -> IResult<Span, Box<TraitBoundNode>> {
 }
 
 pub fn multi_trait(input: Span) -> IResult<Span, Box<MultiTraitNode>> {
-    map_res(type_add, |traits| {
-        res_box(Box::new(MultiTraitNode {
+    map(type_add, |traits| {
+        Box::new(MultiTraitNode {
             range: traits
                 .first()
                 .unwrap()
@@ -223,7 +224,7 @@ pub fn multi_trait(input: Span) -> IResult<Span, Box<MultiTraitNode>> {
                 .start
                 .to(traits.last().unwrap().range().end),
             traits,
-        }))
+        })
     })(input)
 }
 

@@ -6,6 +6,7 @@ use crate::ast::ctx::Ctx;
 
 use crate::ast::builder::BuilderEnum;
 use crate::ast::builder::IRBuilder;
+use cast::ImplCastNode;
 use enum_dispatch::enum_dispatch;
 
 use lsp_types::SemanticTokenType;
@@ -142,6 +143,7 @@ pub enum NodeEnum {
     UnionDefNode(UnionDefNode),
     AsNode(AsNode),
     IsNode(IsNode),
+    ImplCastNode(ImplCastNode),
     TupleInitNode(TupleInitNode),
     ClosureNode(ClosureNode),
     GlobalConstNode(GlobalConstNode),
