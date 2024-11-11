@@ -12,8 +12,47 @@ pub fn test_compile_time_reflection() void {
     assert(n.dd);
     // println!(n, "你好", true, 10);
     io::print_s("\n");
+    let a = test_s{};
+
+    let b = a impl test_t?;
+
+    panic::assert(b);
+
+    test_g(a);
     return;
 }
+
+trait test_t {
+    fn dosth();
+}
+
+struct test_s {
+    
+}
+
+impl test_t for test_s {
+    fn dosth() {
+        
+        return ;
+    }
+}
+
+fn test_g<T>(a:T) void {
+    if a impl test_t? {
+        let b = a impl test_t!;
+        b.dosth();
+    } else {
+        panic::pl_panic();
+    }
+    if let b = a impl test_t {
+        b.dosth();
+    }else {
+        panic::pl_panic();
+    }
+    
+    return;
+}
+
 
 fn name<T>(t:*T) void {
     let s = fullnameof<tmod2::mod1_name>();
