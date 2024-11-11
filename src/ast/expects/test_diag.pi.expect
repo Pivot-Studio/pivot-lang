@@ -68,6 +68,50 @@
     PLDiag {
         raw: PLDiagRaw {
             code: Err(
+                REDECLARATION,
+            ),
+            help: None,
+            labels: [],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 180,
+                    column: 9,
+                    offset: 1983,
+                },
+                end: Pos {
+                    line: 180,
+                    column: 10,
+                    offset: 1984,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
+                REDECLARATION,
+            ),
+            help: None,
+            labels: [],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 181,
+                    column: 9,
+                    offset: 2014,
+                },
+                end: Pos {
+                    line: 181,
+                    column: 10,
+                    offset: 2015,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
                 TYPE_CANNOT_BE_FULLY_INFERRED,
             ),
             help: None,
@@ -105,6 +149,72 @@
                     line: 27,
                     column: 11,
                     offset: 328,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
+                TYPE_CANNOT_BE_FULLY_INFERRED,
+            ),
+            help: None,
+            labels: [],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 179,
+                    column: 9,
+                    offset: 1958,
+                },
+                end: Pos {
+                    line: 179,
+                    column: 10,
+                    offset: 1959,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
+                TYPE_CANNOT_BE_FULLY_INFERRED,
+            ),
+            help: None,
+            labels: [],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 180,
+                    column: 9,
+                    offset: 1983,
+                },
+                end: Pos {
+                    line: 180,
+                    column: 10,
+                    offset: 1984,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
+                TYPE_CANNOT_BE_FULLY_INFERRED,
+            ),
+            help: None,
+            labels: [],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 181,
+                    column: 9,
+                    offset: 2014,
+                },
+                end: Pos {
+                    line: 181,
+                    column: 10,
+                    offset: 2015,
                 },
             },
         },
@@ -491,6 +601,28 @@
                     line: 52,
                     column: 14,
                     offset: 553,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
+                EXPECT_TRAIT_TYPE,
+            ),
+            help: None,
+            labels: [],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 179,
+                    column: 20,
+                    offset: 1969,
+                },
+                end: Pos {
+                    line: 179,
+                    column: 23,
+                    offset: 1972,
                 },
             },
         },
@@ -1404,6 +1536,50 @@
     },
     PLDiag {
         raw: PLDiagRaw {
+            code: Err(
+                EXPECT_GENERIC_TYPE,
+            ),
+            help: None,
+            labels: [],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 180,
+                    column: 13,
+                    offset: 1987,
+                },
+                end: Pos {
+                    line: 180,
+                    column: 14,
+                    offset: 1988,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
+                EXPECT_TAILING_SYMBOL,
+            ),
+            help: None,
+            labels: [],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 181,
+                    column: 13,
+                    offset: 2018,
+                },
+                end: Pos {
+                    line: 181,
+                    column: 29,
+                    offset: 2034,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
             code: Warn(
                 UNUSED_VARIABLE,
             ),
@@ -1766,6 +1942,52 @@
                     line: 163,
                     column: 21,
                     offset: 1708,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Warn(
+                UNUSED_VARIABLE,
+            ),
+            help: None,
+            labels: [
+                PLLabel {
+                    file: u!(""),
+                    txt: Some(
+                        (
+                            u!("Unused variable `{}`"),
+                            [
+                                u!("b"),
+                            ],
+                        ),
+                    ),
+                    range: Range {
+                        start: Pos {
+                            line: 179,
+                            column: 9,
+                            offset: 1958,
+                        },
+                        end: Pos {
+                            line: 179,
+                            column: 10,
+                            offset: 1959,
+                        },
+                    },
+                },
+            ],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 179,
+                    column: 9,
+                    offset: 1958,
+                },
+                end: Pos {
+                    line: 179,
+                    column: 10,
+                    offset: 1959,
                 },
             },
         },
