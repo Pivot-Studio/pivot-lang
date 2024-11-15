@@ -10,6 +10,8 @@
   - [VSC Support](./tutorial/vscsupport.md)
 - [References](./references/README.md)
   - [Basic](./references/basic.md)
+  - [Operator](./references/operator/README.md)
+    - [Type Operator](./references/operator/tyops.md)
   - [Array](./references/array.md)
   - [closure](./references/closure.md)
   - [Module](./references/module.md)

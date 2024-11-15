@@ -22,7 +22,7 @@ brew install llvm@18
 
 如果你使用的是ubuntu，可以使用[这里](https://github.com/Pivot-Studio/setup-llvm/blob/main/scripts/install_llvm.sh)的脚本进行安装
 
-# CMake
+## CMake
 
 我们的垃圾回收模块使用了LLVM中的StackMap功能，需要使用CMake进行编译。
 

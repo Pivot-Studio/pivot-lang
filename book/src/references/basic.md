@@ -90,4 +90,4 @@
 
 例如：
 
-- `let x = (false && true_with_pnanic()) || (true || !true_with_pnanic());`是一个复杂的逻辑运算
+- `let x = (false && true_with_panic()) || (true || !true_with_panic());`是一个复杂的逻辑运算

@@ -284,7 +284,7 @@ pub fn get_legend() -> String {
 
 #[wasm_bindgen]
 pub fn get_completions() -> String {
-    log::error!("get_completions {:#?}", &*COMPLETIONS.inner.borrow());
+    log::trace!("get_completions {:#?}", &*COMPLETIONS.inner.borrow());
     return serde_json::to_value(COMPLETIONS.inner.borrow().clone())
         .unwrap()
         .to_string();
