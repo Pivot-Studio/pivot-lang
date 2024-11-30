@@ -1,5 +1,7 @@
 fn DioGC__malloc(size: i64, obj_type: u8, rsp:i64) *();
 
+pub fn gc_print_block_time() void;
+
 pub fn DioGC__collect() void;
 
 pub fn DioGC__malloc_no_collect(size: i64, obj_type: u8) *u8;

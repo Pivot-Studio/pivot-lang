@@ -1,0 +1,79 @@
+use core::string::stringbuilder;
+use core::string::ToString;
+
+
+pub trait JSONSerilizable {
+    fn to_json() string;
+}
+
+pub fn encode<T>(t:T) string {
+    let sb = stringbuilder(10);
+    sb.add_char('{');
+    forfields(t, {
+        let pos = sb.current_pos();
+        sb.add_char('"');
+        sb.add_str(_field_name);
+        sb.add_char('"');
+        sb.add_char(':');
+
+        let succ = false;
+
+        if let i = _field impl JSONSerilizable {
+            let re = i.to_json();
+            sb.add_str(re);
+            succ = true;
+        }
+        if !succ {
+            match_type<string>(_field, {
+                sb.add_char('"');
+                sb.add_str(_value);
+                sb.add_char('"');
+                succ = true;
+            });
+            match_type<i64>(_field, {
+                sb.add_str(_value.to_string());
+                succ = true;
+            });
+            match_type<u64>(_field, {
+                sb.add_str(_value.to_string());
+                succ = true;
+            });
+            match_type<f64>(_field, {
+                sb.add_str(_value.to_string());
+                succ = true;
+            });
+            match_type<f32>(_field, {
+                sb.add_str(_value.to_string());
+                succ = true;
+            });
+            match_type<bool>(_field, {
+                sb.add_str(_value.to_string());
+                succ = true;
+            });
+            match_type<char>(_field, {
+                sb.add_char('"');
+                sb.add_char(_value);
+                sb.add_char('"');
+                succ = true;
+            });
+
+        }
+        if !succ {
+            let re = encode(_field);
+            sb.add_str(re);
+            succ = true;
+        }
+        
+
+
+        sb.add_char(',');
+        if !succ {
+            sb.set_pos(pos);
+        }
+    });
+    let pos = sb.current_pos();
+    sb.set_pos(pos - 1);
+    sb.add_char('}');
+
+    return sb.str();
+}
