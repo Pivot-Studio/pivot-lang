@@ -163,7 +163,7 @@ pub struct LLVMBuilder<'a, 'ctx> {
 
 pub fn get_target_machine(_level: OptimizationLevel) -> TargetMachine {
     // see issue https://github.com/llvm/llvm-project/issues/75162
-    let level = OptimizationLevel::None;
+    let level = OptimizationLevel::Aggressive;
     let triple = &TargetMachine::get_default_triple();
     let s1 = TargetMachine::get_host_cpu_name();
     let cpu = s1.to_str().unwrap();
@@ -171,6 +171,7 @@ pub fn get_target_machine(_level: OptimizationLevel) -> TargetMachine {
     let features = s2.to_str().unwrap();
     Target::initialize_native(&InitializationConfig::default()).unwrap();
     let target = Target::from_triple(triple).unwrap();
+
 
     target
         .create_target_machine(
@@ -458,13 +459,15 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         let heapptr = call_site_value.try_as_basic_value().left().unwrap();
         self.builder.position_at_end(lb);
 
-        let casted_result = heapptr;
+        // addrspacecast to zero
+        let casted_result1 = self.builder.build_address_space_cast(heapptr.into_pointer_value(), self.context.ptr_type(AddressSpace::from(0)), "mem_cast").unwrap();
 
+        let casted_result = heapptr;
         if !tp.is_atomic() {
             // TODO: force user to manually init all structs, so we can remove this memset
             self.builder
                 .build_memset(
-                    casted_result.into_pointer_value(),
+                    casted_result1,
                     td.get_abi_alignment(&llvmtp),
                     self.context.i8_type().const_zero(),
                     size,
@@ -556,10 +559,10 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     .try_as_basic_value()
                     .left()
                     .unwrap();
-
+                let casted_result1 = self.builder.build_address_space_cast(arr_space.into_pointer_value(), self.context.ptr_type(AddressSpace::from(0)), "mem_cast").unwrap();
                 self.builder
                     .build_memset(
-                        arr_space.into_pointer_value(),
+                        casted_result1,
                         8,
                         self.context.i8_type().const_zero(),
                         arr_size,
@@ -995,16 +998,20 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
     /// # get_fn_type
     ///
     /// get_fn_type returns the inkwell function type for a pivot-lang function value.
-    fn get_fn_type(&self, fnvalue: &FNValue, ctx: &mut Ctx<'a>) -> FunctionType<'ctx> {
+    fn get_fn_type(&self, fnvalue: &FNValue, ctx: &mut Ctx<'a>) -> (FunctionType<'ctx>, Vec<bool>){
         ctx.protect_generic_context(&fnvalue.fntype.generic_map, |ctx| {
             ctx.run_in_type_mod(fnvalue, |ctx, fnvalue| {
                 let mut param_types = vec![];
+                let mut param_atomics = vec![];
                 for param_pltype in fnvalue.fntype.param_pltypes.iter() {
+                    let plty = param_pltype
+                    .get_type(ctx, &self.clone().into(), true)
+                    .unwrap();
+                    let is_atomic = get_type_deep(plty.clone()).borrow().is_atomic() || matches!(&*plty.borrow(), PLType::Pointer(p) if get_type_deep(p.clone()).borrow().is_atomic());
+                    param_atomics.push(is_atomic);
                     param_types.push(
                         self.get_param_type(
-                            &param_pltype
-                                .get_type(ctx, &self.clone().into(), true)
-                                .unwrap()
+                            &plty
                                 .borrow(),
                             ctx,
                             !fnvalue.is_declare,
@@ -1025,7 +1032,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     )
                     .fn_type(&param_types, false);
 
-                fn_type
+                (fn_type,param_atomics)
             })
         })
     }
@@ -1535,7 +1542,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         if let Some(v) = self.module.get_function(&final_llvm_name) {
             return (v, v.count_basic_blocks() != 0);
         }
-        let fn_type = self.get_fn_type(pltp, ctx);
+        let (fn_type, param_atomics) = self.get_fn_type(pltp, ctx);
         let linkage =
             if pltp.is_declare || pltp.is_modified_by(TokenType::PUB) || pltp.name == "main" {
                 Linkage::External
@@ -1547,6 +1554,11 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             .add_function(&final_llvm_name, fn_type, Some(linkage));
         if !pltp.is_declare {
             f.set_call_conventions(CALL_CONV);
+            for (idx,atomic) in param_atomics.iter().enumerate() {
+                if *atomic {
+                    f.add_attribute(inkwell::attributes::AttributeLoc::Param(idx as _), self.context.create_string_attribute("pl_ordinary", ""),);   
+                }
+            }
         }
 
         if pltp.name.starts_with("DioGC__malloc") {
@@ -2063,13 +2075,13 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             Err(format!("{:?}\ntp: {:?}\nindex: {}", gep, tp, index))
         }
     }
-    fn place_safepoint(&self, _ctx: &mut Ctx<'a>) {
+    fn place_safepoint(&self, ctx: &mut Ctx<'a>) {
         // FIXME
-        // let f = self.get_gc_mod_f(ctx, "DioGC__safepoint");
-        // let rsp = self.get_sp();
-        // self.builder
-        //     .build_call(f, &[rsp.into()], "safepoint")
-        //     .unwrap();
+        let f = self.get_gc_mod_f(ctx, "DioGC__safepoint");
+        let rsp = self.get_sp();
+        self.builder
+            .build_call(f, &[rsp.into()], "safepoint")
+            .unwrap();
     }
     fn build_store(&self, ptr: ValueHandle, value: ValueHandle) {
         let ptr = self.get_llvm_value(ptr).unwrap();

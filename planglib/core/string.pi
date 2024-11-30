@@ -41,6 +41,14 @@ pub fn stringbuilder(len: i64) StringBuilder {
 }
 
 impl StringBuilder {
+
+    pub fn current_pos() i64 {
+        return self.len;
+    }
+    pub fn set_pos(pos: i64) void {
+        self.len = pos;
+        return;
+    }
     pub fn add_byte(ch: u8) void {
         self.data[self.len] = ch;
         self.len = self.len + 1;
