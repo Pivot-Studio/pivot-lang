@@ -15,7 +15,7 @@
                 ]
             },
             "args": [
-                "/Users/bobli/src/raytracepl/main.pi",
+                "${workspaceFolder}/test/main.pi",
                 "-O3"
             ]
         },
@@ -82,7 +82,7 @@
             "type": "lldb",
             "request": "launch",
             "name": "(Unix based system)launch test.pi debug",
-            "program": "/Users/bobli/src/raytracepl/out",
+            "program": "${workspaceFolder}/out",
             "args": [],
             "cwd": "${workspaceFolder}",
             "env": {

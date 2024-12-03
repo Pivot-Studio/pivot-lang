@@ -1,5 +1,6 @@
 use core::string::stringbuilder;
 use core::string::ToString;
+use std::slice::SliceExt;
 
 
 pub trait JSONSerilizable {
@@ -8,6 +9,27 @@ pub trait JSONSerilizable {
 
 pub fn encode<T>(t:T) string {
     let sb = stringbuilder(10);
+    let isarr = false;
+    if_arr(t, { 
+        let a = _arr;
+        sb.add_char('[');
+        for let i = 0; i < arr_len(a); i = i + 1 {
+            let elm = a[i];
+            let elm_encode = encode(elm);
+            sb.add_str(elm_encode);
+            sb.add_char(',');
+            
+        }
+        let pos = sb.current_pos();
+        if arr_len(a) > 0 {
+            sb.set_pos(pos - 1);   
+        }
+        sb.add_char(']');
+        isarr = true;
+    });
+    if isarr {
+        return sb.str();   
+    }
     sb.add_char('{');
     forfields(t, {
         let pos = sb.current_pos();
