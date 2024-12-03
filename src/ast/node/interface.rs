@@ -177,6 +177,7 @@ impl TraitDefNode {
             let derives = self.derives.get_types(ctx, builder)?;
             for (i, field) in self.methods.iter().enumerate() {
                 let mut tp = field.clone();
+                tp.modifier = self.modifier;
                 tp.paralist
                     .insert(0, Box::new(new_selfptr_tf_with_name("self".into())));
                 let id = field.id.clone();

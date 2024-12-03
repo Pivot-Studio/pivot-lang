@@ -6,7 +6,7 @@ use crate::{
 use indexmap::IndexMap;
 use internal_macro::node;
 use lsp_types::{DocumentSymbol, SymbolKind};
-use rustc_hash::FxHashSet;
+use rustc_hash::FxHashMap;
 use ustr::Ustr;
 
 #[node(comment)]
@@ -109,7 +109,7 @@ fn check_fn<'a, 'b>(
     builder: &'b BuilderEnum<'a, '_>,
     method: &FuncDefNode,
     trait_tp: Arc<RefCell<PLType>>,
-    traitfns: &mut FxHashSet<Ustr>,
+    traitfns: &mut FxHashMap<Ustr, bool>,
     fntype: Arc<RefCell<PLType>>,
 ) -> Result<(), PLDiag> {
     if let Some((m, r)) = method.modifier {
@@ -188,7 +188,7 @@ impl Node for ImplNode {
                 g.set_traits(ctx, &gm)?;
             }
             let mut traittpandrange = None;
-            let mut traitfns = FxHashSet::default();
+            let mut traitfns = FxHashMap::default();
             if let Some((typename, _)) = &self.impl_trait {
                 typename.emit_highlight(ctx);
                 let trait_tp = typename.get_type(ctx, builder, true)?;
@@ -196,7 +196,10 @@ impl Node for ImplNode {
                     ctx.send_if_go_to_def(typename.range(), st.range, st.path);
                     traittpandrange = Some((trait_tp.clone(), typename.range()));
                     for name in st.fields.keys() {
-                        traitfns.insert(*name);
+                        traitfns.insert(
+                            *name,
+                            st.modifier.map(|m| m.0 == TokenType::PUB).unwrap_or(false),
+                        );
                     }
                 } else {
                     return Err(typename
@@ -271,7 +274,7 @@ impl Node for ImplNode {
                     }
                 }
             }
-            for f in traitfns {
+            for (f, _) in traitfns {
                 let (tp, r) = traittpandrange.clone().unwrap();
                 r.new_err(ErrorCode::METHOD_NOT_IN_IMPL)
                     .add_label(

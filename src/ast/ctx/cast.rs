@@ -71,19 +71,22 @@ pub(crate) fn set_mthd_fields<'a, T: ImplAble>(
     trait_handle: usize,
 ) -> Result<(), PLDiag> {
     for f in t.list_trait_fields().iter() {
-        let mthd = find_mthd(st, f, t).unwrap_or_else(|| {
-            for t in &t.derives {
-                match &*t.borrow() {
-                    PLType::Trait(t) => {
-                        if let Some(mthd) = find_mthd(st, f, t) {
-                            return mthd;
+        let mthd = find_mthd(st, f, t).map_or_else(
+            || {
+                for t in &t.derives {
+                    match &*t.borrow() {
+                        PLType::Trait(t) => {
+                            if let Some(mthd) = find_mthd(st, f, t) {
+                                return Ok(mthd);
+                            }
                         }
+                        _ => return Err(PLDiag::default()),
                     }
-                    _ => unreachable!(),
                 }
-            }
-            unreachable!()
-        });
+                Err(PLDiag::default())
+            },
+            Ok,
+        )?;
         set_mthd_field(mthd, ctx, t, st_pltype, builder, trait_handle, f)?;
     }
     Ok(())

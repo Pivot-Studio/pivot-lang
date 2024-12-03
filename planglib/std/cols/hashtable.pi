@@ -107,7 +107,7 @@ impl <K:Hash+Eq<K>|V> HashTable<K|V>  {
             // current = self.buckets[bucket as i64];
             let head = current as *TableNode<K|V>!;
             while !head.next is None {
-                if head.hash == hash {
+                if head.key.eq(&k) {
                     return head.value;
                 }
                 head = head.next as *TableNode<K|V>!;

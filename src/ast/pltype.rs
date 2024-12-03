@@ -1794,7 +1794,9 @@ impl GenericType {
                     );
                     let fields = t.list_trait_fields();
                     for field in fields {
-                        let re = field.typenode.get_type(ctx, builder, true);
+                        let re = ctx.run_in_type_mod(t, |ctx, _t| {
+                            field.typenode.get_type(ctx, builder, true)
+                        });
                         if let Err(e) = re {
                             e.add_to_ctx(ctx);
                             continue;
@@ -1802,7 +1804,9 @@ impl GenericType {
                         let tp = re.unwrap();
                         if let PLType::Fn(f) = &*tp.clone().borrow() {
                             let mut f = f.clone();
-                            f.fntype.param_pltypes[0] = ph.borrow().get_typenode(&ctx.get_file());
+                            f.fntype.param_pltypes[0] = ctx.run_in_type_mod(t, |ctx, _t| {
+                                ph.borrow().get_typenode(&ctx.get_file())
+                            });
                             let generic = f.fntype.generic;
                             ctx.add_method(
                                 &ph.borrow(),
