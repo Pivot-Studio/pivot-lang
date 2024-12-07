@@ -984,7 +984,7 @@ impl Node for MatchNode {
             .unwrap_or_default()
             .get_value();
         let value = value.unwrap_or_default();
-        let ty = value.get_ty();
+        let ty = get_type_deep(value.get_ty());
         let value = value.get_value();
         match &*ty.borrow() {
             PLType::Struct(_) | PLType::Primitive(_) | PLType::Union(_) => (),
