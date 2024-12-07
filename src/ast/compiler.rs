@@ -70,7 +70,8 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
         let module = if p.extension().unwrap_or_default() == "bc" {
             Module::parse_bitcode_from_path(p, &ctx).unwrap()
         } else {
-            let c_str = std::ffi::CString::new(p.to_str().unwrap()).unwrap();
+            let path = p.to_str().unwrap();
+            let c_str = std::ffi::CString::new(path).unwrap();
             let mem = unsafe { immix::parse_ir(c_str.as_ptr()) };
             Module::parse_bitcode_from_buffer(
                 unsafe { &inkwell::memory_buffer::MemoryBuffer::new(mem as _) },
@@ -216,7 +217,15 @@ pub fn process_llvm_ir<'a>(
 
     let tm = crate::ast::builder::llvmbuilder::get_target_machine(op.optimization.to_llvm());
     let llvmmod = ctx.create_module("main");
-
+    let alloc_src = include_str!("../../alloc.ll");
+    let c_str = std::ffi::CString::new(alloc_src).unwrap();
+    let mem = unsafe { immix::parse_ir_string(c_str.as_ptr()) };
+    let m = Module::parse_bitcode_from_buffer(
+        unsafe { &inkwell::memory_buffer::MemoryBuffer::new(mem as _) },
+        ctx,
+    )
+    .unwrap();
+    llvmmod.link_in_module(m).unwrap();
     for m in mods {
         let m = m.0;
         pb.inc(1);
