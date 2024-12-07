@@ -884,6 +884,7 @@ impl FuncDefNode {
                     }
                 };
                 child.position_at_end(return_block, builder);
+                builder.place_safepoint(child);
                 child.return_block = Some((return_block, ret_value_ptr));
                 if let Some(ptr) = ret_value_ptr {
                     let value = if self.id.name == "main"

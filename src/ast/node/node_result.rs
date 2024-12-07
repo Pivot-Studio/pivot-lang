@@ -26,6 +26,14 @@ impl TerminatorEnum {
 pub struct NodeOutput {
     value: Option<NodeValue>,
     term: TerminatorEnum,
+    pub compile_time_result: CompileTimeResult,
+}
+
+#[derive(Debug, Clone, Default, Copy)]
+pub enum CompileTimeResult {
+    #[default]
+    None,
+    ConstBool(bool),
 }
 
 pub type NodeResult = Result<NodeOutput, PLDiag>;
@@ -49,6 +57,11 @@ impl NodeOutput {
         if let Some(value) = &mut self.value {
             value.set_const(true);
         }
+        self
+    }
+
+    pub fn set_compile_time_result(&mut self, result: CompileTimeResult) -> &mut Self {
+        self.compile_time_result = result;
         self
     }
 
@@ -83,13 +96,18 @@ impl NodeOutput {
     }
 
     pub fn new(value: Option<NodeValue>, term: TerminatorEnum) -> Self {
-        Self { value, term }
+        Self {
+            value,
+            term,
+            compile_time_result: CompileTimeResult::None,
+        }
     }
 
     pub fn new_value(value: NodeValue) -> Self {
         Self {
             value: Some(value),
             term: TerminatorEnum::None,
+            compile_time_result: CompileTimeResult::None,
         }
     }
 
@@ -100,11 +118,16 @@ impl NodeOutput {
         Self {
             value: Some(NodeValue::new(value, ty)),
             term: TerminatorEnum::None,
+            compile_time_result: CompileTimeResult::None,
         }
     }
 
     pub fn new_term(term: TerminatorEnum) -> Self {
-        Self { value: None, term }
+        Self {
+            value: None,
+            term,
+            compile_time_result: CompileTimeResult::None,
+        }
     }
 
     pub fn get_value(&self) -> Option<NodeValue> {

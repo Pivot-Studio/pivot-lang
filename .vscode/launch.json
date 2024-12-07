@@ -15,8 +15,8 @@
                 ]
             },
             "args": [
-                "test/main.pi",
-                // "-O1"
+                "${workspaceFolder}/test/main.pi",
+                "-O3"
             ]
         },
         {

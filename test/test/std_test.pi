@@ -103,6 +103,7 @@ pub fn test_std() void {
     });
     panic::assert(b == 100);
     fn1(test{a:9999});
+    test_json();
     return;
 }
 
@@ -202,3 +203,24 @@ pub async fn test_delay() Task<()> {
     println!("async 2 end");
     return ();
 }
+
+use std::json::encode::encode;
+
+pub fn test_json() void {
+    let nested = JSONObj{
+        data:JSONObj{data:1, a:1, b:"2"}, 
+        a:1, 
+        b:"3"
+    };
+    let re = encode(nested);
+    println!(re);
+    return;
+}
+
+pub struct JSONObj<T> {
+    data: T;
+    a: i64;
+    b: string;
+}
+
+

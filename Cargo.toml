@@ -98,7 +98,7 @@ thread = ["threadpool"]
 members = ["internal_macro", "vm", "pl_linker", "immix", "kagari"]
 
 [profile.release]
-lto = "fat"
+lto = "thin"
 opt-level = 3
 debug = "line-tables-only"
 
@@ -107,7 +107,7 @@ opt-level = 3
 # debug = true
 debug-assertions = false
 overflow-checks = false
-lto = "fat"
+lto = "thin"
 #panic = 'unwind' # This setting is always ignored.
 incremental = true
 codegen-units = 1

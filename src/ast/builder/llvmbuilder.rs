@@ -163,7 +163,7 @@ pub struct LLVMBuilder<'a, 'ctx> {
 
 pub fn get_target_machine(_level: OptimizationLevel) -> TargetMachine {
     // see issue https://github.com/llvm/llvm-project/issues/75162
-    let level = OptimizationLevel::None;
+    let level = OptimizationLevel::Aggressive;
     let triple = &TargetMachine::get_default_triple();
     let s1 = TargetMachine::get_host_cpu_name();
     let cpu = s1.to_str().unwrap();
@@ -458,13 +458,27 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         let heapptr = call_site_value.try_as_basic_value().left().unwrap();
         self.builder.position_at_end(lb);
 
-        let casted_result = heapptr;
+        // addrspacecast to zero
+        let casted_result1 = if heapptr.into_pointer_value().get_type().get_address_space()
+            == AddressSpace::from(1)
+        {
+            self.builder
+                .build_address_space_cast(
+                    heapptr.into_pointer_value(),
+                    self.context.ptr_type(AddressSpace::from(0)),
+                    "mem_cast",
+                )
+                .unwrap()
+        } else {
+            heapptr.into_pointer_value()
+        };
 
+        let casted_result = heapptr;
         if !tp.is_atomic() {
             // TODO: force user to manually init all structs, so we can remove this memset
             self.builder
                 .build_memset(
-                    casted_result.into_pointer_value(),
+                    casted_result1,
                     td.get_abi_alignment(&llvmtp),
                     self.context.i8_type().const_zero(),
                     size,
@@ -556,10 +570,25 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     .try_as_basic_value()
                     .left()
                     .unwrap();
-
+                let casted_result1 = if arr_space
+                    .into_pointer_value()
+                    .get_type()
+                    .get_address_space()
+                    == AddressSpace::from(1)
+                {
+                    self.builder
+                        .build_address_space_cast(
+                            arr_space.into_pointer_value(),
+                            self.context.ptr_type(AddressSpace::from(0)),
+                            "mem_cast",
+                        )
+                        .unwrap()
+                } else {
+                    arr_space.into_pointer_value()
+                };
                 self.builder
                     .build_memset(
-                        arr_space.into_pointer_value(),
+                        casted_result1,
                         8,
                         self.context.i8_type().const_zero(),
                         arr_size,
@@ -995,16 +1024,20 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
     /// # get_fn_type
     ///
     /// get_fn_type returns the inkwell function type for a pivot-lang function value.
-    fn get_fn_type(&self, fnvalue: &FNValue, ctx: &mut Ctx<'a>) -> FunctionType<'ctx> {
+    fn get_fn_type(&self, fnvalue: &FNValue, ctx: &mut Ctx<'a>) -> (FunctionType<'ctx>, Vec<bool>) {
         ctx.protect_generic_context(&fnvalue.fntype.generic_map, |ctx| {
             ctx.run_in_type_mod(fnvalue, |ctx, fnvalue| {
                 let mut param_types = vec![];
+                let mut param_atomics = vec![];
                 for param_pltype in fnvalue.fntype.param_pltypes.iter() {
+                    let plty = param_pltype
+                    .get_type(ctx, &self.clone().into(), true)
+                    .unwrap();
+                    let is_atomic = get_type_deep(plty.clone()).borrow().is_atomic() || matches!(&*plty.borrow(), PLType::Pointer(p) if get_type_deep(p.clone()).borrow().is_atomic());
+                    param_atomics.push(is_atomic);
                     param_types.push(
                         self.get_param_type(
-                            &param_pltype
-                                .get_type(ctx, &self.clone().into(), true)
-                                .unwrap()
+                            &plty
                                 .borrow(),
                             ctx,
                             !fnvalue.is_declare,
@@ -1025,7 +1058,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     )
                     .fn_type(&param_types, false);
 
-                fn_type
+                (fn_type,param_atomics)
             })
         })
     }
@@ -1535,18 +1568,26 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         if let Some(v) = self.module.get_function(&final_llvm_name) {
             return (v, v.count_basic_blocks() != 0);
         }
-        let fn_type = self.get_fn_type(pltp, ctx);
+        let (fn_type, param_atomics) = self.get_fn_type(pltp, ctx);
         let linkage =
             if pltp.is_declare || pltp.is_modified_by(TokenType::PUB) || pltp.name == "main" {
                 Linkage::External
             } else {
-                Linkage::Private
+                Linkage::Internal
             };
         let f = self
             .module
             .add_function(&final_llvm_name, fn_type, Some(linkage));
         if !pltp.is_declare {
             f.set_call_conventions(CALL_CONV);
+            for (idx, atomic) in param_atomics.iter().enumerate() {
+                if *atomic {
+                    f.add_attribute(
+                        inkwell::attributes::AttributeLoc::Param(idx as _),
+                        self.context.create_string_attribute("pl_ordinary", ""),
+                    );
+                }
+            }
         }
 
         if pltp.name.starts_with("DioGC__malloc") {
@@ -3468,6 +3509,29 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             .builder
             .build_int_mul(len, i64_size, "arg_len")
             .unwrap();
+        // cast addrspace if needed
+        let from = if from.get_type().get_address_space() == AddressSpace::from(1) {
+            self.builder
+                .build_address_space_cast(
+                    from,
+                    self.context.ptr_type(AddressSpace::from(0)),
+                    "cpy_cast",
+                )
+                .unwrap()
+        } else {
+            from
+        };
+        let to = if to.get_type().get_address_space() == AddressSpace::from(1) {
+            self.builder
+                .build_address_space_cast(
+                    to,
+                    self.context.ptr_type(AddressSpace::from(0)),
+                    "cpy_cast",
+                )
+                .unwrap()
+        } else {
+            to
+        };
         self.builder.build_memcpy(to, 8, from, 8, arg_len).unwrap();
     }
     fn build_bit_not(&self, v: ValueHandle) -> ValueHandle {

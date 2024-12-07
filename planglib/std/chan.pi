@@ -74,14 +74,31 @@ impl <S>Chan<S> {
             condvar_wait(self.condvar, *self.mtx);
         }
         let s = self.buffer.pop();
-        self.count = self.count - 1;
 
         if self.count == self.capacity {
             condvar_notify(self.condvar);
         }
         
+        self.count = self.count - 1;
         unlock_mutex(*self.mtx);
         return s;
+    }
+
+    pub fn recv_all() [S] {
+        lock_mutex(*self.mtx);
+        if self.count == self.capacity {
+            condvar_notify(self.condvar);
+        }
+        let ret = [S*self.count as i64;];
+        
+        for let i = 0; i < self.count as i64; i = i + 1 {
+            ret[i] = self.buffer.pop();
+        }
+        self.count = 0;
+
+        
+        unlock_mutex(*self.mtx);
+        return ret;
     }
     pub fn len() u64 {
         
