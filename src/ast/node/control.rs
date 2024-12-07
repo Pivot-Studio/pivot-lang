@@ -10,6 +10,7 @@ use crate::ast::traits::CustomType;
 use crate::format_label;
 use crate::inference::unknown_arc;
 use internal_macro::node;
+use node_result::CompileTimeResult;
 use ustr::ustr;
 
 #[node(comment)]
@@ -57,6 +58,7 @@ impl Node for IfNode {
         builder.build_unconditional_branch(cond_block);
         ctx.position_at_end(cond_block, builder);
         let mut gen_def = None;
+        let mut skip_body = false;
         let cond_range = self.cond.range();
 
         if let NodeEnum::Def(def) = &*self.cond {
@@ -76,7 +78,7 @@ impl Node for IfNode {
                         target_type: a.target_type.clone(),
                         range: a.range(),
                     });
-                    build_cond(
+                    _ = build_cond(
                         &mut transformed_is,
                         ctx,
                         builder,
@@ -109,7 +111,7 @@ impl Node for IfNode {
                         range: a.range(),
                         tail: Some((TokenType::QUESTION, Default::default())),
                     });
-                    build_cond(
+                    let re = build_cond(
                         &mut transformed_is,
                         ctx,
                         builder,
@@ -117,6 +119,13 @@ impl Node for IfNode {
                         then_block,
                         else_block,
                     );
+                    if let Ok(NodeOutput {
+                        compile_time_result: CompileTimeResult::ConstBool(false),
+                        ..
+                    }) = re
+                    {
+                        skip_body = true;
+                    }
                     ctx.position_at_end(then_block, builder);
                     let transformed_as = NodeEnum::ImplCastNode(ImplCastNode {
                         expr: a.expr.clone(),
@@ -137,17 +146,21 @@ impl Node for IfNode {
             }
         } else {
             let cond = &mut *self.cond;
-            build_cond(cond, ctx, builder, cond_range, then_block, else_block);
+            _ = build_cond(cond, ctx, builder, cond_range, then_block, else_block);
         }
 
         // emit the else logic into the then block
         ctx.position_at_end(then_block, builder);
+        let mut then_terminator = TerminatorEnum::None;
         // emit the code inside a child context because it belongs to a sub-block
         let mut child = ctx.new_child(self.then.range().start, builder);
-        if let Some(mut def) = gen_def {
-            def.emit(&mut child, builder)?;
+        if !skip_body {
+            if let Some(mut def) = gen_def {
+                def.emit(&mut child, builder)?;
+            }
+            then_terminator = self.then.emit(&mut child, builder)?.get_term();
         }
-        let then_terminator = self.then.emit(&mut child, builder)?.get_term();
+
         if then_terminator.is_none() {
             // there is no terminator(like return, yield and so forth) in the statement
             // create an unconditional branch to merge block to finish off the "then" block
@@ -195,8 +208,8 @@ fn build_cond<'a>(
     cond_range: Range,
     then_block: usize,
     else_block: usize,
-) {
-    _ = cond.emit(ctx, builder).and_then(|o| {
+) -> Result<NodeOutput, PLDiag> {
+    cond.emit(ctx, builder).and_then(|o| {
         let cond_val = o.get_value();
         check_bool(
             &cond_val,
@@ -211,8 +224,8 @@ fn build_cond<'a>(
         let cond = builder.build_int_truncate(cond, &PriType::BOOL, "trunctemp");
 
         builder.build_conditional_branch(cond, then_block, else_block);
-        Ok(())
-    });
+        Ok(o)
+    })
 }
 
 /// # check_bool

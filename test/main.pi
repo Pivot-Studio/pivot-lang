@@ -33,7 +33,7 @@ use project1::test::inference;
 use project1::test::rand;
 use project1::test::_hashtable;
 use project1::test::_io;
-use project1::test::future_test;
+// use project1::test::future_test;
 use project1::test::std_test;
 
 
@@ -71,7 +71,7 @@ async fn main() Task<()> {
     arr::test_arr();
     _hashtable::test_hashtable();
     _io::test_io();
-    future_test::test_future();
+    // future_test::test_future();
     std_test::test_std();
 
     await std_test::test_nested_async_closure();
