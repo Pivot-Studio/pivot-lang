@@ -1384,6 +1384,7 @@ pub trait RangeTrait {
         builder.build_unconditional_branch(cond_block);
         ctx.position_at_end(cond_block, builder);
         let mut gen_def = None;
+        let mut skip_body = false;
         let cond_range = self.cond.range();
 
         if let NodeEnum::Def(def) = &amp;*self.cond {
@@ -1403,7 +1404,7 @@ pub trait RangeTrait {
                         target_type: a.target_type.clone(),
                         range: a.range(),
                     });
-                    build_cond(
+                    _ = build_cond(
                         &amp;mut transformed_is,
                         ctx,
                         builder,
@@ -1436,7 +1437,7 @@ pub trait RangeTrait {
                         range: a.range(),
                         tail: Some((TokenType::QUESTION, Default::default())),
                     });
-                    build_cond(
+                    let re = build_cond(
                         &amp;mut transformed_is,
                         ctx,
                         builder,
@@ -1444,6 +1445,13 @@ pub trait RangeTrait {
                         then_block,
                         else_block,
                     );
+                    if let Ok(NodeOutput {
+                        compile_time_result: CompileTimeResult::ConstBool(false),
+                        ..
+                    }) = re
+                    {
+                        skip_body = true;
+                    }
                     ctx.position_at_end(then_block, builder);
                     let transformed_as = NodeEnum::ImplCastNode(ImplCastNode {
                         expr: a.expr.clone(),
@@ -1464,17 +1472,21 @@ pub trait RangeTrait {
             }
         } else {
             let cond = &amp;mut *self.cond;
-            build_cond(cond, ctx, builder, cond_range, then_block, else_block);
+            _ = build_cond(cond, ctx, builder, cond_range, then_block, else_block);
         }
 
         // emit the else logic into the then block
         ctx.position_at_end(then_block, builder);
+        let mut then_terminator = TerminatorEnum::None;
         // emit the code inside a child context because it belongs to a sub-block
         let mut child = ctx.new_child(self.then.range().start, builder);
-        if let Some(mut def) = gen_def {
-            def.emit(&amp;mut child, builder)?;
+        if !skip_body {
+            if let Some(mut def) = gen_def {
+                def.emit(&amp;mut child, builder)?;
+            }
+            then_terminator = self.then.emit(&amp;mut child, builder)?.get_term();
         }
-        let then_terminator = self.then.emit(&amp;mut child, builder)?.get_term();
+
         if then_terminator.is_none() {
             // there is no terminator(like return, yield and so forth) in the statement
             // create an unconditional branch to merge block to finish off the &quot;then&quot; block
