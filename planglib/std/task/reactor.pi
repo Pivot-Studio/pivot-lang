@@ -57,13 +57,10 @@ struct StreamReadEV {
 var GLOBAL_REACTOR = new_uv_reactor();
 
 
-use std::io;
 
 fn timer_cb(timer:*libuv::uv_timer_t) void {
     let ev = libuv::get_data_for_handle<libuv::uv_timer_t|TimerEV>(timer);
-    io::print_s("timer_cb\n");
     ev.wake();
-    io::print_s("timer_cb end\n");
     let cb = unsafe_cast<()>(&close_cb);
     let handle = unsafe_cast<()>(timer);
     libuv::uv_close(handle,cb);
@@ -120,62 +117,66 @@ use std::io;
 fn async_cb(async_t:*libuv::uv_async_t) void {
     let reactor = libuv::get_data_for_handle<libuv::uv_async_t|UVReactor>(async_t);
     let ch = reactor.ch;
-    let ev = ch.recv();
-    match ev {
-        TimerEV(ev) => {
-            let timer = libuv::new_uv_timer_t();
-            gc::keep_alive_pinned(timer);
-            let cb = unsafe_cast<()>(&timer_cb);
-            gc::keep_alive_pinned(cb);
-            libuv::uv_timer_init(libuv::uv_default_loop(), timer);
-            libuv::set_data_for_handle(timer, &ev);
-            libuv::uv_timer_start(timer, cb, ev.timeout_ms, ev.repeat_ms);
+    let evs = ch.recv_all();
+    for let i = 0; i < arr_len(evs); i = i + 1 {
+        let ev = evs[i];
+        match ev {
+            TimerEV(ev) => {
+                let timer = libuv::new_uv_timer_t();
+                gc::keep_alive_pinned(timer);
+                let cb = unsafe_cast<()>(&timer_cb);
+                gc::keep_alive_pinned(cb);
+                libuv::uv_timer_init(libuv::uv_default_loop(), timer);
+                libuv::set_data_for_handle(timer, &ev);
+                libuv::uv_timer_start(timer, cb, ev.timeout_ms, ev.repeat_ms);
 
-        }
-        TCPListenEV(ev) => {
-            gc::keep_alive_pinned(ev.handle);
-            libuv::uv_tcp_init(reactor.loop, ev.handle);
-            libuv::uv_tcp_bind(ev.handle, &ev.addr, 0 as u32);
-            libuv::set_data_for_handle(ev.handle, &ev.on_connect);
-            let cb = unsafe_cast<()>(&conn_cb);
-            
-            libuv::uv_listen(unsafe_cast<libuv::uv_stream_t>(ev.handle), 128 as i32, cb);
-            
+            }
+            TCPListenEV(ev) => {
+                gc::keep_alive_pinned(ev.handle);
+                libuv::uv_tcp_init(reactor.loop, ev.handle);
+                libuv::uv_tcp_bind(ev.handle, &ev.addr, 0 as u32);
+                libuv::set_data_for_handle(ev.handle, &ev.on_connect);
+                let cb = unsafe_cast<()>(&conn_cb);
+                
+                libuv::uv_listen(unsafe_cast<libuv::uv_stream_t>(ev.handle), 128 as i32, cb);
+                
 
-        }
-        StreamReadEV(ev) => {
-            gc::keep_alive_pinned(ev.handle);
-            let cb = unsafe_cast<()>(&read_cb);
-            let alloc_cb = unsafe_cast<()>(&alloc_cb);
-            libuv::uv_read_start(ev.handle, alloc_cb, cb);
-            libuv::set_data_for_handle(ev.handle, &ev);
+            }
+            StreamReadEV(ev) => {
+                gc::keep_alive_pinned(ev.handle);
+                let cb = unsafe_cast<()>(&read_cb);
+                let alloc_cb = unsafe_cast<()>(&alloc_cb);
+                libuv::uv_read_start(ev.handle, alloc_cb, cb);
+                libuv::set_data_for_handle(ev.handle, &ev);
 
-        }
-        ReadStopEV(ev) => {
-            libuv::uv_read_stop(ev.handle);
-        }
-        WriteEV(ev) => {
-            let req = libuv::new_uv_write_t();
-            gc::keep_alive_pinned(req);
+            }
+            ReadStopEV(ev) => {
+                libuv::uv_read_stop(ev.handle);
+            }
+            WriteEV(ev) => {
+                let req = libuv::new_uv_write_t();
+                gc::keep_alive_pinned(req);
 
-            let raw_slice_p = &ev.buf[0];
-            gc::pin(raw_slice_p);
-            let buf = libuv::uv_buf_init(&ev.buf[0], ev.buf.len() as u32);
-            let buf_p = &buf;
-            gc::pin(buf_p);
-            libuv::set_data_for_handle(req, &ev);
-            
-            let cb = unsafe_cast<()>(&write_cb);
-            libuv::uv_write(req, ev.handle, &buf, 1 as u32, cb);
-            libuv::set_data_for_handle(req, &ev);
-        }
-        StopEV(ev) => {
-            libuv::uv_stop(reactor.loop);
-            libuv::uv_loop_close(GLOBAL_REACTOR.loop);
-        }
-        _ => {
+                let raw_slice_p = &ev.buf[0];
+                gc::pin(raw_slice_p);
+                let buf = libuv::uv_buf_init(&ev.buf[0], ev.buf.len() as u32);
+                let buf_p = &buf;
+                gc::pin(buf_p);
+                libuv::set_data_for_handle(req, &ev);
+                
+                let cb = unsafe_cast<()>(&write_cb);
+                libuv::uv_write(req, ev.handle, &buf, 1 as u32, cb);
+                libuv::set_data_for_handle(req, &ev);
+            }
+            StopEV(ev) => {
+                libuv::uv_stop(reactor.loop);
+                libuv::uv_loop_close(GLOBAL_REACTOR.loop);
+            }
+            _ => {
+            }
         }
     }
+
     return;
 }
 
