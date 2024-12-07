@@ -1,6 +1,8 @@
 use std::{cell::RefCell, sync::Arc};
 
-use super::{super::builder::IntPredicate, interface::MultiTraitNode};
+use super::{
+    super::builder::IntPredicate, interface::MultiTraitNode, node_result::CompileTimeResult,
+};
 use internal_macro::node;
 use ustr::ustr;
 
@@ -688,6 +690,7 @@ impl Node for ImplCastNode {
                         .unwrap()
                         .typ,
                 )
+                .set_compile_time_result(CompileTimeResult::ConstBool(satisfy_bound))
                 .to_result(),
             Some((TokenType::NOT, _)) => {
                 if let PLType::Generic(g) = &*ori_ty.borrow() {

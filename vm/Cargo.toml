@@ -8,7 +8,7 @@ edition = "2021"
 [dependencies]
 internal_macro = { path = "../internal_macro",default-features = false }
 backtrace = "0.3"
-immix = { path = "../immix", default-features = false, features = ["llvm_stackmap", "auto_gc", "madv_dontneed", "conservative_stack_scan", "c-api"] }
+immix = { path = "../immix", default-features = false, features = ["llvm_stackmap", "auto_gc", "madv_dontneed", "conservative_stack_scan", "c-api", "gc_profile"] }
 # env_logger = "0.10"
 log = { version = "0.4", features = ["std"] }
 libc = "0.2"

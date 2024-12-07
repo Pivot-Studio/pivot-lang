@@ -10,7 +10,7 @@ declare noalias ptr addrspace(1) @DioGC__malloc_slowpath(
     ptr %space
 ) allockind("alloc")
 
-declare double    @llvm.sqrt.f64(double %Val)
+declare double @llvm.sqrt.f64(double %Val)
 
 define double @sqrt_64(double %Val) {
     %1 = call double @llvm.sqrt.f64(double %Val)
@@ -33,8 +33,7 @@ check_collector:
 
 
 call_slowpath:
-    %rsp68 = tail call ptr asm alignstack "mov $0, sp", "=r"() #0
-    %slowpath_result = call ptr addrspace(1) @DioGC__malloc_slowpath(i64 %size, i8 %obj_type, ptr %rsp68, ptr @gc_handle)
+    %slowpath_result = call ptr addrspace(1) @DioGC__malloc_slowpath(i64 %size, i8 %obj_type, ptr %rsp, ptr @gc_handle)
     ret ptr addrspace(1) %slowpath_result
 fastpath_start:    
     %thread_local_allocator_ptr = load ptr, ptr %collector_ptr, align 8
