@@ -57,9 +57,13 @@ struct StreamReadEV {
 var GLOBAL_REACTOR = new_uv_reactor();
 
 
+use std::io;
+
 fn timer_cb(timer:*libuv::uv_timer_t) void {
     let ev = libuv::get_data_for_handle<libuv::uv_timer_t|TimerEV>(timer);
+    io::print_s("timer_cb\n");
     ev.wake();
+    io::print_s("timer_cb end\n");
     let cb = unsafe_cast<()>(&close_cb);
     let handle = unsafe_cast<()>(timer);
     libuv::uv_close(handle,cb);
@@ -113,7 +117,6 @@ fn write_cb(req:*libuv::uv_write_t, status:i32) void {
 use std::io;
 
 
-
 fn async_cb(async_t:*libuv::uv_async_t) void {
     let reactor = libuv::get_data_for_handle<libuv::uv_async_t|UVReactor>(async_t);
     let ch = reactor.ch;
@@ -123,6 +126,7 @@ fn async_cb(async_t:*libuv::uv_async_t) void {
             let timer = libuv::new_uv_timer_t();
             gc::keep_alive_pinned(timer);
             let cb = unsafe_cast<()>(&timer_cb);
+            gc::keep_alive_pinned(cb);
             libuv::uv_timer_init(libuv::uv_default_loop(), timer);
             libuv::set_data_for_handle(timer, &ev);
             libuv::uv_timer_start(timer, cb, ev.timeout_ms, ev.repeat_ms);
