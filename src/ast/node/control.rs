@@ -293,7 +293,7 @@ impl Node for WhileNode {
             Ok(())
         });
         ctx.position_at_end(body_block, builder);
-        builder.place_safepoint(ctx);
+        // builder.place_safepoint(ctx);
         let terminator = self.body.emit_child(ctx, builder)?.get_term();
         builder.build_dbg_location(start);
         builder.build_unconditional_branch(cond_block);

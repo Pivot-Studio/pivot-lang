@@ -982,6 +982,8 @@ impl FuncDefNode {
                     } else {
                         child.position_at_end(entry, builder);
                     }
+                    let f = child.get_gc_mod_f(builder, &"gc_set_high_sp".into());
+                    builder.build_call(f, &[builder.get_sp_handle()], &PLType::Void, child, None);
                     child.init_global(builder);
                     child.position_at_end(entry, builder);
                 }
