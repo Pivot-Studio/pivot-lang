@@ -1,10 +1,10 @@
-fn new_thread(f: *||=>void) void;
+fn new_thread(f: *||=>void, sp:i64) void;
 
 
 pub fn spawn(f:||=>void) void {
     let p = &f;
     // gc::pin(p);
-    new_thread(p);
+    new_thread(p,asm_sp());
     return;
 }
 

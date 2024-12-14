@@ -4,7 +4,7 @@ pub struct Chan<T> {
     count: u64;
     capacity: u64;
     mtx: **MutexHandle;
-    condvar: *CondVar;
+    condvar: **CondVar;
 }
 struct Node<T> {
     data: T;
@@ -19,15 +19,15 @@ struct Queue<T> {
 
 impl <T>Queue<T>{
     pub fn push(t: T) void {
-        let node = Node<T>{};
+        let node = &Node<T>{};
         node.data = t;
         if gc::ptr_to_int(unsafe_cast<u8>(self.head)) == 0 {
-            self.head = &node;
-            self.tail = &node;
+            self.head = node;
+            self.tail = node;
             return;
         }
-        self.tail.next = &node;
-        self.tail = &node;
+        self.tail.next = node;
+        self.tail = node;
         return;
     }
 
@@ -48,8 +48,9 @@ pub fn channel<T>(sz: u64) Chan<T> {
     ch.count = 0;
     ch.capacity = sz;
     ch.mtx = &&MutexHandle{};
+    ch.condvar = &&CondVar{};
     create_mutex(ch.mtx);
-    create_condvar(&ch.condvar);
+    create_condvar(ch.condvar);
     return ch;
 }
 use std::io;
@@ -57,13 +58,13 @@ impl <S>Chan<S> {
     pub fn send(s: S) void {
         lock_mutex(*self.mtx);
         while self.count == self.capacity {
-            condvar_wait(self.condvar, *self.mtx);
+            condvar_wait(*self.condvar, *self.mtx);
         }
         self.buffer.push(s);
         // io::printi64ln(self.count as i64);
         self.count = self.count + 1;
         if self.count == 1 {
-            condvar_notify(self.condvar);
+            condvar_notify(*self.condvar);
         }
         unlock_mutex(*self.mtx);
         return;
@@ -71,12 +72,12 @@ impl <S>Chan<S> {
     pub fn recv() S {
         lock_mutex(*self.mtx);
         while self.count == 0 {
-            condvar_wait(self.condvar, *self.mtx);
+            condvar_wait(*self.condvar, *self.mtx);
         }
         let s = self.buffer.pop();
 
         if self.count == self.capacity {
-            condvar_notify(self.condvar);
+            condvar_notify(*self.condvar);
         }
         
         self.count = self.count - 1;
@@ -87,7 +88,7 @@ impl <S>Chan<S> {
     pub fn recv_all() [S] {
         lock_mutex(*self.mtx);
         if self.count == self.capacity {
-            condvar_notify(self.condvar);
+            condvar_notify(*self.condvar);
         }
         let ret = [S*self.count as i64;];
         

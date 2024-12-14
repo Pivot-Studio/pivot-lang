@@ -26,6 +26,8 @@ pub fn is_pinned<T>(ptr: *T) bool {
     return DioGC__is_pinned(unsafe_cast<u8>(ptr)) == 1;
 }
 
+pub fn gc_set_high_sp(sp:i64) void;
+
 pub fn keep_alive_pinned<T>(ptr: *T) void {
     DioGC__keep_live_pinned(unsafe_cast<u8>(ptr));
     return;

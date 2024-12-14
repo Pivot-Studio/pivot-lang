@@ -10,6 +10,24 @@ declare noalias ptr addrspace(1) @DioGC__malloc_slowpath(
     ptr %space
 ) allockind("alloc")
 
+
+declare noalias void @DioGC__safepoint_ex(
+    i64 %rsp,
+    ptr %space
+)
+
+
+define noalias void @DioGC__safepoint(
+    i64 %rsp) {
+    call void @DioGC__safepoint_ex(i64 %rsp, ptr @gc_handle)
+    ret void
+}
+
+
+declare void @llvm.memset.p0.i64(ptr nocapture, i8, i64, i1) nounwind
+
+
+
 declare double @llvm.sqrt.f64(double %Val)
 
 define double @sqrt_64(double %Val) {
@@ -59,6 +77,9 @@ fastpath_start:
     
     %available_line_num_ptr = getelementptr i64, ptr addrspace(1) %block, i32 2
     %available_line_num = load i64, ptr addrspace(1) %available_line_num_ptr, align 8
+
+    %hole_num_ptr = getelementptr i64, ptr addrspace(1) %block, i32 3
+    %hole_num = load i64, ptr addrspace(1) %hole_num_ptr, align 8
     
     
     ; Calculate line_size = (size - 1) / LINE_SIZE + 1
@@ -77,7 +98,7 @@ fast_path:
     store i64 %new_available, ptr addrspace(1) %available_line_num_ptr, align 8
     
     ; Get line map pointer (after the first three fields)
-    %line_map_ptr = getelementptr i64, ptr addrspace(1) %block, i32 3
+    %line_map_ptr = getelementptr i64, ptr addrspace(1) %block, i32 4
     
     ; Mark lines as used and set object type for first line
     %first_line_ptr = getelementptr i8, ptr addrspace(1) %line_map_ptr, i64 %cursor
@@ -116,7 +137,17 @@ finish_fast_path:
     ; Update next_hole_size
     %new_hole_size = sub i64 %next_hole_size, %line_size
     store i64 %new_hole_size, ptr addrspace(1) %next_hole_size_ptr, align 8
-    
+
+    ; if new_hole_size == 0, update hole_num to hole_num - 1
+    %hole_size_eq_0 = icmp eq i64 %new_hole_size, 0
+    br i1 %hole_size_eq_0, label %update_hole_num, label %finish_fast_path_2
+
+update_hole_num:
+    %new_hole_num = sub i64 %hole_num, 1
+    store i64 %new_hole_num, ptr addrspace(1) %hole_num_ptr, align 8
+    br label %finish_fast_path_2
+
+finish_fast_path_2:
     ; Update bytes_allocated_since_last_gc (the size should be line_size * 128)
     %bytes_allocated_since_last_gc = load i64, ptr %bytes_allocated_since_last_gc_ptr, align 8
     %size_128 = mul i64 %line_size, 128

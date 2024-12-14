@@ -91,7 +91,7 @@ fn vm_ftoa(f: f32, rec: *mut u8) {
 }
 
 #[is_runtime]
-fn new_thread(f: *mut i128) {
+fn new_thread(f: *mut i128, sp:*mut u8) {
     // f's first 8 byte is fn pointer, next 8 byte is data pointer
     let ptr = f as *const i64;
     let f_ptr = ptr as *const extern "C" fn(i64);
@@ -99,20 +99,27 @@ fn new_thread(f: *mut i128) {
     let func = unsafe { *f_ptr };
     let (s, r) = channel::<()>();
     let ptr_i = ptr as i64;
+    immix::pin(data_ptr as _);
+    // immix::gc_keep_live(data_ptr as _);
     // immix::gc_add_root(data_ptr  as *mut _, ObjectType::Pointer.int_value());
     let c = move || {
         // thread::sleep(std::time::Duration::from_secs(1));
-        immix::gc_keep_live(ptr_i as _);
+        let sp = immix::Collector::current_sp();
+        immix::set_high_sp(sp);
+        // immix::gc_keep_live(data_ptr as _);
         // immix::set_evacuation(false);
         // immix::gc_add_root(&mut f as *mut _ as *mut _, ObjectType::Trait.int_value());
         s.send(()).unwrap();
         func(data_ptr);
         // immix::gc_remove_root(&mut f as *mut _ as *mut _);
-        immix::gc_rm_live(ptr_i as _);
+        // immix::gc_rm_live(data_ptr as _);
         immix::no_gc_thread();
     };
     thread::spawn(c);
+    immix::thread_stuck_start_fast(sp);
     r.recv().unwrap();
+    immix::thread_stuck_end();
+    // immix::gc_rm_live(data_ptr as _);
 }
 
 #[is_runtime]
