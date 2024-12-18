@@ -19,10 +19,18 @@ declare noalias void @DioGC__safepoint_ex(
 
 define noalias void @DioGC__safepoint(
     i64 %rsp) {
-    call void @DioGC__safepoint_ex(i64 %rsp, ptr @gc_handle)
+    %collector_ptr = load ptr, ptr @gc_handle, align 8, !invariant.load !0
+    call void @DioGC__safepoint_ex(i64 %rsp, ptr %collector_ptr)
     ret void
 }
 
+
+declare noalias void @gc_set_handle(ptr %handle)
+
+define void @gc_thread_init() {
+    call void @gc_set_handle(ptr @gc_handle)
+    ret void
+}
 
 declare void @llvm.memset.p0.i64(ptr nocapture, i8, i64, i1) nounwind
 
@@ -43,7 +51,7 @@ entry:
     br i1 %size_gt_7936, label %call_slowpath, label %check_collector
 check_collector:
     ; Load collector from gc_handle
-    %collector_ptr = load ptr, ptr @gc_handle, align 8
+    %collector_ptr = load ptr, ptr @gc_handle, align 8, !invariant.load !0
     
     ; Check if collector_ptr is null
     %is_null = icmp eq ptr %collector_ptr, null
@@ -158,3 +166,4 @@ finish_fast_path_2:
 
 
 attributes #0 = { nounwind allockind("alloc") "gc-leaf-function" }
+!0 = !{}
