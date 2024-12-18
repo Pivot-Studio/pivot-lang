@@ -98,9 +98,9 @@ thread = ["threadpool"]
 members = ["internal_macro", "vm", "pl_linker", "immix", "kagari"]
 
 [profile.release]
-lto = "thin"
+lto = "fat"
 opt-level = 3
-debug = "line-tables-only"
+# debug = "line-tables-only"
 
 [profile.bench]
 opt-level = 3
@@ -127,3 +127,8 @@ vergen = { version = "8.3.1", features = [
     "rustc",
     "si",
 ] }
+
+
+[profile.dev]
+overflow-checks = false
+debug-assertions = false
