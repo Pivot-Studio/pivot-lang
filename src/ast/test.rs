@@ -511,6 +511,7 @@ fn test_compile() {
         .unwrap_or_else(|_| panic!("static compiled file not found {:?}", exe));
     eprintln!("exec: {:?}", exe);
     let mut child = Command::new(exe.to_str().unwrap())
+        .env("GC_LOG", "info")
         .spawn()
         .expect("failed to execute compiled program");
 

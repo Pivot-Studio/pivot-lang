@@ -180,7 +180,10 @@ fn async_cb(async_t:*libuv::uv_async_t) void {
     return;
 }
 
+fn eprinti64ln(i:i64) void ;
+
 fn idle_cb(_idle: *libuv::uv_idle_t) void {
+    eprinti64ln(9877);
     gc::DioGC__safepoint(asm_sp());
     return;
 }
