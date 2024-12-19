@@ -510,7 +510,12 @@ fn test_compile() {
     let exe = crate::utils::canonicalize(&exe)
         .unwrap_or_else(|_| panic!("static compiled file not found {:?}", exe));
     eprintln!("exec: {:?}", exe);
+    eprintln!(
+        "start: {:?}",
+        std::time::SystemTime::now().duration_since(std::time::SystemTime::UNIX_EPOCH)
+    );
     let mut child = Command::new(exe.to_str().unwrap())
+        .env("GC_LOG", "info")
         .spawn()
         .expect("failed to execute compiled program");
 

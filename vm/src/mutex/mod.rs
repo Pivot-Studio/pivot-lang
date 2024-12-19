@@ -6,6 +6,8 @@ use std::{
 
 use internal_macro::is_runtime;
 
+use crate::logger::SimpleLogger;
+
 struct MutexContainer {
     mutex: Mutex<()>,
     guard: Cell<Option<MutexGuard<'static, ()>>>,
@@ -16,6 +18,7 @@ pub struct OpaqueMutex {
 
 #[is_runtime]
 fn create_mutex(mutex: *mut *mut OpaqueMutex) -> u64 {
+    SimpleLogger::init_from_env("GC_LOG");
     // immix::pin(mutex.cast());
     // immix::gc_keep_live_pinned(mutex.cast());
     *mutex = Box::into_raw(Box::new(MutexContainer {
