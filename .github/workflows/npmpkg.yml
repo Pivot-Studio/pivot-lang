@@ -23,7 +23,7 @@ jobs:
       - name: install rust
         run: cargo install wasm-pack
       - name: build wasm
-        run: wasm-pack build --target bundler --no-default-features --scope pivot-lang --release
+        run: wasm-pack build --target bundler --no-default-features --scope pivot-lang --release --locked
       # Setup .npmrc file to publish to npm
       - uses: actions/setup-node@v3
         with:

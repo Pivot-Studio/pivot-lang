@@ -15,6 +15,10 @@
     "lldb.dereferencePointers": true,
     "lldb.consoleMode": "commands",
     "makefile.configureOnOpen": true,
+    "vs-browser.localProxyServer.cookieDomainRewrite": true,
+    "vs-browser.localProxyServer.enabled": true,
+    "vs-browser.localProxyServer.forceLocation": true,
+    "vs-browser.proxyMode": true,
     // "rust-analyzer.check.targets": [
     //     "wasm32-unknown-unknown",
     // ],

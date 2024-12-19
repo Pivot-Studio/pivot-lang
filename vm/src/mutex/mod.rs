@@ -16,11 +16,14 @@ pub struct OpaqueMutex {
 
 #[is_runtime]
 fn create_mutex(mutex: *mut *mut OpaqueMutex) -> u64 {
+    // immix::pin(mutex.cast());
+    // immix::gc_keep_live_pinned(mutex.cast());
     *mutex = Box::into_raw(Box::new(MutexContainer {
         mutex: Mutex::new(()),
         guard: Cell::new(None),
     }))
     .cast();
+    // eprintln!("mutex: {:p} -> {:p}", mutex,*mutex);
     fn drop_mutex_f(mutex: *mut u8) {
         unsafe {
             drop(Box::from_raw(mutex.cast::<MutexContainer>()));
@@ -32,6 +35,7 @@ fn create_mutex(mutex: *mut *mut OpaqueMutex) -> u64 {
 
 #[is_runtime]
 fn lock_mutex(mutex: *mut OpaqueMutex) -> u64 {
+    // eprintln!("lock mutex: {:p}", mutex);
     let container: &MutexContainer = &*mutex.cast();
     // immix::thread_stuck_start();
     let lock: MutexGuard<'static, _> = mem::transmute(container.mutex.lock().unwrap());
@@ -66,6 +70,7 @@ fn drop_condvar(cond: *mut Condvar) -> u64 {
 
 #[is_runtime]
 fn condvar_wait(cond: *mut Condvar, mutex: *mut OpaqueMutex) -> u64 {
+    // eprintln!("condvar wait mutex: {:p}", mutex);
     let container: &MutexContainer = &*mutex.cast();
     let lock = container.guard.replace(None).unwrap();
     let cond = unsafe { &*cond };
@@ -76,6 +81,7 @@ fn condvar_wait(cond: *mut Condvar, mutex: *mut OpaqueMutex) -> u64 {
 
 #[is_runtime]
 fn condvar_notify(cond: *mut Condvar) -> u64 {
+    // eprintln!("condvar notify");
     let cond = unsafe { &*cond };
     cond.notify_one();
     0

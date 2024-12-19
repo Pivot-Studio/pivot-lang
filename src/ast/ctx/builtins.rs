@@ -5,7 +5,7 @@ use crate::{
     ast::{
         builder::no_op_builder::NoOpBuilder,
         node::{node_result::NodeResultBuilder, RangeTrait},
-        pltype::{ARRType, PlaceHolderType, PriType},
+        pltype::{ARRType, GenericType, PlaceHolderType, PriType},
     },
     format_label,
 };
@@ -802,11 +802,18 @@ fn emit_for_fields<'a, 'b>(
             // 这种情况不会生成对应代码，但是需要进行相应的语法分析
             builder = &noop;
             ctx.run_in_origin_mod(|ctx| {
-                let field_tp = Arc::new(RefCell::new(PLType::PlaceHolder(PlaceHolderType {
+                let place_holder = Arc::new(RefCell::new(PLType::PlaceHolder(PlaceHolderType {
                     name: "@field_T".into(),
                     range: Default::default(),
                     path: "".into(),
                     methods: Default::default(),
+                })));
+                let field_tp = Arc::new(RefCell::new(PLType::Generic(GenericType {
+                    name: "@field_T".into(),
+                    range: Default::default(),
+                    curpltype: Some(place_holder),
+                    trait_impl: None,
+                    refs: Default::default(),
                 })));
                 let gep = builder.alloc("placeholder", &field_tp.borrow(), ctx, None);
                 let mut sn = StringNode {
@@ -837,6 +844,13 @@ fn emit_for_fields<'a, 'b>(
                     ctx.run_in_origin_mod(|ctx| {
                         ctx.run_in_type_mod(sttp, |ctx, _| {
                             let field_tp = field.typenode.get_type(ctx, builder, true)?;
+                            let field_tp = Arc::new(RefCell::new(PLType::Generic(GenericType {
+                                name: "@field_T".into(),
+                                range: Default::default(),
+                                curpltype: Some(field_tp),
+                                trait_impl: None,
+                                refs: Default::default(),
+                            })));
                             ctx.add_symbol_raw("_field".into(), gep, field_tp, f.range);
                             let mut sn = StringNode {
                                 content: name.to_string(),

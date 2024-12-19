@@ -383,7 +383,11 @@ impl Mod {
         if let Some(pv) = v {
             if range != Default::default() {
                 ctx.set_if_refs_tp(pv.typ.clone(), range);
-                ctx.send_if_go_to_def(range, pv.borrow().get_range().unwrap_or(range), self.path);
+                ctx.send_if_go_to_def(
+                    range,
+                    pv.borrow().get_range().unwrap_or(range),
+                    pv.borrow().get_path().unwrap_or(self.path),
+                );
             }
             return Some(pv.clone());
         }
@@ -396,7 +400,11 @@ impl Mod {
     fn get_type_walker(&self, name: &Ustr, range: Range, ctx: &Ctx) -> Result<GlobalType, PLDiag> {
         if let Some(pv) = ctx.generic_types.get(name) {
             ctx.set_if_refs_tp(pv.clone(), range);
-            ctx.send_if_go_to_def(range, pv.borrow().get_range().unwrap_or(range), self.path);
+            ctx.send_if_go_to_def(
+                range,
+                pv.borrow().get_range().unwrap_or(range),
+                pv.borrow().get_path().unwrap_or(self.path),
+            );
             return Ok(pv.clone().into());
         }
         if let Some(pv) = self.get_type_inner(name, range, ctx) {
