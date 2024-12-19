@@ -288,9 +288,7 @@ impl<'a, 'ctx> Ctx<'a> {
         if let PLType::Union(u) = &*target_pltype.borrow() {
             let mut union_members = vec![];
             for tp in &u.sum_types {
-                let tp = self.run_in_type_mod(u, |ctx,u|{
-                    tp.get_type(ctx, builder, true)
-                })?;
+                let tp = self.run_in_type_mod(u, |ctx, _| tp.get_type(ctx, builder, true))?;
                 union_members.push(tp);
             }
             for (i, tp) in union_members.iter().enumerate() {
