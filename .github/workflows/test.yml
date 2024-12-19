@@ -88,7 +88,7 @@ jobs:
       CARGO_TARGET_DIR: ${{ matrix.CARGO_TARGET_DIR }}
       KAGARI_LIB_ROOT: ${{ github.workspace }}${{ matrix.KAGARI_LIB_ROOT }}
       PL_ROOT: ${{ github.workspace }}${{ matrix.PL_ROOT }}
-      GC_LOG: warn
+      GC_LOG: trace
     steps:
       - uses: actions/checkout@v4
         with:
@@ -120,7 +120,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --manifest-path vm/Cargo.toml --target-dir target -vv
+          args: --manifest-path vm/Cargo.toml --target-dir target -vv --no-default-features --features "static,immix,jitdylib"
 
       # - name: build plc
       #   uses: actions-rs/cargo@v1

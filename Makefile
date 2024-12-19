@@ -12,7 +12,7 @@ devmac:
 	@echo "环境变量已加入~/.bashrc，请重启终端和vsc应用更改"
 
 vm:
-	@cd vm && cargo build --release
+	@cd vm && cargo build --release --locked
 
 vmdebug:
 	@mkdir -p target/release

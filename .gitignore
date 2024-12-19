@@ -2,7 +2,9 @@ target
 *.plb
 *.piv
 .VSCodeCounter
+# ignore all ll file except alloc.ll
 *.ll
+!alloc.ll
 *.out
 *.ilk
 *.exe

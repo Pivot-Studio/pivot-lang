@@ -5,7 +5,6 @@ pub struct Array<T> {
     data:[T];
     len:u32;
 }
-
 pub fn new<T>() Array<T> {
     let arr_raw = [T*4;];
     let arr = Array<T> {
