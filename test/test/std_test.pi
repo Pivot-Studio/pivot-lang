@@ -39,6 +39,7 @@ impl Task<i64> for CustomTask {
 
 pub fn test_std() void {
     iter::test_generator();
+    println!("test_gen done");
     let re = "abcde".index_of("cde");
     let chars = [1,2,3];
     let subchars = [3];
@@ -72,7 +73,7 @@ pub fn test_std() void {
     let mi = math::min(1.0, 2.0);
     panic::assert(mi==1.0);
     panic::assert((math::cos(math::PI) - -1.0).abs() < 0.0000001);
-
+    println!("math done");
     let task = async_f1();
     task.poll(||=>{
         return;
@@ -103,7 +104,9 @@ pub fn test_std() void {
     });
     panic::assert(b == 100);
     fn1(test{a:9999});
+    println!("async done");
     test_json();
+    println!("json done");
     return;
 }
 
