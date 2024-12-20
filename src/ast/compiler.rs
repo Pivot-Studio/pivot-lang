@@ -1,3 +1,4 @@
+use super::builder::llvmbuilder::get_target_machine;
 use super::node::program::ModWrapper;
 use super::node::program::ASSET_PATH;
 #[cfg(feature = "llvm")]
@@ -217,14 +218,7 @@ pub fn process_llvm_ir<'a>(
 
     let tm = crate::ast::builder::llvmbuilder::get_target_machine(op.optimization.to_llvm());
     let llvmmod = ctx.create_module("main");
-    let alloc_src = include_str!("../../alloc.ll");
-    let c_str = std::ffi::CString::new(alloc_src).unwrap();
-    let mem = unsafe { immix::parse_ir_string(c_str.as_ptr()) };
-    let m = Module::parse_bitcode_from_buffer(
-        unsafe { &inkwell::memory_buffer::MemoryBuffer::new(mem as _) },
-        ctx,
-    )
-    .unwrap();
+    let m = get_alloc_module(ctx, op);
     llvmmod.link_in_module(m).unwrap();
     for m in mods {
         let m = m.0;
@@ -313,6 +307,39 @@ pub fn process_llvm_ir<'a>(
         eprintln!("asm file written to: {}", &asm_path);
     }
     (llvmmod, output_files)
+}
+
+pub(crate) fn get_alloc_module(ctx: &Context, op: Options) -> Module<'_> {
+    let alloc_src = if op.jit {
+        #[cfg(target_arch = "x86_64")]
+        {
+            include_str!("../../alloc-jit-x64.ll")
+        }
+        #[cfg(target_arch = "aarch64")]
+        {
+            include_str!("../../alloc-jit-aarch64.ll")
+        }
+    } else {
+        #[cfg(target_arch = "x86_64")]
+        {
+            include_str!("../../alloc-x64.ll")
+        }
+        #[cfg(target_arch = "aarch64")]
+        {
+            include_str!("../../alloc-aarch64.ll")
+        }
+    };
+    let c_str = std::ffi::CString::new(alloc_src).unwrap();
+    let mem = unsafe { immix::parse_ir_string(c_str.as_ptr()) };
+    let m = Module::parse_bitcode_from_buffer(
+        unsafe { &inkwell::memory_buffer::MemoryBuffer::new(mem as _) },
+        ctx,
+    )
+    .unwrap();
+    let tm = get_target_machine(op.optimization.to_llvm());
+    m.set_data_layout(&tm.get_target_data().get_data_layout());
+    m.set_triple(&tm.get_triple());
+    m
 }
 
 #[cfg(feature = "llvm")]

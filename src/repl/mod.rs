@@ -22,7 +22,7 @@ mod completer;
 mod repl_cmd;
 
 use crate::ast::accumulators::{Diagnostics, ModBuffer};
-use crate::ast::compiler::{self, ActionType};
+use crate::ast::compiler::{self, get_alloc_module, ActionType};
 use crate::ast::diag::print_diags;
 use crate::ast::plmod::GlobalVar;
 use crate::db::Database;
@@ -137,6 +137,15 @@ project = "repl"
     rl.set_helper(Some(completer));
     let _ = rl.load_history(&PathBuf::from(&root).join("history.txt"));
 
+    unsafe {
+        immix::setREPL(1);
+        let mo = get_alloc_module(&ctx, op);
+        mo.set_name("alloc_builtin");
+        let p = mo.as_mut_ptr();
+        std::mem::forget(mo);
+        // immix::run_module_pass(p as _, mem.op(&db).optimization as _, 0, 0);
+        immix::AddModuleToOrcJIT(p as _);
+    }
     loop {
         let docs = mem.docs(&db);
         let docs2 = mem_check.docs(&db2);
@@ -388,7 +397,6 @@ project = "repl"
 
 fn load_mod_and_evaluate(db: &Database, mem: MemDocsInput, ctx: &Context) {
     let mods = compiler::compile_dry::accumulated::<ModBuffer>(db, mem);
-    unsafe { immix::setREPL(1) };
     for m in &mods {
         let m = &m.0;
         if !m.name.starts_with("__anon__") {
