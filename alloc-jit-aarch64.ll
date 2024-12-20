@@ -1,13 +1,12 @@
-; create a threadlocal collecor handle
 
-@gc_handle = thread_local(localexec) global ptr null, align 8
+
+declare ptr @gc_get_handle() readnone allockind("alloc") "gc-leaf-function"
 
 ; declare DioGC__malloc_slowpath
-declare noalias ptr addrspace(1) @DioGC__malloc_slowpath(
+declare noalias ptr addrspace(1) @DioGC__malloc_slowpath_jit(
     i64 %size,
     i8 %obj_type,
-    i64 %rsp,
-    ptr %space
+    i64 %rsp
 ) allockind("alloc")
 
 
@@ -19,7 +18,8 @@ declare noalias void @DioGC__safepoint_ex(
 
 define noalias void @DioGC__safepoint(
     i64 %rsp) {
-    %collector_ptr = load ptr, ptr @gc_handle, align 8, !invariant.load !0
+    
+    %collector_ptr = call ptr @gc_get_handle()
     call void @DioGC__safepoint_ex(i64 %rsp, ptr %collector_ptr)
     ret void
 }
@@ -28,7 +28,6 @@ define noalias void @DioGC__safepoint(
 declare noalias void @gc_set_handle(ptr %handle)
 
 define void @gc_thread_init() {
-    call void @gc_set_handle(ptr @gc_handle)
     ret void
 }
 
@@ -44,22 +43,18 @@ define double @sqrt_64(double %Val) {
 }
 
 ; define new DioGC__malloc
-define ptr addrspace(1) @DioGC__malloc(i64 %size, i8 %obj_type, ptr %rsp) noinline optnone allockind("alloc") {
+define ptr addrspace(1) @DioGC__malloc(i64 %size, i8 %obj_type, i64 %rsp) noinline optnone allockind("alloc") {
 entry:
     ; if size > 7936, call slowpath
     %size_gt_7936 = icmp ugt i64 %size, 7936
-    br i1 %size_gt_7936, label %call_slowpath, label %check_collector
-check_collector:
-    ; Load collector from gc_handle
-    %collector_ptr = load ptr, ptr @gc_handle, align 8, !invariant.load !0
-    
-    ; Check if collector_ptr is null
-    %is_null = icmp eq ptr %collector_ptr, null
-    br i1 %is_null, label %call_slowpath, label %fastpath_start
+    %collector_ptr = call ptr @gc_get_handle()
+    br i1 %size_gt_7936, label %call_slowpath, label %fastpath_start
 
 
 call_slowpath:
-    %slowpath_result = call ptr addrspace(1) @DioGC__malloc_slowpath(i64 %size, i8 %obj_type, ptr %rsp, ptr @gc_handle)
+    %innerrsp = tail call ptr asm alignstack "mov $0, sp", "=r"() #0
+    %rspi = ptrtoint ptr %innerrsp to i64
+    %slowpath_result = call ptr addrspace(1) @DioGC__malloc_slowpath_jit(i64 %size, i8 %obj_type, i64 %rspi)
     ret ptr addrspace(1) %slowpath_result
 fastpath_start:    
     %thread_local_allocator_ptr = load ptr, ptr %collector_ptr, align 8

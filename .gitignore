@@ -4,7 +4,7 @@ target
 .VSCodeCounter
 # ignore all ll file except alloc.ll
 *.ll
-!alloc.ll
+!alloc*.ll
 *.out
 *.ilk
 *.exe

@@ -417,7 +417,7 @@ fn test_doc_symbol() {
 }
 
 #[test]
-#[ignore = "may get SIGSEGV on jit engine exit somehow, need to investigate"]
+// #[ignore = "may get SIGSEGV on jit engine exit somehow, need to investigate"]
 #[cfg(all(feature = "jit", not(windows)))]
 fn test_orc_jit() {
     use crate::ast::compiler::{compile, Options};
