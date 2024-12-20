@@ -1,3 +1,4 @@
+#[cfg(feature = "llvm")]
 use super::builder::llvmbuilder::get_target_machine;
 use super::node::program::ModWrapper;
 use super::node::program::ASSET_PATH;
@@ -309,6 +310,7 @@ pub fn process_llvm_ir<'a>(
     (llvmmod, output_files)
 }
 
+#[cfg(feature = "llvm")]
 pub(crate) fn get_alloc_module(ctx: &Context, op: Options) -> Module<'_> {
     let alloc_src = if op.jit {
         #[cfg(target_arch = "x86_64")]
