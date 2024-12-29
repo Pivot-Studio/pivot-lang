@@ -44,8 +44,6 @@ define double @sqrt_64(double %Val) {
 
 ; define new DioGC__malloc
 define ptr addrspace(1) @DioGC__malloc(i64 %size, i8 %obj_type, i64 %rsp) noinline optnone allockind("alloc") {
-; define new DioGC__malloc
-define ptr addrspace(1) @DioGC__malloc(i64 %size, i8 %obj_type, i64 %rsp) noinline optnone allockind("alloc") {
 entry:
     ; if size > 128, call slowpath
     ; call void @printi64ln(i64 2222)
@@ -77,7 +75,12 @@ fastpath_start:
 
     ; Get thread_local_allocator (first field)
     %block = load ptr addrspace(1), ptr %thread_local_allocator_ptr, align 8
+
+    ; check block is null
+    %block_is_null = icmp eq ptr addrspace(1) %block, null
+    br i1 %block_is_null, label %call_slowpath, label %load_block_fields
     
+load_block_fields:
     ; Load block fields
     %cursor_ptr = getelementptr i64, ptr addrspace(1) %block, i32 0
     %cursor = load ptr addrspace(1), ptr addrspace(1) %cursor_ptr, align 8
