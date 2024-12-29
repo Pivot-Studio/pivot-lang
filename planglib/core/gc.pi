@@ -2,7 +2,7 @@ fn DioGC__malloc(size: i64, obj_type: u8, rsp:i64) *();
 
 pub fn gc_print_block_time() void;
 
-pub fn DioGC__collect() void;
+pub fn DioGC__collect(rsp:i64) void;
 
 pub fn DioGC__malloc_no_collect(size: i64, obj_type: u8) *u8;
 
@@ -44,7 +44,7 @@ fn DioGC__remove_coro_stack(stack:i64) void;
 
 pub fn DioGC__safepoint(sp:i64) void;
 
-pub fn DioGC__register_global(p:i64, tp:u8) void;
+pub fn DioGC__register_global(p:i64, tp:i32) void;
 
 pub fn DioGC__set_eva(ev:bool) void;
 

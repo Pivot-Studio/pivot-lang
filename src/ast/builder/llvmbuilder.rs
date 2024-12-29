@@ -540,6 +540,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 self.builder.build_store(len_ptr, arr_len).unwrap();
 
                 let rsp = self.get_sp();
+
                 let arr_space = self
                     .builder
                     .build_call(
@@ -549,7 +550,10 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                                 arr_size.into(),
                                 self.context
                                     .i8_type()
-                                    .const_int(immix::ObjectType::Trait.int_value() as u64, false)
+                                    .const_int(
+                                        arr.element_type.borrow().get_immix_type() as u64,
+                                        false,
+                                    )
                                     .into(),
                                 rsp.into(),
                             ]
@@ -559,7 +563,10 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                                 arr_size.into(),
                                 self.context
                                     .i8_type()
-                                    .const_int(immix::ObjectType::Trait.int_value() as u64, false)
+                                    .const_int(
+                                        arr.element_type.borrow().get_immix_type() as u64,
+                                        false,
+                                    )
                                     .into(),
                             ]
                             .to_vec()
@@ -3011,19 +3018,24 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         );
         global.set_initializer(&base_type.const_zero());
         global.set_metadata(exp.as_metadata_value(self.context), 0);
-        let gctp = pltp.get_immix_type();
+        // let gctp = pltp.get_immix_type();
         let f = self.get_gc_mod_f(ctx, "DioGC__register_global");
         let ptrtoint = self
             .builder
             .build_ptr_to_int(global.as_pointer_value(), self.context.i64_type(), "")
             .unwrap();
-        let gc_tp_int = self
-            .get_llvm_value(self.int_value(&PriType::U8, gctp as u64, false))
+        let td = self.targetmachine.get_target_data();
+        let byte_size_int = self
+            .get_llvm_value(self.int_value(&PriType::I32, td.get_store_size(&base_type), false))
             .unwrap()
             .into_int_value();
 
         self.builder
-            .build_call(f, &[ptrtoint.into(), gc_tp_int.into()], "register_global")
+            .build_call(
+                f,
+                &[ptrtoint.into(), byte_size_int.into()],
+                "register_global",
+            )
             .unwrap();
         self.get_llvm_value_handle(&global.as_any_value_enum())
     }
