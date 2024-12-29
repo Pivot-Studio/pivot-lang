@@ -87,8 +87,16 @@
             "cwd": "${workspaceFolder}",
             "env": {
                 // "GC_LOG": "info"
+                // "PL_IMMIX_HEAP_SIZE": "80000000"
             }
             // "stopOnEntry": true
+        },
+        {
+            "name": "(lldb) Attach",
+            "type": "cppdbg",
+            "request": "attach",
+            "program": "out",
+            "MIMode": "lldb"
         },
         {
             "name": "(Windows) Launch",

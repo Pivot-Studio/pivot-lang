@@ -146,12 +146,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "atomic-maybe-uninit"
-version = "0.3.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e5a320ab39d3f29f95494ce06a1e5d86890eadb13e4438bfd3102b1f5566b299"
-
-[[package]]
 name = "atty"
 version = "0.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -502,10 +496,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1137cd7e7fc0fb5d3c5a8678be38ec56e819125d8d7907411fe24ccb943faca8"
 dependencies = [
  "crossbeam-channel",
- "crossbeam-deque 0.8.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "crossbeam-epoch 0.9.18 (registry+https://github.com/rust-lang/crates.io-index)",
+ "crossbeam-deque",
+ "crossbeam-epoch",
  "crossbeam-queue",
- "crossbeam-utils 0.8.20 (registry+https://github.com/rust-lang/crates.io-index)",
+ "crossbeam-utils",
 ]
 
 [[package]]
@@ -514,7 +508,7 @@ version = "0.5.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "33480d6946193aa8033910124896ca395333cae7e2d1113d1fef6c3272217df2"
 dependencies = [
- "crossbeam-utils 0.8.20 (registry+https://github.com/rust-lang/crates.io-index)",
+ "crossbeam-utils",
 ]
 
 [[package]]
@@ -523,17 +517,8 @@ version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "613f8cc01fe9cf1a3eb3d7f488fd2fa8388403e97039e2f73692932e291a770d"
 dependencies = [
- "crossbeam-epoch 0.9.18 (registry+https://github.com/rust-lang/crates.io-index)",
- "crossbeam-utils 0.8.20 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "crossbeam-deque"
-version = "0.8.5"
-source = "git+https://github.com/Pivot-Studio/crossbeam.git#6925a93dbd6db8b13173252b159a9dc83febbe3a"
-dependencies = [
- "crossbeam-epoch 0.9.18 (git+https://github.com/Pivot-Studio/crossbeam.git)",
- "crossbeam-utils 0.8.20 (git+https://github.com/Pivot-Studio/crossbeam.git)",
+ "crossbeam-epoch",
+ "crossbeam-utils",
 ]
 
 [[package]]
@@ -542,15 +527,7 @@ version = "0.9.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5b82ac4a3c2ca9c3460964f020e1402edd5753411d7737aa39c3714ad1b5420e"
 dependencies = [
- "crossbeam-utils 0.8.20 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "crossbeam-epoch"
-version = "0.9.18"
-source = "git+https://github.com/Pivot-Studio/crossbeam.git#6925a93dbd6db8b13173252b159a9dc83febbe3a"
-dependencies = [
- "crossbeam-utils 0.8.20 (git+https://github.com/Pivot-Studio/crossbeam.git)",
+ "crossbeam-utils",
 ]
 
 [[package]]
@@ -559,7 +536,7 @@ version = "0.3.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "df0346b5d5e76ac2fe4e327c5fd1118d6be7c51dfb18f9b7922923f287471e35"
 dependencies = [
- "crossbeam-utils 0.8.20 (registry+https://github.com/rust-lang/crates.io-index)",
+ "crossbeam-utils",
 ]
 
 [[package]]
@@ -567,14 +544,6 @@ name = "crossbeam-utils"
 version = "0.8.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "22ec99545bb0ed0ea7bb9b8e1e9122ea386ff8a48c0922e43f36d45ab09e0e80"
-
-[[package]]
-name = "crossbeam-utils"
-version = "0.8.20"
-source = "git+https://github.com/Pivot-Studio/crossbeam.git#6925a93dbd6db8b13173252b159a9dc83febbe3a"
-dependencies = [
- "atomic-maybe-uninit",
-]
 
 [[package]]
 name = "crunchy"
@@ -589,7 +558,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "804c8821570c3f8b70230c2ba75ffa5c0f9a4189b9a432b6656c536712acae28"
 dependencies = [
  "cfg-if",
- "crossbeam-utils 0.8.20 (registry+https://github.com/rust-lang/crates.io-index)",
+ "crossbeam-utils",
  "hashbrown 0.14.5",
  "lock_api",
  "once_cell",
@@ -889,7 +858,7 @@ dependencies = [
  "backtrace",
  "cmake",
  "criterion",
- "crossbeam-deque 0.8.5 (git+https://github.com/Pivot-Studio/crossbeam.git)",
+ "crossbeam-deque",
  "int-enum",
  "lazy_static",
  "libc",
@@ -1648,8 +1617,8 @@ version = "1.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1465873a3dfdaa8ae7cb14b4383657caab0b3e8a0aa9ae8e04b044854c8dfce2"
 dependencies = [
- "crossbeam-deque 0.8.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "crossbeam-utils 0.8.20 (registry+https://github.com/rust-lang/crates.io-index)",
+ "crossbeam-deque",
+ "crossbeam-utils",
 ]
 
 [[package]]
