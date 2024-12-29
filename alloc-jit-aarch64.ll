@@ -75,7 +75,12 @@ fastpath_start:
 
     ; Get thread_local_allocator (first field)
     %block = load ptr addrspace(1), ptr %thread_local_allocator_ptr, align 8
+
+    ; check block is null
+    %block_is_null = icmp eq ptr addrspace(1) %block, null
+    br i1 %block_is_null, label %call_slowpath, label %load_block_fields
     
+load_block_fields:
     ; Load block fields
     %cursor_ptr = getelementptr i64, ptr addrspace(1) %block, i32 0
     %cursor = load ptr addrspace(1), ptr addrspace(1) %cursor_ptr, align 8
