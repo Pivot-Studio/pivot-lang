@@ -129,6 +129,6 @@ vergen = { version = "8.3.1", features = [
 ] }
 
 
-[profile.dev]
-overflow-checks = false
-debug-assertions = false
+# [profile.dev]
+# overflow-checks = false
+# debug-assertions = false
