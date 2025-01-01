@@ -101,6 +101,8 @@ members = ["internal_macro", "vm", "pl_linker", "immix", "kagari"]
 lto = "fat"
 opt-level = 3
 debug = "line-tables-only"
+overflow-checks = false
+debug-assertions = false
 
 [profile.bench]
 opt-level = 3

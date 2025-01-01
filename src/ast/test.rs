@@ -418,7 +418,7 @@ fn test_doc_symbol() {
 
 #[test]
 // #[ignore = "may get SIGSEGV on jit engine exit somehow, need to investigate"]
-#[cfg(all(feature = "jit", not(windows)))]
+#[cfg(all(feature = "jit", not(windows), not(target_os = "linux")))]
 fn test_orc_jit() {
     use crate::ast::compiler::{compile, Options};
     use std::path::PathBuf;

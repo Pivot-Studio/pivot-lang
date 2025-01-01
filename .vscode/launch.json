@@ -87,7 +87,7 @@
             "cwd": "${workspaceFolder}",
             "env": {
                 // "GC_LOG": "info"
-                // "PL_IMMIX_HEAP_SIZE": "80000000"
+                "PL_IMMIX_HEAP_SIZE": "70000000"
             }
             // "stopOnEntry": true
         },
