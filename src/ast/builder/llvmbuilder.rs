@@ -550,10 +550,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                                 arr_size.into(),
                                 self.context
                                     .i8_type()
-                                    .const_int(
-                                        arr.element_type.borrow().get_immix_type() as u64,
-                                        false,
-                                    )
+                                    .const_int(ObjectType::Trait as u64, false)
                                     .into(),
                                 rsp.into(),
                             ]
@@ -563,10 +560,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                                 arr_size.into(),
                                 self.context
                                     .i8_type()
-                                    .const_int(
-                                        arr.element_type.borrow().get_immix_type() as u64,
-                                        false,
-                                    )
+                                    .const_int(ObjectType::Trait as u64, false)
                                     .into(),
                             ]
                             .to_vec()
@@ -3024,18 +3018,14 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             .builder
             .build_ptr_to_int(global.as_pointer_value(), self.context.i64_type(), "")
             .unwrap();
-        let td = self.targetmachine.get_target_data();
-        let byte_size_int = self
-            .get_llvm_value(self.int_value(&PriType::I32, td.get_store_size(&base_type), false))
+        let obj_tp = pltp.get_immix_type();
+        let obj_ty = self
+            .get_llvm_value(self.int_value(&PriType::I8, obj_tp.int_value() as _, false))
             .unwrap()
             .into_int_value();
 
         self.builder
-            .build_call(
-                f,
-                &[ptrtoint.into(), byte_size_int.into()],
-                "register_global",
-            )
+            .build_call(f, &[ptrtoint.into(), obj_ty.into()], "register_global")
             .unwrap();
         self.get_llvm_value_handle(&global.as_any_value_enum())
     }

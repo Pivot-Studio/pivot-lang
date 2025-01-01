@@ -8,7 +8,7 @@ pub trait JSONSerilizable {
 }
 
 pub fn encode<T>(t:T) string {
-    let sb = stringbuilder(10);
+    let sb = stringbuilder(100);
     let isarr = false;
     if_arr(t, { 
         let a = _arr;
