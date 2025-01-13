@@ -315,20 +315,20 @@ pub(crate) fn get_alloc_module(ctx: &Context, op: Options) -> Module<'_> {
     let alloc_src = if op.jit {
         #[cfg(target_arch = "x86_64")]
         {
-            include_str!("../../alloc-jit-x64.ll")
+            include_str!("../../immix/alloc-jit-x64.ll")
         }
         #[cfg(target_arch = "aarch64")]
         {
-            include_str!("../../alloc-jit-aarch64.ll")
+            include_str!("../../immix/alloc-jit-aarch64.ll")
         }
     } else {
         #[cfg(target_arch = "x86_64")]
         {
-            include_str!("../../alloc-x64.ll")
+            include_str!("../../immix/alloc-x64.ll")
         }
         #[cfg(target_arch = "aarch64")]
         {
-            include_str!("../../alloc-aarch64.ll")
+            include_str!("../../immix/alloc-aarch64.ll")
         }
     };
     let c_str = std::ffi::CString::new(alloc_src).unwrap();
