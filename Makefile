@@ -20,7 +20,7 @@ vmdebug:
 	@cp target/debug/libvm.a target/release/libvm.a
 	@touch target/debug/libvm.so && cp target/debug/libvm.so target/release/libvm.so
 	@touch target/debug/libvm.dylib && cp target/debug/libvm.dylib target/release/libvm.dylib
-	@touch target/debug/libuv.so && cp target/debug/libvm.so target/release/libuv.so
+	@touch target/debug/libuv.so && cp target/debug/libuv.so target/release/libuv.so
 	@touch target/debug/libuv.dylib && cp target/debug/libuv.dylib target/release/libuv.dylib
 
 install:
