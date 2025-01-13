@@ -73,10 +73,11 @@ fn print_i64(i: i64) {
 
 #[is_runtime]
 fn vm_dtoa(f: f64, rec: *mut u8) {
-    let s = unsafe { std::slice::from_raw_parts_mut(rec, 64) };
+    let s = unsafe { std::slice::from_raw_parts_mut(rec, 70) };
     f.to_string()
         .as_bytes()
         .iter()
+        .take(70)
         .enumerate()
         .for_each(|(i, b)| {
             s[i] = *b;
@@ -103,19 +104,13 @@ fn new_thread(f: *mut i128, sp: *mut u8) {
     let data_ptr = unsafe { *ptr.offset(1) };
     let func = unsafe { *f_ptr };
     let (s, r) = channel::<()>();
-    // let ptr_i = ptr as i64;
+    // pin data to prevent evacuation
     immix::pin(data_ptr as _);
-    // immix::gc_keep_live(data_ptr as _);
-    // immix::gc_add_root(data_ptr  as *mut _, ObjectType::Pointer.int_value());
     let c = move || {
-        // thread::sleep(std::time::Duration::from_secs(1));
-        // immix::gc_keep_live(data_ptr as _);
-        // immix::set_evacuation(false);
-        // immix::gc_add_root(&mut f as *mut _ as *mut _, ObjectType::Trait.int_value());
+        // initialize gc to prevent evacuation before thread local collector init
+        immix::register_current_thread();
         s.send(()).unwrap();
         func(data_ptr);
-        // immix::gc_remove_root(&mut f as *mut _ as *mut _);
-        // immix::gc_rm_live(data_ptr as _);
         immix::no_gc_thread();
     };
     thread::spawn(c);

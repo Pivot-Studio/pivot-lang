@@ -392,19 +392,23 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             .i8_type()
             .const_int(tp.get_immix_type().int_value() as u64, false);
         let td = self.targetmachine.get_target_data();
-        let size = td.get_store_size(&llvmtp);
-        if size == 0 {
+        let size_u = td.get_store_size(&llvmtp);
+        if size_u == 0 {
             // return null
             let null = self.gc_ptr_ty().const_null();
             return (null, llvmtp);
         }
-        let mut size = self.context.i64_type().const_int(size, false);
+        let mut size = self.context.i64_type().const_int(size_u, false);
         if name == "___ctx" {
             // generator ctx, use stack variable as size
             self.builder.position_at_end(alloca);
             let stack_ptr = self
                 .builder
                 .build_alloca(self.context.i64_type(), "ctx_tp_ptr")
+                .unwrap();
+            // zero init it
+            self.builder
+                .build_store(stack_ptr, self.context.i64_type().const_zero())
                 .unwrap();
             ctx.generator_data
                 .as_ref()
