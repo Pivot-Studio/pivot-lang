@@ -19,28 +19,42 @@
 
 ## CONTRIBUTING
 
-中文见[此处](./CONTRIBUTING-CN.md)  
-欢迎加入[qq群](http://qm.qq.com/cgi-bin/qm/qr?_wv=1027&k=vjKI1nbRHAIz1UbmDOjttLurEw93mLhA&authKey=U6cUmnIxiptTskr9trZZ9vc2p291uWht8TlzPSOEPXliihLC9vAYMaRwDI0%2FolR8&noverify=0&group_code=688301255)
+[CONTRIBUTING](CONTRIBUTING.md)｜[贡献代码](https://pivotlang.tech/docs/CONTRIBUTING-CN.html)
+
+欢迎加入: [QQ群](http://qm.qq.com/cgi-bin/qm/qr?_wv=1027&k=nlRLeRcRfr0SxXcLYsjsXobP6X7EeV_c&authKey=rdyEXtc0uMqjYS4i%2FJapoi7CUdwtKgtK5V8Xv0WKgIIb9n4ZkFaIo9mgkflqV%2Frf&noverify=0&group_code=688301255) [discord](https://discord.gg/ZYNhYu6sW9)
 
 ## dependencies
 
-- [llvm-18](https://github.com/llvm/llvm-project/releases/tag/llvmorg-18.1.2)
-- [rust](https://www.rust-lang.org/)
+- [LLVM-18](https://github.com/llvm/llvm-project/releases/tag/llvmorg-18.1.5)
+- [Rust](https://www.rust-lang.org/)
 
 **重要**：如果你想参与开发，请先在项目目录`make vm install`，然后根据自己是linux还是mac运行`make devlinux`或者`make devmac`
 
 ## 特点
 
 - 支持静态编译与JIT
+- [高性能](./performance.md)
 - REPL
 - 热重载
-- 极其方便的Rust互操作
+- 极其方便的Rust/C互操作
 - 支持debug
 - 支持lsp，自带[vsc插件](https://github.com/Pivot-Studio/pivot-lang-support)，能提供优秀的代码支持
 - 有GC，自动管理内存
 - 强大的类型推断，支持省略大部分类型标注
 
-## 一些ShowCase
+## 一些ShowCases
+
+### [Ray Tracing in One Weekend in Pivot Lang](https://github.com/Pivot-Studio/rtweekend-pl)
+
+使用Pivot Lang实现的简单光追
+
+![example](imgs/2024-02-21-11-46-55.png)
+
+### 编辑器支持
+
+![debug](imgs/2024-02-21-11-50-11.png)
+
+![lsp](imgs/2024-02-21-11-50-25.png)
 
 ### Hello World
 
@@ -61,7 +75,7 @@ use core::panic::assert;
 use core::eq::*;
 
 fn main() i64 {
-    let table = hashtable::new_hash_table<string|string>(10 as u64, 1 as u64);
+    let table = hashtable::new_hash_table(10 as u64, 1 as u64);
     table.insert("hello","world");
     table.insert("bye","bye");
     assert(table.get("hello") is string);
@@ -101,7 +115,7 @@ fn fib(n: i64) i64 {
 ```pivot
 use core::panic;
 pub fn main() i64 {
-    let g = |f: |i64| => i64, x: i64| => i64 {
+    let g = |f, x| => {
         if x == 0 {
             return 1;
         }
@@ -113,6 +127,7 @@ pub fn main() i64 {
     }
     return 0;
 }
+
 
 struct Func<A|F> {
     f: |Func<A|F>, A| => F;
@@ -126,19 +141,17 @@ impl<A|F> Func<A|F> {
 }
 
 fn Y<A|R>(g: ||A| => R, A| => R) |A| => R {
-    return |x: A| => R {
-        let in = |f: Func<A|R>, x: A| => R {
+    // 下方代码的类型推断是一个很好的例子
+    return |x| => {
+        return |f, x| => {
             return f.call(f, x);
-        };
-        let field = |f: Func<A|R>, x: A| => R {
-            return g(|x: A| => R {
-                return f.call(f, x);
-            }, x);
-        };
-        let f = Func{
-            f: field
-        };
-        return in(f, x);
+        }(Func{
+            f: |f, x| => {
+                return g(|x| => {
+                    return f.call(f, x);
+                }, x);
+            }
+        }, x);
     };
 }
 
@@ -148,7 +161,6 @@ fn fact_recursion(x: i64) i64 {
     }
     return x * fact_recursion(x - 1);
 }
-
 
 
 ```
