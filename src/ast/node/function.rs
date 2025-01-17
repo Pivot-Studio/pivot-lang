@@ -1040,6 +1040,7 @@ impl FuncDefNode {
         });
         builder.set_di_file(&ctx.get_file());
         builder.position_at_end_block(bb);
+        builder.rm_curr_debug_location();
         // builder.try_set_fn_dbg(self.range.start, ctx.function.unwrap());
         re
     }

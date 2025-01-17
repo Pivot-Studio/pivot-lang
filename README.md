@@ -33,9 +33,10 @@
 ## 特点
 
 - 支持静态编译与JIT
+- [高性能](./book/src/performance.md)
 - REPL
 - 热重载
-- 极其方便的Rust互操作
+- 极其方便的Rust/C互操作
 - 支持debug
 - 支持lsp，自带[vsc插件](https://github.com/Pivot-Studio/pivot-lang-support)，能提供优秀的代码支持
 - 有GC，自动管理内存

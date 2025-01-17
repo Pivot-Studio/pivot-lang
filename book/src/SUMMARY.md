@@ -1,6 +1,7 @@
 # Summary
 
 - [About](./About.md)
+- [Performance](./performance.md)
 
 ## Tutorial
 
@@ -13,7 +14,7 @@
   - [Operator](./references/operator/README.md)
     - [Type Operator](./references/operator/tyops.md)
   - [Array](./references/array.md)
-  - [closure](./references/closure.md)
+  - [Closure](./references/closure.md)
   - [Module](./references/module.md)
   - [Method](./references/method.md)
   - [Trait](./references/interface.md)

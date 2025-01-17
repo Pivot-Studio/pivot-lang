@@ -220,6 +220,25 @@ pub fn process_llvm_ir<'a>(
     let tm = crate::ast::builder::llvmbuilder::get_target_machine(op.optimization.to_llvm());
     let llvmmod = ctx.create_module("main");
     let m = get_alloc_module(ctx, op);
+    if op.debug {
+        let o = PathBuf::from(format!(
+            "{}/{}",
+            &ASSET_PATH.lock().unwrap(),
+            "alloc_fast.o"
+        ));
+        unsafe {
+            immix::run_module_pass(
+                m.as_mut_ptr() as _,
+                op.optimization as _,
+                op.debug as _,
+                op.print_escape as _,
+            );
+        }
+        // if debug, generate one obj file per file, or debug info will be lost
+        tm.write_to_file(&m, inkwell::targets::FileType::Object, &o)
+            .unwrap();
+        output_files.push(o);
+    }
     llvmmod.link_in_module(m).unwrap();
     for m in mods {
         let m = m.0;
