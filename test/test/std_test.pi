@@ -226,4 +226,18 @@ pub struct JSONObj<T> {
     b: string;
 }
 
+use std::task::udp;
+use std::libuv;
+
+pub async fn test_udp() Task<()> {
+    let udp_t = udp::new_udp_socket(libuv::new_uv_udp_t());
+    udp_t.bind("127.0.0.1", 8080 as i32);
+    let buf = [u8 * 10;];
+    let nread = await udp_t.read_async(buf);
+    println!("read: ", nread);
+    let s = string_from_bytes(buf);
+    println!("udp msp:", s);
+
+    return ();
+}
 

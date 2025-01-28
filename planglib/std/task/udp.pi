@@ -1,0 +1,124 @@
+use std::task::Task;
+use std::task::reactor;
+use std::task::executor;
+use std::libuv;
+use std::slice::SliceExt;
+
+use std::io;
+
+pub struct UDPSocket {
+    handle:*libuv::uv_udp_t;
+}
+
+pub fn new_udp_socket(handle:*libuv::uv_udp_t) UDPSocket {
+    return UDPSocket{
+        handle:handle,
+    };
+}
+
+impl UDPSocket {
+    pub fn bind(ip:string, port:i32) void {
+        reactor::GLOBAL_REACTOR.new_udp_socket(self.handle, ip, port);
+        return;
+    }
+
+    pub fn read_async(buf:[u8]) Task<i64> {
+        // pin the buffer
+        let buf_ptr = &buf[0];
+        gc::pin(buf_ptr);
+        let read_task = UDPReadTask{
+            first:true,
+            ready:false,
+            handle: self.handle,
+            read_len:0,
+            buf:buf,
+        };
+
+        return read_task as Task<i64>;
+    }
+
+    pub fn send_async(buf:[u8], ip:string, port:i32) Task<i32> {
+        let write_task = UDPWriteTask{
+            first:true,
+            ready:false,
+            handle: self.handle,
+            buf:buf,
+            status:0 as i32,
+            ip:ip,
+            port:port,
+        };
+        return write_task as Task<i32>;
+    }
+}
+
+struct UDPWriteTask {
+    first:bool;
+    ready:bool;
+    handle:*libuv::uv_udp_t;
+    buf: [u8];
+    status:i32;
+    ip:string;
+    port:i32;
+}
+
+impl Task<i32> for UDPWriteTask {
+    fn poll(wk:||=>void) Option<i32> {
+        if self.first {
+            self.first = false;
+            let write_cb = |status| => {
+                if self.ready {
+                    return;
+                }
+                self.status = status;
+                self.ready = true;
+                wk();
+                return;
+            };
+            reactor::GLOBAL_REACTOR.udp_send(self.handle, self.buf, self.ip, self.port, write_cb);
+        }
+
+        if self.ready {
+            return self.status as Option<i32>;
+        }
+        return None{} as Option<i32>;
+    }
+}
+
+struct UDPReadTask {
+    first:bool;
+    ready:bool;
+    handle:*libuv::uv_udp_t;
+    read_len:i64;
+    buf: [u8];
+}
+
+impl Task<i64> for UDPReadTask {
+    fn poll(wk:||=>void) Option<i64> {
+        if self.first {
+            self.first = false;
+            let read_cb = |nread| => {
+                if self.ready {
+                    return;
+                }
+                if nread<0 {
+                    // error
+                    self.read_len = -1;
+                    self.ready = true;
+                    wk();
+                    return;
+                }
+                self.read_len = nread + self.read_len;
+                if self.read_len >= self.buf.len() {
+                    self.ready = true;
+                    wk();
+                }
+                return;
+            };
+            reactor::GLOBAL_REACTOR.udp_recv(self.handle, self.buf, read_cb);
+        }
+        if self.ready {
+            return self.read_len as Option<i64>;
+        }
+        return None{} as Option<i64>;
+    }
+} 

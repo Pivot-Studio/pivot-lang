@@ -73,6 +73,7 @@ async fn main() Task<()> {
     _io::test_io();
     // future_test::test_future();
     std_test::test_std();
+    // await std_test::test_udp();
 
     await std_test::test_nested_async_closure();
     await std_test::test_nested_async_closure_in_normal_f();
