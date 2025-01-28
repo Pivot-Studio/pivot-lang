@@ -5,6 +5,7 @@ var UV_ASYNC = 1 as u32;
 var UV_IDLE = 6 as u32;
 var UV_TIMER = 13 as u32;
 var UV_TCP = 12 as u32;
+var UV_UDP = 14 as u32;
 
 
 // below are request types
@@ -17,6 +18,7 @@ pub struct uv_timer_t {}
 pub struct uv_tcp_t {}
 pub struct uv_stream_t {}
 pub struct uv_write_t {}
+pub struct uv_udp_t {}
 
 pub struct uv_buf_t {
     pub base:i64;
@@ -162,6 +164,19 @@ pub fn get_data_for_handle_raw<H|T> (handle:*H) *T {
     let re = uv_handle_get_data(unsafe_cast<()>(handle));
     // gc::rm_alive_pinned(re);
     return unsafe_cast<T>(re);
+}
+
+pub fn uv_udp_init(loop:*uv_loop_t, handle:*uv_udp_t) i32;
+
+pub fn uv_udp_bind(handle:*uv_udp_t, addr:*sockaddr_in, flags:u32) i32;
+
+pub fn uv_udp_recv_start(handle:*uv_udp_t, alloc_cb:*(), recv_cb:*()) i32;
+
+pub fn uv_udp_send(req:*uv_write_t, handle:*uv_udp_t, bufs:*uv_buf_t, nbufs:u32, addr:*sockaddr_in, cb:*()) i32;
+
+pub fn new_uv_udp_t() *uv_udp_t {
+    let re = gc::malloc_pinned(uv_handle_size(UV_UDP) as i64);
+    return unsafe_cast<uv_udp_t>(re);
 }
 
 

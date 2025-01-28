@@ -25,7 +25,7 @@ struct StopEV {
 }
 
 
-type EV =   TCPListenEV | TimerEV | StreamReadEV | ReadStopEV | WriteEV |StopEV;
+type EV = TCPListenEV | TimerEV | StreamReadEV | ReadStopEV | WriteEV | StopEV | UDPRecvEV | UDPSendEV;
 
 
 
@@ -52,6 +52,20 @@ struct StreamReadEV {
     handle: *libuv::uv_stream_t;
     total_read: i64;
     buf: [u8];
+}
+
+struct UDPRecvEV {
+    handle: *libuv::uv_udp_t;
+    buf: [u8];
+    read_cb: |i64|=>void;
+    total_read: i64;
+}
+
+struct UDPSendEV {
+    handle: *libuv::uv_udp_t; 
+    buf: [u8];
+    write_cb: |i32|=>void;
+    addr: libuv::sockaddr_in;
 }
 
 var GLOBAL_REACTOR = new_uv_reactor();
@@ -113,7 +127,6 @@ fn write_cb(req:*libuv::uv_write_t, status:i32) void {
 
 use std::io;
 
-
 fn async_cb(async_t:*libuv::uv_async_t) void {
     let reactor = libuv::get_data_for_handle<libuv::uv_async_t|UVReactor>(async_t);
     let ch = reactor.ch;
@@ -171,6 +184,25 @@ fn async_cb(async_t:*libuv::uv_async_t) void {
             StopEV(ev) => {
                 libuv::uv_stop(reactor.loop);
                 libuv::uv_loop_close(GLOBAL_REACTOR.loop);
+            }
+            UDPRecvEV(ev) => {
+                gc::keep_alive_pinned(ev.handle);
+                let cb = unsafe_cast<()>(&udp_recv_cb);
+                let alloc_cb = unsafe_cast<()>(&udp_alloc_cb);
+                libuv::uv_udp_recv_start(ev.handle, alloc_cb, cb);
+                libuv::set_data_for_handle(ev.handle, &ev);
+            }
+            UDPSendEV(ev) => {
+                let req = libuv::new_uv_write_t();
+                gc::keep_alive_pinned(req);
+                let raw_slice_p = &ev.buf[0];
+                gc::pin(raw_slice_p);
+                let buf = libuv::uv_buf_init(&ev.buf[0], ev.buf.len() as u32);
+                let buf_p = &buf;
+                gc::pin(buf_p);
+                libuv::set_data_for_handle(req, &ev);
+                let cb = unsafe_cast<()>(&udp_send_cb);
+                libuv::uv_udp_send(req, ev.handle, &buf, 1 as u32, &ev.addr, cb);
             }
             _ => {
             }
@@ -290,6 +322,41 @@ impl UVReactor {
         return;
     }
     
+    pub fn new_udp_socket(udp_h:*libuv::uv_udp_t, ip:string, port:i32) void {
+        let addr = libuv::sockaddr_in{};
+        libuv::uv_ip4_addr(ip.cstr(), port, &addr);
+        libuv::uv_udp_init(self.loop, udp_h);
+        libuv::uv_udp_bind(udp_h, &addr, 0 as u32);
+        return;
+    }
+
+    pub fn udp_recv(udp:*libuv::uv_udp_t, buf:[u8], readcb:|i64|=>void) void {
+        let ev = UDPRecvEV{
+            handle: udp,
+            buf: buf,
+            read_cb: readcb,
+            total_read: 0,
+        };
+        let e = ev as EV;
+        self.ch.send(e);
+        libuv::uv_async_send(self.async_t);
+        return;
+    }
+
+    pub fn udp_send(udp:*libuv::uv_udp_t, buf:[u8], ip:string, port:i32, writecb:|i32|=>void) void {
+        let addr = libuv::sockaddr_in{};
+        libuv::uv_ip4_addr(ip.cstr(), port, &addr);
+        let ev = UDPSendEV{
+            handle: udp,
+            buf: buf, 
+            write_cb: writecb,
+            addr: addr,
+        };
+        let e = ev as EV;
+        self.ch.send(e);
+        libuv::uv_async_send(self.async_t);
+        return;
+    }
 }
 
 
@@ -302,5 +369,29 @@ pub fn start_global_reactor() void {
 
 pub fn stop_global_reactor() void {
     GLOBAL_REACTOR.stop();
+    return;
+}
+
+fn udp_recv_cb(handle:*libuv::uv_udp_t, nread:i64, _buf:*libuv::uv_buf_t) void {
+    let ev = libuv::get_data_for_handle<libuv::uv_udp_t|UDPRecvEV>(handle);
+    ev.total_read = nread + ev.total_read;
+    ev.read_cb(nread);
+    return;
+}
+
+fn udp_send_cb(req:*libuv::uv_write_t, status:i32) void {
+    let ev = libuv::get_data_for_handle<libuv::uv_write_t|UDPSendEV>(req);
+    ev.write_cb(status);
+    return;
+}
+
+fn udp_alloc_cb(handle:*(), _suggested_size:i64, buf:*libuv::uv_buf_t) void {
+    let ev = libuv::get_data_for_handle<_|UDPRecvEV>(handle);
+    let ptr = &ev.buf[ev.total_read];
+    let l = ev.buf.len() - ev.total_read;
+    if l<=0 {
+        l = 0;
+    }
+    * buf = libuv::uv_buf_init(ptr, l as u32);
     return;
 }
