@@ -35,15 +35,15 @@ jobs:
 
           # Custom dependencies in case other formulas are needed to build the current one.
           # Optional - multiline string.
-          # depends_on: |
-          #   "llvm@14"
+          depends_on: |
+            "zstd"
           # Custom install command for your formula.
           # Required - string.
           install: |
             lib.install Dir["./planglib"]
-                lib.install "./libvm.a"
-                lib.install "./libvm.dylib"
-                bin.install "./plc"
+            lib.install "./libvm.a"
+            lib.install "./libvm.dylib"
+            bin.install "./plc"
           # Custom test command for your formula so you can run `brew test`.
           # Optional - string.
           # test: 'assert_match("my script output", shell_output("my-script-command"))'
