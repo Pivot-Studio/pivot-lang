@@ -29,7 +29,7 @@ jobs:
             dir: osx64
             arch: darwin-arm64
             artifacts: "plc"
-            RUSTFLAGS: ""
+            RUSTFLAGS: "-C link-args=-Wl,-ld_classic"
             libvm: "libvm.a"
             libvm_dylib: "libvm.dylib"
             libuv_dylib: "libuv.dylib"
@@ -83,7 +83,9 @@ jobs:
       - name: Cargo build
         env:
           RUSTFLAGS: ${{ matrix.config.RUSTFLAGS }}
-        run: cargo build --release
+        run: |
+          cargo build --release
+          install_name_tool -change @rpath/libc++.1.dylib /usr/lib/libc++.1.dylib ./target/release/plc
 
       - run: mkdir -p ${{ matrix.config.dir }}
 
