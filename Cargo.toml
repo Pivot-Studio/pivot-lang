@@ -113,7 +113,7 @@ lto = "thin"
 #panic = 'unwind' # This setting is always ignored.
 incremental = true
 codegen-units = 1
-# rpath = true
+rpath = false
 
 
 [dev-dependencies]
