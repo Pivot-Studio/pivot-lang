@@ -4,6 +4,8 @@ use core::hash::pl_hash::*;
 // use core::eq::*;
 
 use std::iter::*;
+use std::json::encode::JSONSerializable;
+use core::string::stringbuilder;
 
 
 
@@ -157,4 +159,27 @@ impl <K:ToString+Hash+Eq<K>|V:ToString> ToString for HashTable<K|V> {
         ret.append("}");
         return ret;
     }
+}
+
+impl <K:Hash+Eq<K>+ToString|V> JSONSerializable for HashTable<K|V> {
+    fn to_json() string {
+        let sb = stringbuilder(100);
+        sb.add_char('{');
+        let iterator = self.into_iter();
+        for let i = iterator.next(); !i is None; {
+            let (key, value) = i as (K,V)!;
+            sb.add_char('"');
+            sb.add_str(key.to_string());
+            sb.add_char('"');
+            sb.add_char(':');
+            sb.add_str(encode::encode(value));
+            i = iterator.next();
+            if !i is None {
+                sb.add_char(',');
+            }
+        }
+        sb.add_char('}');
+        return sb.str();
+    }
+    
 }

@@ -46,10 +46,11 @@ fn test_g<T>(a:T) void {
     }
     if let b = a impl test_t {
         b.dosth();
+        return;
     }else {
         panic::pl_panic();
     }
-    
+    panic::pl_panic();
     return;
 }
 
