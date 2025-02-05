@@ -208,6 +208,7 @@ pub async fn test_delay() Task<()> {
 }
 
 use std::json::encode::encode;
+use std::cols::hashtable;
 
 pub fn test_json() void {
     let nested = JSONObj{
@@ -217,6 +218,16 @@ pub fn test_json() void {
     };
     let re = encode(nested);
     println!(re);
+    panic::assert(re.eq(&"{\"data\":{\"data\":1,\"a\":1,\"b\":\"2\"},\"a\":1,\"b\":\"3\"}"));
+    let table = hashtable::new_hash_table(10 as u64, 0  as u64);
+    table.insert(1, "abc");
+    table.insert(2, "bcd");
+    table.to_json();
+    re = encode(table);
+    println!(re);
+    // hash table is special, it's directly encoded as json object
+    panic::assert(re.eq(&"{\"1\":\"abc\",\"2\":\"bcd\"}"));
+    
     return;
 }
 
@@ -230,13 +241,14 @@ use std::task::udp;
 use std::libuv;
 
 pub async fn test_udp() Task<()> {
-    let udp_t = udp::new_udp_socket(libuv::new_uv_udp_t());
+    let udp_t = udp::new_udp_socket();
     udp_t.bind("127.0.0.1", 8080 as i32);
     let buf = [u8 * 10;];
     let nread = await udp_t.read_async(buf);
     println!("read: ", nread);
     let s = string_from_bytes(buf);
-    println!("udp msp:", s);
+    println!("udp msg:", s);
+    
 
     return ();
 }

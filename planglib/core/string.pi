@@ -42,6 +42,17 @@ pub fn stringbuilder(len: i64) StringBuilder {
 
 impl StringBuilder {
 
+    fn expand_if_needed(len: i64) {
+        if self.len + len >= arr_len(self.data) {
+            let new_data = [u8*(arr_len(self.data) *2);];
+            for let i = 0; i < self.len; i = i + 1 {
+                new_data[i] = self.data[i];
+            }
+            self.data = new_data;
+        }
+        return;
+    }
+
     pub fn current_pos() i64 {
         return self.len;
     }
@@ -50,6 +61,7 @@ impl StringBuilder {
         return;
     }
     pub fn add_byte(ch: u8) void {
+        self.expand_if_needed(1);
         self.data[self.len] = ch;
         self.len = self.len + 1;
         return;

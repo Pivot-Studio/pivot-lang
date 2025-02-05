@@ -3,12 +3,18 @@ use core::string::ToString;
 use std::slice::SliceExt;
 
 
-pub trait JSONSerilizable {
+pub trait JSONSerializable {
     fn to_json() string;
 }
 
 pub fn encode<T>(t:T) string {
     let sb = stringbuilder(100);
+    if try_encode_primary(t, &sb) {
+        return sb.str();
+    }
+    if let i = t impl JSONSerializable {
+        return i.to_json();
+    }
     let isarr = false;
     if_arr(t, { 
         let a = _arr;
@@ -40,44 +46,13 @@ pub fn encode<T>(t:T) string {
 
         let succ = false;
 
-        if let i = _field impl JSONSerilizable {
+        if let i = _field impl JSONSerializable {
             let re = i.to_json();
             sb.add_str(re);
             succ = true;
         }
         if !succ {
-            match_type<string>(_field, {
-                sb.add_char('"');
-                sb.add_str(_value);
-                sb.add_char('"');
-                succ = true;
-            });
-            match_type<i64>(_field, {
-                sb.add_str(_value.to_string());
-                succ = true;
-            });
-            match_type<u64>(_field, {
-                sb.add_str(_value.to_string());
-                succ = true;
-            });
-            match_type<f64>(_field, {
-                sb.add_str(_value.to_string());
-                succ = true;
-            });
-            match_type<f32>(_field, {
-                sb.add_str(_value.to_string());
-                succ = true;
-            });
-            match_type<bool>(_field, {
-                sb.add_str(_value.to_string());
-                succ = true;
-            });
-            match_type<char>(_field, {
-                sb.add_char('"');
-                sb.add_char(_value);
-                sb.add_char('"');
-                succ = true;
-            });
+            succ = try_encode_primary(_field, &sb);
 
         }
         if !succ {
@@ -98,4 +73,42 @@ pub fn encode<T>(t:T) string {
     sb.add_char('}');
 
     return sb.str();
+}
+
+
+fn try_encode_primary<T>(_field:T,sb: *string::StringBuilder) bool {
+    let succ = false;
+    match_type<string>(_field, {
+        sb.add_char('"');
+        sb.add_str(_value);
+        sb.add_char('"');
+        succ = true;
+    });
+    match_type<i64>(_field, {
+        sb.add_str(_value.to_string());
+        succ = true;
+    });
+    match_type<u64>(_field, {
+        sb.add_str(_value.to_string());
+        succ = true;
+    });
+    match_type<f64>(_field, {
+        sb.add_str(_value.to_string());
+        succ = true;
+    });
+    match_type<f32>(_field, {
+        sb.add_str(_value.to_string());
+        succ = true;
+    });
+    match_type<bool>(_field, {
+        sb.add_str(_value.to_string());
+        succ = true;
+    });
+    match_type<char>(_field, {
+        sb.add_char('"');
+        sb.add_char(_value);
+        sb.add_char('"');
+        succ = true;
+    });
+    return succ;
 }

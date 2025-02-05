@@ -11,18 +11,18 @@ pub struct TCPServer {
 
 
 
-pub struct TCPStream {
+pub struct TCPSocket {
     handle:*libuv::uv_tcp_t;
 }
 
-pub fn new_stream_from_tcp(handle:*libuv::uv_tcp_t) TCPStream {
+pub fn new_tcp_socket() TCPSocket {
     
-    return TCPStream{
-        handle:handle,
+    return TCPSocket{
+        handle: libuv::new_uv_tcp_t(),
     };
 }
 
-impl TCPStream {
+impl TCPSocket {
     pub fn read_async(buf:[u8]) Task<i64> {
         // pin the buffer
         let buf_ptr = &buf[0];

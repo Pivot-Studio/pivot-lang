@@ -10,9 +10,9 @@ pub struct UDPSocket {
     handle:*libuv::uv_udp_t;
 }
 
-pub fn new_udp_socket(handle:*libuv::uv_udp_t) UDPSocket {
+pub fn new_udp_socket() UDPSocket {
     return UDPSocket{
-        handle:handle,
+        handle:libuv::new_uv_udp_t(),
     };
 }
 
