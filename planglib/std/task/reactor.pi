@@ -25,7 +25,7 @@ struct StopEV {
 }
 
 
-type EV = TCPListenEV | TimerEV | StreamReadEV | ReadStopEV | WriteEV | StopEV | UDPRecvEV | UDPSendEV;
+type EV = TCPListenEV | TimerEV | StreamReadEV | ReadStopEV | WriteEV | StopEV | UDPRecvEV | UDPSendEV | TCPConnectEV;
 
 
 
@@ -66,6 +66,12 @@ struct UDPSendEV {
     buf: [u8];
     write_cb: |i32|=>void;
     addr: libuv::sockaddr_in;
+}
+
+struct TCPConnectEV {
+    handle: *libuv::uv_tcp_t;
+    addr: libuv::sockaddr_in;
+    connect_cb: |i32|=>void;
 }
 
 var GLOBAL_REACTOR = new_uv_reactor();
@@ -204,6 +210,13 @@ fn async_cb(async_t:*libuv::uv_async_t) void {
                 let cb = unsafe_cast<()>(&udp_send_cb);
                 libuv::uv_udp_send(req, ev.handle, &buf, 1 as u32, &ev.addr, cb);
             }
+            TCPConnectEV(ev) => {
+                let req = libuv::new_uv_connect_t();
+                gc::keep_alive_pinned(req);
+                libuv::set_data_for_handle(req, &ev);
+                let cb = unsafe_cast<()>(&connect_cb);
+                libuv::uv_tcp_connect(req, ev.handle, &ev.addr, cb);
+            }
             _ => {
             }
         }
@@ -261,6 +274,11 @@ impl UVReactor {
         let e = ev as EV;
         self.ch.send(e);
         libuv::uv_async_send(self.async_t);
+        return;
+    }
+
+    pub fn tcp_init(tcp_h:*libuv::uv_tcp_t) void {
+        libuv::uv_tcp_init(self.loop, tcp_h);
         return;
     }
 
@@ -357,6 +375,20 @@ impl UVReactor {
         libuv::uv_async_send(self.async_t);
         return;
     }
+
+    pub fn tcp_connect(tcp:*libuv::uv_tcp_t, ip:string, port:i32, connect_cb:|i32|=>void) void {
+        let addr = libuv::sockaddr_in{};
+        libuv::uv_ip4_addr(ip.cstr(), port, &addr);
+        let ev = TCPConnectEV{
+            handle: tcp,
+            addr: addr,
+            connect_cb: connect_cb,
+        };
+        let e = ev as EV;
+        self.ch.send(e);
+        libuv::uv_async_send(self.async_t);
+        return;
+    }
 }
 
 
@@ -393,5 +425,11 @@ fn udp_alloc_cb(handle:*(), _suggested_size:i64, buf:*libuv::uv_buf_t) void {
         l = 0;
     }
     * buf = libuv::uv_buf_init(ptr, l as u32);
+    return;
+}
+
+fn connect_cb(req:*libuv::uv_connect_t, status:i32) void {
+    let ev = libuv::get_data_for_handle<libuv::uv_connect_t|TCPConnectEV>(req);
+    ev.connect_cb(status);
     return;
 }

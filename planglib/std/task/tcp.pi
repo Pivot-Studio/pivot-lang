@@ -9,20 +9,32 @@ use std::io;
 pub struct TCPServer {
 }
 
-
-
 pub struct TCPSocket {
     handle:*libuv::uv_tcp_t;
 }
 
 pub fn new_tcp_socket() TCPSocket {
-    
+    let handle = libuv::new_uv_tcp_t();
+    reactor::GLOBAL_REACTOR.tcp_init(handle);
     return TCPSocket{
-        handle: libuv::new_uv_tcp_t(),
+        handle: handle,
     };
 }
 
 impl TCPSocket {
+    pub fn connect_async(ip:string, port:i32) Task<i32> {
+        
+        let connect_task = ConnectTask{
+            first: true,
+            ready: false,
+            handle: self.handle,
+            status: 0 as i32,
+            ip: ip,
+            port: port,
+        };
+        return connect_task as Task<i32>;
+    }
+
     pub fn read_async(buf:[u8]) Task<i64> {
         // pin the buffer
         let buf_ptr = &buf[0];
@@ -47,6 +59,38 @@ impl TCPSocket {
             status:0 as i32,
         };
         return write_task as Task<i32>;
+    }
+}
+
+struct ConnectTask {
+    first: bool;
+    ready: bool;
+    handle: *libuv::uv_tcp_t;
+    status: i32;
+    ip: string;
+    port: i32;
+}
+
+impl Task<i32> for ConnectTask {
+    fn poll(wk:||=>void) Option<i32> {
+        if self.first {
+            self.first = false;
+            let connect_cb = |status| => {
+                if self.ready {
+                    return;
+                }
+                self.status = status;
+                self.ready = true;
+                wk();
+                return;
+            };
+            reactor::GLOBAL_REACTOR.tcp_connect(self.handle, self.ip, self.port, connect_cb);
+        }
+
+        if self.ready {
+            return self.status as Option<i32>;
+        }
+        return None{} as Option<i32>;
     }
 }
 
