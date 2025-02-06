@@ -1,0 +1,84 @@
+use std::task::Task;
+use std::task::tcp;
+use std::string::StringBuilder;
+use std::string::StringExt;
+
+pub struct HttpResponse {
+    status_code: i32;
+    headers: string;
+    body: [u8];
+}
+
+pub struct HttpClient {
+    socket: tcp::TCPSocket;
+}
+
+pub fn new_http_client() HttpClient {
+    return HttpClient{
+        socket: tcp::new_tcp_socket(),
+    };
+}
+
+impl HttpClient {
+    pub async fn get_async(url: string) Task<HttpResponse> {
+        // 构建HTTP GET请求
+        let sb = StringBuilder{
+            data: [u8*1024;],
+            len: 0,
+        };
+        sb.add_str("GET / HTTP/1.1\r\n");
+        sb.add_str("Host: ");
+        sb.add_str(url);
+        sb.add_str("\r\n");
+        sb.add_str("Connection: close\r\n\r\n");
+        
+        let request = sb.str();
+        let bytes = request.bytes();
+        let status = await self.socket.connect_async("127.0.0.1", 5500 as i32);
+        // 发送请求
+        await self.socket.write_async(bytes);
+        
+        // 读取响应
+        let response_buf = [u8*4096;];
+        let read_len = await self.socket.read_async(response_buf);
+        
+        // let response_str = string_from_bytes(arr_slice(response_buf, 0, read_len));
+        
+        // 手动解析响应
+        let header_end = 0;
+        // 查找headers和body的分隔符 \r\n\r\n
+        for let i = 0; i < read_len - 3; i = i + 1 {
+            if response_buf[i] == '\r' as u8 && response_buf[i+1] == '\n' as u8 &&response_buf[i+2] == '\r' as u8 &&response_buf[i+3] == '\n' as u8 {
+                header_end = i;
+                break;
+            }
+        }
+        
+        let headers = string_from_bytes(arr_slice(response_buf, 0, header_end));
+        let body = arr_slice(response_buf, header_end + 4, read_len - (header_end + 4));
+        
+        // 解析状态码
+        let status_start = 9; // "HTTP/1.1 "的长度
+        let status_end = status_start;
+        for let i = status_start; i < header_end; i = i + 1 {
+            if response_buf[i] == ' ' as u8 {
+                status_end = i;
+                break;
+            }
+        }
+        let status_str = string_from_bytes(arr_slice(response_buf, status_start, status_end - status_start));
+        // TODO: 将status_str转换为整数
+        
+        return HttpResponse{
+            status_code: 200 as i32,
+            headers: headers,
+            body: body,
+        };
+    }
+}
+
+impl HttpResponse {
+    pub fn get_body_string() string {
+        return string_from_bytes(self.body);
+    }
+}

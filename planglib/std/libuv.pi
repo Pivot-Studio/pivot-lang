@@ -10,6 +10,7 @@ var UV_UDP = 14 as u32;
 
 // below are request types
 var UV_WRITE = 3 as u32;
+var UV_CONNECT = 2 as u32;
 
 pub struct uv_loop_t {}
 pub struct uv_idle_t {}
@@ -19,6 +20,7 @@ pub struct uv_tcp_t {}
 pub struct uv_stream_t {}
 pub struct uv_write_t {}
 pub struct uv_udp_t {}
+pub struct uv_connect_t {}
 
 pub struct uv_buf_t {
     pub base:i64;
@@ -178,5 +180,13 @@ pub fn new_uv_udp_t() *uv_udp_t {
     let re = gc::malloc_pinned(uv_handle_size(UV_UDP) as i64);
     return unsafe_cast<uv_udp_t>(re);
 }
+
+pub fn new_uv_connect_t() *uv_connect_t {
+    let size = uv_req_size(UV_CONNECT);
+    let connect = gc::malloc_pinned(size as i64);
+    return unsafe_cast<uv_connect_t>(connect);
+}
+
+pub fn uv_tcp_connect(req:*uv_connect_t, handle:*uv_tcp_t, addr:*sockaddr_in, cb:*()) i32;
 
 

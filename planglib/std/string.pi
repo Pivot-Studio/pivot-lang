@@ -1,14 +1,36 @@
 use std::slice::SliceExt;
 use core::panic::pl_panic;
+pub use core::string::*;
+use std::cols::arr;
 
 pub trait StringExt {
     fn index_of(s:string) Option<i64>;
     fn contains(s:string) bool;
     fn slice(start:i64, len:i64) string;
+    fn split(s:string) [string];
 }
 
 
 impl StringExt for string {
+    fn split(s:string) [string] {
+        let chars = self.chars();
+        let subchars = s.chars();
+        let re = arr::new<string>();
+        let i = 0;
+        let j = 0;
+        while i < arr_len(chars) {
+            if chars[i] == subchars[j] {
+                j = j + 1;
+            }
+            if j == arr_len(subchars) {
+                let sub = self.slice(i, j);
+                re.push(sub);
+                j = 0;
+            }
+            i = i + 1;
+        }
+        return re.get_slice();
+    }
     /// # index_of
     ///
     /// Returns the index of the first occurrence of the

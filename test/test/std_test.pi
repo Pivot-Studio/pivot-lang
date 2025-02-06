@@ -239,6 +239,15 @@ pub struct JSONObj<T> {
 
 use std::task::udp;
 use std::libuv;
+use std::task::http;
+
+pub async fn test_http() Task<()> {
+    let http = http::new_http_client();
+    let re = await http.get_async("http://127.0.0.1:5500");
+    let body = re.get_body_string();
+    println!(body);
+    return ();
+}
 
 pub async fn test_udp() Task<()> {
     let udp_t = udp::new_udp_socket();
