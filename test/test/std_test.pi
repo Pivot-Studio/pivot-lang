@@ -209,6 +209,7 @@ pub async fn test_delay() Task<()> {
 
 use std::json::encode::encode;
 use std::cols::hashtable;
+use std::json::encode::JSONSerializable;
 
 pub fn test_json() void {
     let nested = JSONObj{
@@ -222,7 +223,6 @@ pub fn test_json() void {
     let table = hashtable::new_hash_table(10 as u64, 0  as u64);
     table.insert(1, "abc");
     table.insert(2, "bcd");
-    table.to_json();
     re = encode(table);
     println!(re);
     // hash table is special, it's directly encoded as json object

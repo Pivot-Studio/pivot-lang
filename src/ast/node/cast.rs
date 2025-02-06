@@ -671,7 +671,9 @@ impl Node for ImplCastNode {
         let mut satisfy_bound = true;
         for t in &t {
             if let PLType::Trait(trait_ty) = &*t.borrow() {
-                if !ty.borrow().implements_trait(trait_ty, ctx) {
+                if ctx.try_run_in_type_mod(&ty.borrow(), |ctx, ty| {
+                    !ty.implements_trait(trait_ty, ctx)
+                }) {
                     satisfy_bound = false;
                     break;
                 }

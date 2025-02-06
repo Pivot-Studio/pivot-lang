@@ -1118,6 +1118,25 @@ impl<'a, 'ctx> Ctx<'a> {
         res
     }
 
+    pub fn try_run_in_type_mod<'b, R, F: FnMut(&mut Ctx<'a>, &PLType) -> R>(
+        &'b mut self,
+        ty: &PLType,
+        mut f: F,
+    ) -> R {
+        match ty {
+            PLType::Struct(sttype) => {
+                self.run_in_type_mod(sttype, |ctx, tp| f(ctx, &PLType::Struct(tp.clone())))
+            }
+            PLType::Trait(sttype) => {
+                self.run_in_type_mod(sttype, |ctx, tp| f(ctx, &PLType::Struct(tp.clone())))
+            }
+            PLType::Union(union_type) => {
+                self.run_in_type_mod(union_type, |ctx, tp| f(ctx, &PLType::Union(tp.clone())))
+            }
+            _ => f(self, ty),
+        }
+    }
+
     /// # run_in_type_mod
     ///
     /// it executes the function f under the module of the custom_type

@@ -154,7 +154,7 @@ impl Node for IfNode {
         let mut then_terminator = TerminatorEnum::None;
         // emit the code inside a child context because it belongs to a sub-block
         let mut child = ctx.new_child(self.then.range().start, builder);
-        if !skip_body {
+        if !skip_body || matches!(builder, BuilderEnum::NoOp(_)) {
             if let Some(mut def) = gen_def {
                 def.emit(&mut child, builder)?;
             }

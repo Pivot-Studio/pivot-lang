@@ -265,8 +265,9 @@ pub trait TraitImplAbleWithGeneric: Generic + TraitImplAble {
         false
     }
     fn implements_trait(&self, tp: &STType, ctx: &Ctx) -> bool {
-        if tp.path == ctx.plmod.path {
-            let plmod = &ctx.plmod;
+        let origin_mod = unsafe { ctx.origin_mod.as_ref().unwrap() };
+        if tp.path == origin_mod.path {
+            let plmod = origin_mod;
             if self.implements_trait_curr_mod(tp, plmod) {
                 return true;
             }

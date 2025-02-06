@@ -520,7 +520,6 @@ impl PLType {
 
     pub fn implements_trait(&self, tp: &STType, ctx: &Ctx) -> bool {
         let name = &self.get_full_elm_name_without_generic();
-
         match self {
             PLType::Struct(s) => s.implements_trait(tp, ctx),
             PLType::Union(u) => u.implements_trait(tp, ctx),
