@@ -25,7 +25,7 @@ struct StopEV {
 }
 
 
-type EV = TCPListenEV | TimerEV | StreamReadEV | ReadStopEV | WriteEV | StopEV | UDPRecvEV | UDPSendEV | TCPConnectEV;
+type EV = TCPListenEV | TimerEV | StreamReadEV | ReadStopEV | WriteEV | StopEV | UDPRecvEV | UDPSendEV | TCPConnectEV | DNSResolveEV;
 
 
 
@@ -72,6 +72,11 @@ struct TCPConnectEV {
     handle: *libuv::uv_tcp_t;
     addr: libuv::sockaddr_in;
     connect_cb: |i32|=>void;
+}
+
+struct DNSResolveEV {
+    hostname: string;
+    resolve_cb: |string|=>void;
 }
 
 var GLOBAL_REACTOR = new_uv_reactor();
@@ -216,6 +221,15 @@ fn async_cb(async_t:*libuv::uv_async_t) void {
                 libuv::set_data_for_handle(req, &ev);
                 let cb = unsafe_cast<()>(&connect_cb);
                 libuv::uv_tcp_connect(req, ev.handle, &ev.addr, cb);
+            }
+            DNSResolveEV(ev) => {
+                let req = libuv::new_uv_getaddrinfo_t();
+                gc::keep_alive_pinned(req);
+                libuv::set_data_for_handle(req, &ev);
+                let cb = unsafe_cast<()>(&getaddrinfo_cb);
+                let null = gc::int_to_ptr(0);
+
+                libuv::uv_getaddrinfo(reactor.loop, req, cb, ev.hostname.cstr(), null, unsafe_cast<libuv::addrinfo>(null));
             }
             _ => {
             }
@@ -389,6 +403,17 @@ impl UVReactor {
         libuv::uv_async_send(self.async_t);
         return;
     }
+
+    pub fn dns_resolve(hostname:string, resolve_cb:|string|=>void) void {
+        let ev = DNSResolveEV{
+            hostname: hostname,
+            resolve_cb: resolve_cb,
+        };
+        let e = ev as EV;
+        self.ch.send(e);
+        libuv::uv_async_send(self.async_t);
+        return;
+    }
 }
 
 
@@ -431,5 +456,24 @@ fn udp_alloc_cb(handle:*(), _suggested_size:i64, buf:*libuv::uv_buf_t) void {
 fn connect_cb(req:*libuv::uv_connect_t, status:i32) void {
     let ev = libuv::get_data_for_handle<libuv::uv_connect_t|TCPConnectEV>(req);
     ev.connect_cb(status);
+    return;
+}
+
+use std::libc;
+
+fn getaddrinfo_cb(req:*libuv::uv_getaddrinfo_t, status:i32, res:*libuv::addrinfo) void {
+    let ev = libuv::get_data_for_handle<libuv::uv_getaddrinfo_t|DNSResolveEV>(req);
+    if status < 0 {
+        ev.resolve_cb("");
+        return;
+    }
+    
+    let bs = [u8 * 17;];
+    let addr = libc::LibC__addrinfo_ai_addr(res);
+
+    libuv::uv_ip4_name(unsafe_cast<libuv::sockaddr_in>(addr), &bs[0], 16 as u32);
+    let ip = string_from_bytes(bs);
+    ev.resolve_cb(ip);
+    libuv::uv_freeaddrinfo(res);
     return;
 }

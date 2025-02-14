@@ -249,6 +249,16 @@ pub async fn test_http() Task<()> {
     return ();
 }
 
+use std::task::dns;
+
+pub async fn test_dns() Task<()> {
+    let dns = dns::new_dns_resolver();
+    let ip = await dns.resolve_async("www.baidu.com");
+    println!("IP address: ", ip);
+    return ();  
+}
+
+
 pub async fn test_udp() Task<()> {
     let udp_t = udp::new_udp_socket();
     udp_t.bind("127.0.0.1", 8080 as i32);

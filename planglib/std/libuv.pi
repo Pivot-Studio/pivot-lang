@@ -3,6 +3,7 @@ var UV_RUN_ONCE = 1 as u32;
 var UV_RUN_NOWAIT = 2 as u32;
 var UV_ASYNC = 1 as u32;
 var UV_IDLE = 6 as u32;
+var UV_GETADDRINFO = 8 as u32;
 var UV_TIMER = 13 as u32;
 var UV_TCP = 12 as u32;
 var UV_UDP = 14 as u32;
@@ -21,6 +22,8 @@ pub struct uv_stream_t {}
 pub struct uv_write_t {}
 pub struct uv_udp_t {}
 pub struct uv_connect_t {}
+pub struct uv_getaddrinfo_t {}
+pub struct addrinfo {}
 
 pub struct uv_buf_t {
     pub base:i64;
@@ -188,5 +191,15 @@ pub fn new_uv_connect_t() *uv_connect_t {
 }
 
 pub fn uv_tcp_connect(req:*uv_connect_t, handle:*uv_tcp_t, addr:*sockaddr_in, cb:*()) i32;
+
+pub fn uv_getaddrinfo(loop:*uv_loop_t, req:*uv_getaddrinfo_t, cb:*(), node:*u8, service:*u8, hints:*addrinfo) i32;
+pub fn uv_freeaddrinfo(ai:*addrinfo) void;
+// int uv_ip4_name(const struct sockaddr_in *src, char *dst, size_t size)
+pub fn uv_ip4_name(src:*sockaddr_in, dst:*u8, size:u32) i32;
+
+pub fn new_uv_getaddrinfo_t() *uv_getaddrinfo_t {
+    let re = gc::malloc_pinned(uv_req_size(UV_GETADDRINFO) as i64);
+    return unsafe_cast<uv_getaddrinfo_t>(re);
+}
 
 

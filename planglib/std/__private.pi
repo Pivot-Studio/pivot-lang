@@ -25,4 +25,5 @@ use std::task::delay;
 use std::task::tcp;
 use std::task::udp;
 use std::task::http;
+use std::task::dns;
 use std::json::encode;
