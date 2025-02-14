@@ -69,6 +69,9 @@ impl LibC {
                 .unwrap()
         }
     }
+    fn addrinfo_ai_addr(ai: *const libc::addrinfo) -> *const libc::sockaddr {
+        unsafe { (*ai).ai_addr }
+    }
     fn open(path: *const u8, byte_len: i64, flags: libc::c_int) -> libc::c_int {
         // create cstr from ptr and len
         let path = unsafe { std::slice::from_raw_parts(path, byte_len as usize) };

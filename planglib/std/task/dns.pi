@@ -1,0 +1,52 @@
+use std::task::Task;
+use std::task::reactor;
+use std::libuv;
+
+pub struct DNSResolver {
+}
+
+pub fn new_dns_resolver() DNSResolver {
+    return DNSResolver{};
+}
+
+struct ResolveTask {
+    first: bool;
+    ready: bool;
+    hostname: string;
+    ip: string;
+}
+
+impl Task<string> for ResolveTask {
+    fn poll(wk:||=>void) Option<string> {
+        if self.first {
+            self.first = false;
+            let resolve_cb = |ip:string| => {
+                if self.ready {
+                    return;
+                }
+                self.ip = ip;
+                self.ready = true;
+                wk();
+                return;
+            };
+            reactor::GLOBAL_REACTOR.dns_resolve(self.hostname, resolve_cb);
+        }
+
+        if self.ready {
+            return self.ip as Option<string>;
+        }
+        return None{} as Option<string>;
+    }
+}
+
+impl DNSResolver {
+    pub fn resolve_async(hostname: string) Task<string> {
+        let resolve_task = ResolveTask{
+            first: true,
+            ready: false,
+            hostname: hostname,
+            ip: "",
+        };
+        return resolve_task as Task<string>;
+    }
+} 

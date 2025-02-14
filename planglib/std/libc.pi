@@ -26,3 +26,7 @@ pub fn LibC__memcpy(dest:*u8, src:*u8, n:u64) *u8;
 ///  - `0`: `GRND_RANDOM` - use /dev/random  
 ///  - `1`: `GRND_NONBLOCK` - return EAGAIN if not enough entropy
 pub fn LibC__getrandom(buf:*u8, buflen:u64, flags:u32) i64;
+
+use std::libuv::*;
+
+pub fn LibC__addrinfo_ai_addr(ai:*addrinfo) *u8;
