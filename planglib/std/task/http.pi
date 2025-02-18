@@ -1,12 +1,16 @@
 use std::task::Task;
 use std::task::tcp;
+use std::task::dns;
 use std::string::StringBuilder;
 use std::string::StringExt;
+use std::cols::arr;
 
 pub struct HttpResponse {
     status_code: i32;
     headers: string;
-    body: [u8];
+    socket: tcp::TCPSocket;
+    body_read: bool;
+    cached_body: arr::Array<u8>; // 新增:缓存已读取的body内容
 }
 
 pub struct HttpClient {
@@ -19,6 +23,7 @@ pub fn new_http_client() HttpClient {
     };
 }
 
+use std::io;
 impl HttpClient {
     pub async fn get_async(url: string) Task<HttpResponse> {
         // 构建HTTP GET请求
@@ -34,51 +39,89 @@ impl HttpClient {
         
         let request = sb.str();
         let bytes = request.bytes();
-        let status = await self.socket.connect_async("127.0.0.1", 5500 as i32);
+        let resolver = dns::new_dns_resolver();
+        let ip = await resolver.resolve_async(url);
+        let status = await self.socket.connect_async(ip, 80 as i32);
         // 发送请求
         await self.socket.write_async(bytes);
         
-        // 读取响应
-        let response_buf = [u8*4096;];
-        let read_len = await self.socket.read_async(response_buf);
+        // 使用1k缓冲区读取header
+        let response_buf = [u8*1024;];
+        let  total_read = 0;
+        let header_end = -1;
         
-        // let response_str = string_from_bytes(arr_slice(response_buf, 0, read_len));
-        
-        // 手动解析响应
-        let header_end = 0;
-        // 查找headers和body的分隔符 \r\n\r\n
-        for let i = 0; i < read_len - 3; i = i + 1 {
-            if response_buf[i] == '\r' as u8 && response_buf[i+1] == '\n' as u8 &&response_buf[i+2] == '\r' as u8 &&response_buf[i+3] == '\n' as u8 {
-                header_end = i;
+        while header_end == -1 {
+            let read_len = await self.socket.read_async(response_buf);
+            if read_len == 0 {
                 break;
             }
+            
+            // 查找header结束位置
+            for let i = 0; i < read_len - 3; i = i + 1 {
+                if response_buf[i] as char == '\r' && 
+                    response_buf[i+1] as char == '\n' && 
+                    response_buf[i+2] as char == '\r' && 
+                    response_buf[i+3] as char == '\n' {
+                    header_end = total_read + i;
+                    break;
+                }
+            }
+            total_read = total_read + read_len;
         }
         
         let headers = string_from_bytes(arr_slice(response_buf, 0, header_end));
-        let body = arr_slice(response_buf, header_end + 4, read_len - (header_end + 4));
+        
+        // 缓存已读取的body内容
+        let body_start = header_end + 4;
+        let cached_body = arr::from_slice<u8>(arr_slice(response_buf, body_start, total_read - body_start));
         
         // 解析状态码
-        let status_start = 9; // "HTTP/1.1 "的长度
-        let status_end = status_start;
-        for let i = status_start; i < header_end; i = i + 1 {
-            if response_buf[i] == ' ' as u8 {
-                status_end = i;
-                break;
-            }
-        }
-        let status_str = string_from_bytes(arr_slice(response_buf, status_start, status_end - status_start));
-        // TODO: 将status_str转换为整数
+        let status_str = string_from_bytes(arr_slice(response_buf, 9, 12));
         
         return HttpResponse{
             status_code: 200 as i32,
             headers: headers,
-            body: body,
+            socket: self.socket,
+            body_read: false,
+            cached_body: cached_body,
         };
     }
 }
 
+use std::math::*;
+use std::slice::SliceExt;
+
 impl HttpResponse {
-    pub fn get_body_string() string {
-        return string_from_bytes(self.body);
+    
+    pub async fn read_async(buf: [u8]) Task<Option<i64>> {
+        if self.body_read {
+            return None{} as Option<i64>;
+        }
+        // 先读取缓存的body内容
+        if self.cached_body.length() > 0 {
+            let copy_len = min(buf.len(), self.cached_body.length() as i64);
+            arr_copy(self.cached_body.get_slice(), buf, copy_len);
+            self.cached_body = arr::from_slice(arr_slice(self.cached_body.get_slice(), copy_len, self.cached_body.length() as i64 - copy_len));
+            return copy_len as Option<i64>;
+        }
+        // 继续从socket读取
+        let n = await self.socket.read_async(buf);
+        if n == 0 {
+            self.body_read = true;
+        }
+        return n as Option<i64>;
+    }
+
+    pub async fn read_all_async() Task<[u8]> {
+        let content = arr::new<u8>();
+        let buf = [u8*4096;];
+        while true {
+            if let n = (await self.read_async(buf)) as i64 {
+                content.append(arr::from_slice(arr_slice(buf, 0, n)));
+            } else {
+                break;
+            }
+        }
+        return content.get_slice();
     }
 }

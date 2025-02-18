@@ -22,14 +22,14 @@ impl TerminatorEnum {
     }
 }
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, PartialEq, Eq, Debug)]
 pub struct NodeOutput {
     value: Option<NodeValue>,
     term: TerminatorEnum,
     pub compile_time_result: CompileTimeResult,
 }
 
-#[derive(Debug, Clone, Default, Copy)]
+#[derive(Debug, Clone, Default, Copy, PartialEq, Eq)]
 pub enum CompileTimeResult {
     #[default]
     None,
@@ -140,7 +140,7 @@ impl NodeOutput {
 }
 
 /// NodeValue is the output of the builder
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NodeValue {
     /// the index which maps the real value stored inside the LLVMBuilder
     value: ValueHandle,

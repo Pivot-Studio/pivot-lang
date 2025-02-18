@@ -24,6 +24,14 @@ pub use _match::*;
 }"
 )]
 #[test_parser(
+    "if a > 1 ||
+    b > 2 { 
+    a = 1;
+} else {
+    a = 2;
+}"
+)]
+#[test_parser(
     "if true {
     a = 1;
 } else if false {

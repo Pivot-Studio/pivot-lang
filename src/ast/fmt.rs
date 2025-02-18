@@ -10,6 +10,7 @@ use super::{
         global::{GlobalConstNode, GlobalNode},
         implement::ImplNode,
         interface::{MultiTraitNode, TraitBoundNode, TraitDefNode},
+        intermediate_node::IntermediateNode,
         macro_nodes::{MacroCallNode, MacroLoopStatementNode, MacroNode, MacroRuleNode},
         operator::{BinOpNode, TakeOpNode, UnaryOpNode},
         pkg::{ExternIdNode, UseNode},
@@ -941,4 +942,6 @@ impl FmtBuilder {
             super::node::control::MatchArmCondition::TypedDeconstruct(_, _) => todo!(),
         }
     }
+
+    pub fn parse_intermediate_node(&mut self, _node: &IntermediateNode) {}
 }
