@@ -29,20 +29,20 @@ use super::*;
 pub fn array_init(input: Span) -> IResult<Span, Box<NodeEnum>> {
     map_res(
         tuple((
-            tag_token_symbol(TokenType::LBRACKET),
+            tag_token_symbol_ex(TokenType::LBRACKET),
             opt(pair(
                 type_name,
                 delimited(
-                    tag_token_symbol(TokenType::MUL),
+                    tag_token_symbol_ex(TokenType::MUL),
                     general_exp,
-                    tag_token_symbol(TokenType::SEMI),
+                    tag_token_symbol_ex(TokenType::SEMI),
                 ),
             )),
             separated_list0(
-                tag_token_symbol(TokenType::COMMA),
+                tag_token_symbol_ex(TokenType::COMMA),
                 del_newline_or_space!(general_exp),
             ),
-            tag_token_symbol(TokenType::RBRACKET),
+            tag_token_symbol_ex(TokenType::RBRACKET),
         )),
         // lb and rb are used to mark the boundaries of an arry.
         |((_, lb), tp, exps, (_, rb))| {
@@ -57,9 +57,9 @@ pub fn array_init(input: Span) -> IResult<Span, Box<NodeEnum>> {
 pub fn array_element_op(input: Span) -> IResult<Span, (ComplexOp, Vec<Box<NodeEnum>>)> {
     delspace(map_res(
         tuple((
-            tag_token_symbol(TokenType::LBRACKET),
+            tag_token_symbol_ex(TokenType::LBRACKET),
             opt(general_exp),
-            tag_token_symbol(TokenType::RBRACKET),
+            tag_token_symbol_ex(TokenType::RBRACKET),
             many0(comment),
         )),
         |(_, idx, (_, rr), com)| {

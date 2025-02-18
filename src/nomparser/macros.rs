@@ -29,7 +29,7 @@ macro_rules! parse_bin_ops {
                 many0(tuple((
                     alt((
                         $(
-                            tag_token_symbol(TokenType::$op),
+                            tag_token_symbol_ex(TokenType::$op),
                         )*
                     )),
                     $exp,

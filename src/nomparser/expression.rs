@@ -29,6 +29,14 @@ pub fn general_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
 #[test_parser("a&&b")]
 #[test_parser("a||b")]
 #[test_parser("a &&  b")]
+#[test_parser(
+    "a && 
+ b"
+)]
+#[test_parser(
+    "a || 
+b"
+)]
 #[test_parser("a  || b")]
 #[test_parser("a&&b||c")]
 #[test_parser("a||b&&c")]

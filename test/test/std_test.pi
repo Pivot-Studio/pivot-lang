@@ -243,9 +243,10 @@ use std::task::http;
 
 pub async fn test_http() Task<()> {
     let http = http::new_http_client();
-    let re = await http.get_async("http://127.0.0.1:5500");
-    let body = re.get_body_string();
-    println!(body);
+    let re = await http.get_async("www.baidu.com");
+    let body = await re.read_all_async();
+    let body_str = string_from_bytes(body);
+    println!(body_str);
     return ();
 }
 

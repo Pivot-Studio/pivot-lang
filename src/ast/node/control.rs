@@ -73,8 +73,11 @@ impl Node for IfNode {
                                 .clone(),
                         );
                     }
+
+                    // we need to evaluate the expr first, to avoid it run twice
+                    let inter = IntermediateNode::new(a.expr.clone().emit(ctx, builder));
                     let mut transformed_is = NodeEnum::IsNode(IsNode {
-                        expr: a.expr.clone(),
+                        expr: Box::new(NodeEnum::InterNode(inter.clone())),
                         target_type: a.target_type.clone(),
                         range: a.range(),
                     });
@@ -88,7 +91,7 @@ impl Node for IfNode {
                     );
                     ctx.position_at_end(then_block, builder);
                     let transformed_as = NodeEnum::AsNode(AsNode {
-                        expr: a.expr.clone(),
+                        expr: Box::new(NodeEnum::InterNode(inter)),
                         target_type: a.target_type.clone(),
                         range: a.range(),
                         tail: Some((TokenType::NOT, Default::default())),
@@ -105,8 +108,10 @@ impl Node for IfNode {
                                 .clone(),
                         );
                     }
+                    // we need to evaluate the expr first, to avoid it run twice
+                    let inter = IntermediateNode::new(a.expr.clone().emit(ctx, builder));
                     let mut transformed_is = NodeEnum::ImplCastNode(ImplCastNode {
-                        expr: a.expr.clone(),
+                        expr: Box::new(NodeEnum::InterNode(inter.clone())),
                         target_type: a.target_type.clone(),
                         range: a.range(),
                         tail: Some((TokenType::QUESTION, Default::default())),
@@ -128,7 +133,7 @@ impl Node for IfNode {
                     }
                     ctx.position_at_end(then_block, builder);
                     let transformed_as = NodeEnum::ImplCastNode(ImplCastNode {
-                        expr: a.expr.clone(),
+                        expr: Box::new(NodeEnum::InterNode(inter)),
                         target_type: a.target_type.clone(),
                         range: a.range(),
                         tail: Some((TokenType::NOT, Default::default())),

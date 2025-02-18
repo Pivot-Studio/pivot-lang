@@ -9,6 +9,7 @@ use crate::ast::builder::IRBuilder;
 use cast::ImplCastNode;
 use enum_dispatch::enum_dispatch;
 
+use intermediate_node::IntermediateNode;
 use lsp_types::SemanticTokenType;
 
 use self::cast::AsNode;
@@ -54,6 +55,7 @@ pub mod function;
 pub mod global;
 pub mod implement;
 pub mod interface;
+pub mod intermediate_node;
 pub mod macro_nodes;
 pub mod node_result;
 pub mod operator;
@@ -148,6 +150,7 @@ pub enum NodeEnum {
     ClosureNode(ClosureNode),
     GlobalConstNode(GlobalConstNode),
     MatchNode(MatchNode),
+    InterNode(IntermediateNode),
 }
 // ANCHOR: range
 #[enum_dispatch]
