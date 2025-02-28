@@ -13,22 +13,48 @@ pub trait StringExt {
 
 impl StringExt for string {
     fn split(s:string) [string] {
+        // 如果分隔符为空，直接返回原字符串作为唯一元素
+        if s.byte_len() == 0 {
+            return [*self];
+        }
+        
         let chars = self.chars();
         let subchars = s.chars();
         let re = arr::new<string>();
         let i = 0;
-        let j = 0;
-        while i < arr_len(chars) {
-            if chars[i] == subchars[j] {
+        let start = 0;
+        
+        while i <= arr_len(chars) - arr_len(subchars) {
+            let m = true;
+            let j = 0;
+            
+            // 检查当前位置是否匹配分隔符
+            while j < arr_len(subchars) {
+                if chars[i + j] != subchars[j] {
+                    m = false;
+                    break;
+                }
                 j = j + 1;
             }
-            if j == arr_len(subchars) {
-                let sub = self.slice(i, j);
-                re.push(sub);
-                j = 0;
+            
+            // 如果找到匹配
+            if m {
+                // 添加分隔符前的子字符串
+                re.push(self.slice(start, i - start));
+                // 跳过分隔符
+                i = i + arr_len(subchars);
+                // 更新下一个子字符串的起始位置
+                start = i;
+            } else {
+                i = i + 1;
             }
-            i = i + 1;
         }
+        
+        // 添加最后一个子字符串
+        if start < arr_len(chars) {
+            re.push(self.slice(start, arr_len(chars) - start));
+        }
+        
         return re.get_slice();
     }
     /// # index_of

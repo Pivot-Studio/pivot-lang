@@ -182,8 +182,8 @@ define_diag!(
     MACRO_EXPANSION_FAILED = "macro expansion failed",
     SYNTAX_ERROR_FUNC_PARAM = "syntax error: function parameter",
     ONLY_AWAIT_IN_ASYNC_FN = "await is only expected in async functions",
-    IF_LET_DOES_NOT_EXPECT_TAIL = "`if let ...` does not expect `?` or `!` tail",
-    EXPECT_IF_LET_AS = "`if let .. as ...` is expected here",
+    IF_LET_DOES_NOT_EXPECT_TAIL = "`if/while let ...` does not expect `?` or `!` tail",
+    EXPECT_IF_LET_AS = "`if/while let .. as ...` is expected here",
     EXPECT_GENERIC_TYPE = "expect generic type",
     EXPECT_TAILING_SYMBOL = "expect tailing symbol `!` or `?`",
 );
