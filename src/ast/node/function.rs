@@ -153,9 +153,8 @@ impl FuncCallNode {
             }
             let v = para
                 .emit(ctx, builder)
-                .map(|re| {
+                .inspect(|_| {
                     ctx.expect_ty = None;
-                    re
                 })?
                 .get_value();
             if v.is_none() {
