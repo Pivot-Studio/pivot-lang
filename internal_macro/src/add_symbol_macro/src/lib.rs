@@ -141,6 +141,9 @@ fn impl_macro_impl(arg: &AcceptAttrInput, ast: &ItemImpl) -> TokenStream {
             let cl = clonedsig.inputs.clone();
             let inputs = clonedsig.inputs.clone().into_iter();
 
+            // 保留原始方法的属性
+            let attrs = &m.attrs;
+
             let expr = transform_params(cl);
 
             let ret = clonedsig.output;
@@ -150,6 +153,7 @@ fn impl_macro_impl(arg: &AcceptAttrInput, ast: &ItemImpl) -> TokenStream {
             if Option::is_none(&first) {
                 cfn = quote!(
                     #[no_mangle]
+                    #(#attrs)*
                     pub unsafe extern "C" fn #findent(#(#inputs,)*) #ret {
                         #sfty::#id #expr
                     }
@@ -160,6 +164,7 @@ fn impl_macro_impl(arg: &AcceptAttrInput, ast: &ItemImpl) -> TokenStream {
                     let inputs1 = inputs.clone().skip(1);
                     cfn = quote!(
                         #[no_mangle]
+                        #(#attrs)*
                         pub unsafe extern "C" fn #findent(me: * mut #sfty,#(#inputs1,)*) #ret {
                             let me = &mut *me;
                             me.#id #expr
@@ -168,6 +173,7 @@ fn impl_macro_impl(arg: &AcceptAttrInput, ast: &ItemImpl) -> TokenStream {
                 } else {
                     cfn = quote!(
                         #[no_mangle]
+                        #(#attrs)*
                         pub unsafe extern "C" fn #findent(#(#inputs,)*) #ret {
                             #sfty::#id #expr
                         }
