@@ -312,9 +312,8 @@ pub fn prepare_build_envs(db: &dyn Db, kagari_source: SourceProgram) -> Result<C
                     pb.set_message(format!("正在分析依赖{}", k));
                     if PathBuf::from(&v.path).is_absolute() {
                         _ = crate::utils::canonicalize(&v.path)
-                            .map(|p| {
+                            .inspect(|p| {
                                 v.path = p.to_str().unwrap().to_string();
-                                p
                             })
                             .map_err(|e| {
                                 pb.abandon_with_message(format!("error: {:?}", e));
@@ -323,9 +322,8 @@ pub fn prepare_build_envs(db: &dyn Db, kagari_source: SourceProgram) -> Result<C
                             });
                     } else {
                         _ = crate::utils::canonicalize(config_root.join(&v.path))
-                            .map(|p| {
+                            .inspect(|p| {
                                 v.path = p.to_str().unwrap().to_string();
-                                p
                             })
                             .map_err(|e| {
                                 pb.abandon_with_message(format!("error: {:?}", e));

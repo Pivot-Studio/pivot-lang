@@ -327,7 +327,7 @@ impl Linker for MsvcLinker {
                 "-libpath:{}",
                 p.to_str()
                     .unwrap()
-                    .trim_end_matches(|c| c == '\\')
+                    .trim_end_matches('\\')
                     .replace('\\', r"\\")
             ));
         });

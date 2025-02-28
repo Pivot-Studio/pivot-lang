@@ -16,7 +16,7 @@ bytecount = "0.6.3"
 context = "3.0.0"
 thread-priority = "1.2.0"
 [target.'cfg(windows)'.dependencies]
-winapi = { version = "0.3", features = ["winuser", "wincrypt"] }
+winapi = { version = "0.3", features = ["winuser", "wincrypt", "ws2def"] }
 
 [dev-dependencies]
 rand = "0.8"
