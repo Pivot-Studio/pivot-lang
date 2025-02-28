@@ -134,6 +134,12 @@ pub fn if_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
 }
 "
 )]
+#[test_parser(
+    "while let a = b as i32 {
+    let a = b;
+}
+"
+)]
 #[test_parser_error(
     "whiletrue {
     let a = b;
@@ -145,7 +151,7 @@ pub fn while_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
         delspace(tuple((
             tag_token_word(TokenType::WHILE),
             alt_except(
-                parse_with_ex(general_exp, true),
+                alt((parse_with_ex(general_exp, true), new_variable)),
                 "{",
                 "failed to parse while condition",
                 ErrorCode::SYNTAX_ERROR_WHILE_CONDITION,

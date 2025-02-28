@@ -31,16 +31,18 @@ impl HttpClient {
             data: [u8*1024;],
             len: 0,
         };
+        let domain = url.split("://")[1].split("/")[0];
+
         sb.add_str("GET / HTTP/1.1\r\n");
         sb.add_str("Host: ");
-        sb.add_str(url);
+        sb.add_str(domain);
         sb.add_str("\r\n");
         sb.add_str("Connection: close\r\n\r\n");
         
         let request = sb.str();
         let bytes = request.bytes();
         let resolver = dns::new_dns_resolver();
-        let ip = await resolver.resolve_async(url);
+        let ip = await resolver.resolve_async(domain);
         let status = await self.socket.connect_async(ip, 80 as i32);
         // 发送请求
         await self.socket.write_async(bytes);
@@ -78,6 +80,7 @@ impl HttpClient {
         // 解析状态码
         let status_str = string_from_bytes(arr_slice(response_buf, 9, 12));
         
+        // TODO: 解析状态码
         return HttpResponse{
             status_code: 200 as i32,
             headers: headers,
@@ -115,12 +118,8 @@ impl HttpResponse {
     pub async fn read_all_async() Task<[u8]> {
         let content = arr::new<u8>();
         let buf = [u8*4096;];
-        while true {
-            if let n = (await self.read_async(buf)) as i64 {
-                content.append(arr::from_slice(arr_slice(buf, 0, n)));
-            } else {
-                break;
-            }
+        while let n = (await self.read_async(buf)) as i64 {
+            content.append(arr::from_slice(buf.slice(0, n)));
         }
         return content.get_slice();
     }
