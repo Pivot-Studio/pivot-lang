@@ -97,6 +97,7 @@ fn close_cb(handle:*()) void {
     return;
 }
 
+pub fn uv_buf_init(base:*u8, len:u32) libuv::uv_buf_t;
 
 fn conn_cb(server:*libuv::uv_stream_t, _status:u32) void {
     let client = libuv::new_uv_tcp_t();
@@ -115,7 +116,8 @@ fn alloc_cb(handle:*(), _suggested_size:i64, buf:*libuv::uv_buf_t) void {
     if l<=0 {
         l = 0;
     }
-    * buf = libuv::uv_buf_init(ptr, l as u32);
+    let cb: *() = unsafe_cast<()>(&uv_buf_init);
+    libuv::my_uv_buf_init(buf, ptr, l as u32, cb);
 
     return;
 }
@@ -183,13 +185,15 @@ fn async_cb(async_t:*libuv::uv_async_t) void {
 
                 let raw_slice_p = &ev.buf[0];
                 gc::pin(raw_slice_p);
-                let buf = libuv::uv_buf_init(&ev.buf[0], ev.buf.len() as u32);
+                let buf = libuv::uv_buf_t{};
+                let cb: *() = unsafe_cast<()>(&uv_buf_init);
+                libuv::my_uv_buf_init(&buf, &ev.buf[0], ev.buf.len() as u32, cb);
                 let buf_p = &buf;
                 gc::pin(buf_p);
                 libuv::set_data_for_handle(req, &ev);
                 
-                let cb = unsafe_cast<()>(&write_cb);
-                libuv::uv_write(req, ev.handle, &buf, 1 as u32, cb);
+                let cb1 = unsafe_cast<()>(&write_cb);
+                libuv::uv_write(req, ev.handle, buf_p, 1 as u32, cb1);
                 libuv::set_data_for_handle(req, &ev);
             }
             StopEV(ev) => {
@@ -208,12 +212,14 @@ fn async_cb(async_t:*libuv::uv_async_t) void {
                 gc::keep_alive_pinned(req);
                 let raw_slice_p = &ev.buf[0];
                 gc::pin(raw_slice_p);
-                let buf = libuv::uv_buf_init(&ev.buf[0], ev.buf.len() as u32);
+                let buf = libuv::uv_buf_t{};
+                let cb: *() = unsafe_cast<()>(&uv_buf_init);
+                libuv::my_uv_buf_init(&buf, &ev.buf[0], ev.buf.len() as u32, cb);
                 let buf_p = &buf;
                 gc::pin(buf_p);
                 libuv::set_data_for_handle(req, &ev);
-                let cb = unsafe_cast<()>(&udp_send_cb);
-                libuv::uv_udp_send(req, ev.handle, &buf, 1 as u32, &ev.addr, cb);
+                let cb1 = unsafe_cast<()>(&udp_send_cb);
+                libuv::uv_udp_send(req, ev.handle, &buf, 1 as u32, &ev.addr, cb1);
             }
             TCPConnectEV(ev) => {
                 let req = libuv::new_uv_connect_t();
@@ -229,7 +235,7 @@ fn async_cb(async_t:*libuv::uv_async_t) void {
                 let cb = unsafe_cast<()>(&getaddrinfo_cb);
                 let null = gc::int_to_ptr(0);
 
-                libuv::uv_getaddrinfo(reactor.loop, req, cb, ev.hostname.cstr(), null, unsafe_cast<libuv::addrinfo>(null));
+                let _re = libuv::uv_getaddrinfo(reactor.loop, req, cb, ev.hostname.cstr(), null, unsafe_cast<libuv::addrinfo>(null));
             }
             _ => {
             }
@@ -449,7 +455,8 @@ fn udp_alloc_cb(handle:*(), _suggested_size:i64, buf:*libuv::uv_buf_t) void {
     if l<=0 {
         l = 0;
     }
-    * buf = libuv::uv_buf_init(ptr, l as u32);
+    let cb: *() = unsafe_cast<()>(&uv_buf_init);
+    libuv::my_uv_buf_init(buf, ptr, l as u32, cb);
     return;
 }
 

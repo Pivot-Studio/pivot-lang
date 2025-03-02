@@ -347,6 +347,24 @@ fn millitime() -> i64 {
         .as_millis() as _
 }
 
+#[repr(C)]
+pub struct UVBuf {
+    pub f1: usize,
+    pub f2: usize, // Only for placeholder
+}
+
+#[no_mangle]
+pub extern "C" fn my_uv_buf_init(
+    buf: *mut UVBuf,
+    base: *mut i8,
+    len: u32,
+    uv_buf_init: extern "C" fn(base: *mut i8, len: u32) -> UVBuf,
+) {
+    unsafe {
+        *buf = uv_buf_init(base, len);
+    }
+}
+
 #[cfg(all(windows, feature = "jitdylib"))]
 mod compiler_rt;
 
