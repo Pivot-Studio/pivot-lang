@@ -43,7 +43,8 @@ pub fn uv_stop(loop:*uv_loop_t) i32;
 
 pub fn uv_default_loop() *uv_loop_t;
 
-pub fn uv_buf_init(base:*u8, len:u32) uv_buf_t;
+
+pub fn my_uv_buf_init(buf:*uv_buf_t, base:*u8, len:u32, uv_buf_init: *());
 
 pub fn uv_read_stop(stream:*uv_stream_t) i32;
 
@@ -202,4 +203,4 @@ pub fn new_uv_getaddrinfo_t() *uv_getaddrinfo_t {
     return unsafe_cast<uv_getaddrinfo_t>(re);
 }
 
-
+pub fn uv_conn_handle(req:*uv_connect_t) *uv_stream_t ;
