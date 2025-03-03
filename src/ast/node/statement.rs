@@ -587,19 +587,19 @@ impl Node for AssignNode {
                     return Err(ctx.add_diag(self.var.range().new_err(ErrorCode::NOT_ASSIGNABLE)));
                 }
                 let rel = rel.unwrap();
-                let ptr = rel.get_value();
                 let lpltype = rel.get_ty();
                 // 要走转换逻辑，所以不和下方分支统一
                 let value = ctx
-                    .emit_with_expectation(
-                        &mut self.exp,
-                        lpltype.clone(),
-                        self.var.range(),
-                        builder,
-                    )?
+                    .emit_with_expectation(&mut self.exp, lpltype.clone(), var.range(), builder)?
                     .get_value()
                     .unwrap()
                     .get_value();
+                let rel = var.emit(ctx, builder)?.get_value();
+                if rel.is_none() {
+                    return Err(ctx.add_diag(self.var.range().new_err(ErrorCode::NOT_ASSIGNABLE)));
+                }
+                let rel = rel.unwrap();
+                let ptr = rel.get_value();
                 if rel.is_const() {
                     return Err(ctx.add_diag(self.range.new_err(ErrorCode::ASSIGN_CONST)));
                 }

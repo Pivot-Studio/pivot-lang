@@ -45,7 +45,7 @@ impl HttpClient {
         let ip = await resolver.resolve_async(domain);
         let status = await self.socket.connect_async(ip, 80 as i32);
         // 发送请求
-        await self.socket.write_async(bytes);
+        status = await self.socket.write_async(bytes);
         
         // 使用1k缓冲区读取header
         let response_buf = [u8*1024;];
