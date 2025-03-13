@@ -98,9 +98,9 @@ impl Ctx<'_> {
         if range == Default::default() {
             return;
         }
-        if self.plmod.path != self.get_root_ctx().plmod.path {
-            return;
-        }
+        // if self.plmod.path != self.get_root_ctx().plmod.path {
+        //     return;
+        // }
         self.get_root_ctx().plmod.defs.borrow_mut().insert(
             range,
             LSPDef::Scalar(Location {

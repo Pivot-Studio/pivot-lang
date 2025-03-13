@@ -705,8 +705,6 @@ impl Node for StructInitNode {
                     .add_to_ctx(ctx))
             }
         };
-        // let mut field_init_values = vec![];
-        let mut idx = 0;
         ctx.save_if_comment_doc_hover(self.typename.range(), Some(sttype.doc.clone()));
         let sttype = &mut sttype;
         if !sttype.generic_map.is_empty() {
@@ -727,35 +725,34 @@ impl Node for StructInitNode {
                 ));
             }
         }
-        let struct_pointer = builder.alloc("initstruct", &pltype.borrow(), ctx, None); //alloc(ctx, tp, "initstruct");
-        ctx.run_in_type_mod_mut(sttype, |ctx, sttype| {
-            for fieldinit in self.fields.iter_mut() {
-                if let NodeEnum::STInitField(fieldinit) = &mut **fieldinit {
-                    let field_id_range = fieldinit.id.range;
-                    let field_exp_range = fieldinit.exp.range();
-                    let field = sttype.fields.get(&fieldinit.id.name);
-                    if field.is_none() {
-                        ctx.generate_completion_if(ctx.should_gen(self.range), || {
-                            sttype.get_completions(ctx)
-                        });
-                        return Err(
-                            ctx.add_diag(field_id_range.new_err(ErrorCode::STRUCT_FIELD_NOT_FOUND))
-                        );
-                    }
-                    let field = field.unwrap();
-                    let v = fieldinit.emit(ctx, builder)?.get_value();
-                    idx += 1;
-                    if v.is_none() {
-                        return Err(ctx.add_diag(field_exp_range.new_err(ErrorCode::EXPECT_VALUE)));
-                    }
-                    let v = v.unwrap();
-                    let value = ctx.try_load2var(
-                        field_exp_range,
-                        v.get_value(),
-                        builder,
-                        &v.get_ty().borrow(),
-                    )?;
-                    let value_pltype = v.get_ty();
+        let struct_pointer = builder.alloc("initstruct", &pltype.borrow(), ctx, None);
+        for fieldinit in self.fields.iter_mut() {
+            if let NodeEnum::STInitField(fieldinit) = &mut **fieldinit {
+                let field_id_range = fieldinit.id.range;
+                let field_exp_range = fieldinit.exp.range();
+                let field = sttype.fields.get(&fieldinit.id.name);
+                if field.is_none() {
+                    ctx.generate_completion_if(ctx.should_gen(self.range), || {
+                        sttype.get_completions(ctx)
+                    });
+                    return Err(
+                        ctx.add_diag(field_id_range.new_err(ErrorCode::STRUCT_FIELD_NOT_FOUND))
+                    );
+                }
+                let field = field.unwrap();
+                let v = fieldinit.emit(ctx, builder)?.get_value();
+                if v.is_none() {
+                    return Err(ctx.add_diag(field_exp_range.new_err(ErrorCode::EXPECT_VALUE)));
+                }
+                let v = v.unwrap();
+                let value = ctx.try_load2var(
+                    field_exp_range,
+                    v.get_value(),
+                    builder,
+                    &v.get_ty().borrow(),
+                )?;
+                let value_pltype = v.get_ty();
+                ctx.run_in_type_mod(sttype, |ctx, sttype| {
                     ctx.protect_generic_context(&sttype.generic_map, |ctx| {
                         if !field
                             .typenode
@@ -769,41 +766,32 @@ impl Node for StructInitNode {
                             ));
                         }
                         Ok(())
-                    })?;
-                    let fieldptr = builder
-                        .build_struct_gep(
-                            struct_pointer,
-                            field.index,
-                            "fieldptr",
-                            &pltype.borrow(),
-                            ctx,
-                        )
-                        .unwrap();
-                    builder.build_store(fieldptr, value);
-                    // field_init_values.push((field.index, value));
-                    ctx.send_if_go_to_def(field_id_range, field.range, sttype.get_path());
-                    ctx.set_field_refs(pltype.clone(), field, field_id_range);
-                } else if let NodeEnum::Err(fieldinit) = &mut **fieldinit {
-                    if !fieldinit.src.contains(':') {
-                        ctx.generate_completion_if(ctx.should_gen(fieldinit.range()), || {
-                            sttype.get_completions(ctx)
-                        });
-                    }
-                    let _ = fieldinit.emit(ctx, builder);
-                } else {
-                    unreachable!()
+                    })
+                })?;
+                let fieldptr = builder
+                    .build_struct_gep(
+                        struct_pointer,
+                        field.index,
+                        "fieldptr",
+                        &pltype.borrow(),
+                        ctx,
+                    )
+                    .unwrap();
+                builder.build_store(fieldptr, value);
+                ctx.send_if_go_to_def(field_id_range, field.range, sttype.get_path());
+                ctx.set_field_refs(pltype.clone(), field, field_id_range);
+            } else if let NodeEnum::Err(fieldinit) = &mut **fieldinit {
+                if !fieldinit.src.contains(':') {
+                    ctx.generate_completion_if(ctx.should_gen(fieldinit.range()), || {
+                        sttype.get_completions(ctx)
+                    });
                 }
+                let _ = fieldinit.emit(ctx, builder);
+            } else {
+                unreachable!()
             }
-            Ok(())
-        })?;
+        }
 
-        // let struct_pointer = builder.alloc("initstruct", &pltype.borrow(), ctx, None); //alloc(ctx, tp, "initstruct");
-        // field_init_values.iter().for_each(|(index, value)| {
-        //     let fieldptr = builder
-        //         .build_struct_gep(struct_pointer, *index, "fieldptr", &pltype.borrow(), ctx)
-        //         .unwrap();
-        //     builder.build_store(fieldptr, *value);
-        // });
         struct_pointer.new_output(pltype.clone()).to_result()
     }
 }

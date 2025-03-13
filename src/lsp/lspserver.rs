@@ -135,6 +135,7 @@ fn main_loop(
         None,
     );
     let completions: Comple = Arc::new(Mutex::new(None));
+    let doc_sym: Arc<Mutex<Vec<(RequestId, String)>>> = Arc::new(Mutex::new(Vec::new()));
     let mut last_semantic_file = "".to_string();
     let mut last_tokens: SemanticTokens = SemanticTokens::default();
 
@@ -148,6 +149,7 @@ fn main_loop(
             }
         }
         let completions = completions.clone();
+        let doc_sym = doc_sym.clone();
         di.on::<GotoDefinition, _>(|id, params| {
             let uri = url_to_path(params.text_document_position_params.text_document.uri);
             let pos = Pos::from_diag_pos(&params.text_document_position_params.position);
@@ -232,9 +234,10 @@ fn main_loop(
             let snapshot = db.clone();
             let sender = connection.sender.clone();
             let completions = completions.clone();
+            let doc_sym = doc_sym.clone();
             pool.execute(move || {
                 let _ = compile_dry(&snapshot, docin);
-                do_send_completions_and_diags(&snapshot, docin, completions, &sender);
+                do_send_completions_and_diags(&snapshot, docin, completions, doc_sym, &sender);
                 let mut codelens = compile_dry::accumulated::<PLCodeLens>(&snapshot, docin);
                 send_code_lens(
                     &sender,
@@ -256,6 +259,7 @@ fn main_loop(
                 &snapshot,
                 docin,
                 completions.clone(),
+                doc_sym.clone(),
                 &connection.sender,
             );
             let mut newtokens = compile_dry::accumulated::<PLSemanticTokens>(&snapshot, docin);
@@ -291,6 +295,7 @@ fn main_loop(
                 &snapshot,
                 docin,
                 completions.clone(),
+                doc_sym.clone(),
                 &connection.sender,
             );
             let mut newtokens = compile_dry::accumulated::<PLSemanticTokens>(&snapshot, docin);
@@ -375,7 +380,13 @@ fn main_loop(
                 .set_docs(&mut db)
                 .to(Arc::new(Mutex::new(docs.lock().unwrap().clone())));
             let _ = compile_dry(&db, docin);
-            do_send_completions_and_diags(&db, docin, completions.clone(), &connection.sender);
+            do_send_completions_and_diags(
+                &db,
+                docin,
+                completions.clone(),
+                doc_sym.clone(),
+                &connection.sender,
+            );
             let sigs = compile_dry::accumulated::<PLSignatureHelp>(&db, docin);
             if !sigs.is_empty() {
                 let sender = connection.sender.clone();
@@ -412,10 +423,11 @@ fn main_loop(
             let sender = connection.sender.clone();
             let snapshot = db.clone();
             let completions = completions.clone();
+            let doc_sym = doc_sym.clone();
             pool.execute(move || {
                 if docin.file(&snapshot) != &uri {
                     let _ = compile_dry(&snapshot, docin);
-                    do_send_completions_and_diags(&snapshot, docin, completions, &sender);
+                    do_send_completions_and_diags(&snapshot, docin, completions, doc_sym, &sender);
                 }
                 let hints = compile_dry::accumulated::<Hints>(&snapshot, docin);
                 if !hints.is_empty() {
@@ -425,6 +437,10 @@ fn main_loop(
         })
         .on::<DocumentSymbolRequest, _>(|id, params| {
             let uri = url_to_path(params.text_document.uri);
+            // 存储请求ID和URI
+            let mut guard = doc_sym.lock().unwrap();
+            guard.push((id.clone(), uri.clone()));
+            drop(guard);
             if docin.file(&db) != &uri {
                 docin.set_file(&mut db).to(uri.clone());
                 docin.set_action(&mut db).to(ActionType::DocSymbol);
@@ -439,15 +455,12 @@ fn main_loop(
             let sender = connection.sender.clone();
             let snapshot = db.clone();
             let completions = completions.clone();
+            let doc_sym = doc_sym.clone();
             pool.execute(move || {
                 if docin.file(&snapshot) != &uri {
                     let _ = compile_dry(&snapshot, docin);
                 }
-                do_send_completions_and_diags(&snapshot, docin, completions, &sender);
-                let doc_symbols = compile_dry::accumulated::<DocSymbols>(&snapshot, docin);
-                if !doc_symbols.is_empty() {
-                    send_doc_symbols(&sender, id, doc_symbols[0].clone().0);
-                }
+                do_send_completions_and_diags(&snapshot, docin, completions, doc_sym, &sender);
             });
         })
         .on_noti::<DidChangeTextDocument, _>(|params| {
@@ -474,9 +487,10 @@ fn main_loop(
             let snapshot = db.clone();
             let sender = connection.sender.clone();
             let completions = completions.clone();
+            let doc_sym = doc_sym.clone();
             pool.execute(move || {
                 let _ = compile_dry(&snapshot, docin);
-                do_send_completions_and_diags(&snapshot, docin, completions, &sender);
+                do_send_completions_and_diags(&snapshot, docin, completions, doc_sym, &sender);
             });
         })
         .on_noti::<DidOpenTextDocument, _>(|params| {
@@ -517,6 +531,7 @@ fn do_send_completions_and_diags(
     snapshot: &crate::Database,
     docin: MemDocsInput,
     completions: Arc<Mutex<Option<RequestId>>>,
+    doc_sym: Arc<Mutex<Vec<(RequestId, String)>>>,
     sender: &crossbeam_channel::Sender<Message>,
 ) {
     let comps = compile_dry::accumulated::<Completions>(snapshot, docin);
@@ -530,6 +545,33 @@ fn do_send_completions_and_diags(
     }
     *guard = None;
     drop(guard);
+
+    let current_file = docin.file(snapshot);
+    let doc_symbols = compile_dry::accumulated::<DocSymbols>(snapshot, docin);
+    // 检查是否有文档符号请求
+    let mut guard = doc_sym.lock().unwrap();
+    if !guard.is_empty() {
+        // 创建一个新的向量来存储未处理的请求
+        let mut remaining_requests = Vec::new();
+
+        for (id, uri) in guard.drain(..) {
+            // 检查URI是否匹配
+            if current_file == &uri {
+                // URI匹配，获取文档符号
+                if !doc_symbols.is_empty() {
+                    send_doc_symbols(sender, id.clone(), doc_symbols[0].clone().0);
+                }
+            } else {
+                // URI不匹配，保留请求以便后续处理
+                remaining_requests.push((id, uri));
+            }
+        }
+
+        // 将未处理的请求放回向量
+        *guard = remaining_requests;
+    }
+    drop(guard);
+
     let diags = compile_dry::accumulated::<Diagnostics>(snapshot, docin);
     debug!("diags: {:#?}", diags);
     let mut m = FxHashMap::<String, Vec<Diagnostic>>::default();

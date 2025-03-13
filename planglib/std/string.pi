@@ -117,7 +117,7 @@ impl StringExt for string {
             return string {
                 _len: 0,
                 _byte_len: 0,
-                data: int_to_ptr(0)
+                data: gc::int_to_ptr(0)
             };
         }else {
             return string {
