@@ -443,7 +443,7 @@ pub struct StructDefNode {
     pub id: Box<VarNode>,
 
     /// fields is all fields of a structure, the order follows the code order from top to bottom
-    pub fields: Vec<StructField>,
+    pub fields: Vec<ParsedField>,
 
     /// generics stands for the generics arguments in the structure
     pub generics: Option<Box<GenericDefNode>>,
@@ -451,6 +451,13 @@ pub struct StructDefNode {
     /// modifier indicates whether the trait is decorated by a keyword `pub`
     pub modifier: Option<(TokenType, Range)>,
 }
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum ParsedField {
+    Normal(StructField),
+    Err(Box<NodeEnum>),
+}
+
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct StructField {
     pub id: Box<TypedIdentifierNode>,
@@ -471,7 +478,14 @@ impl PrintTrait for StructDefNode {
         let mut i = self.fields.len();
         for field in &self.fields {
             i -= 1;
-            field.id.print(tabs + 1, i == 0, line.clone());
+            match field {
+                ParsedField::Normal(field) => {
+                    field.id.print(tabs + 1, i == 0, line.clone());
+                }
+                ParsedField::Err(err_node) => {
+                    err_node.print(tabs + 1, i == 0, line.clone());
+                }
+            }
         }
     }
 }
@@ -488,13 +502,20 @@ impl Node for StructDefNode {
             generics.emit_highlight(ctx);
         }
         for field in self.fields.iter() {
-            ctx.push_semantic_token(field.id.id.range, SemanticTokenType::PROPERTY, 0);
-            field.id.typenode.emit_highlight(ctx);
-            if !field.has_semi {
-                ctx.add_diag(field.id.range.new_err(ErrorCode::COMPLETION));
-            }
-            if let Some(doc) = &field.id.doc {
-                ctx.push_semantic_token(doc.range, SemanticTokenType::COMMENT, 0);
+            match field {
+                ParsedField::Normal(field) => {
+                    ctx.push_semantic_token(field.id.id.range, SemanticTokenType::PROPERTY, 0);
+                    field.id.typenode.emit_highlight(ctx);
+                    if !field.has_semi {
+                        ctx.add_diag(field.id.range.new_err(ErrorCode::COMPLETION));
+                    }
+                    if let Some(doc) = &field.id.doc {
+                        ctx.push_semantic_token(doc.range, SemanticTokenType::COMMENT, 0);
+                    }
+                }
+                ParsedField::Err(_) => {
+                    // 对于错误节点，不需要进行高亮处理
+                }
             }
         }
         Ok(Default::default())
@@ -542,16 +563,23 @@ impl StructDefNode {
     ) -> Result<(), PLDiag> {
         let pltype = ctx.get_type(&self.id.name, self.id.range)?;
         for f in self.fields.iter() {
-            let id = &f.id;
-            // 自引用检查
-            if let TypeNodeEnum::Basic(b) = &*id.typenode {
-                if let Some(id) = &b.id {
-                    if id.namespace.is_empty() {
-                        // 只有本包内类型可能自引用
-                        let v = ctx.self_ref_map.entry(id.id.name).or_default();
-                        v.insert((self.id.name, self.id.range()));
-                        ctx.check_self_ref(&id.id.name, id.range)?;
+            match f {
+                ParsedField::Normal(field) => {
+                    let id = &field.id;
+                    // 自引用检查
+                    if let TypeNodeEnum::Basic(b) = &*id.typenode {
+                        if let Some(id) = &b.id {
+                            if id.namespace.is_empty() {
+                                // 只有本包内类型可能自引用
+                                let v = ctx.self_ref_map.entry(id.id.name).or_default();
+                                v.insert((self.id.name, self.id.range()));
+                                ctx.check_self_ref(&id.id.name, id.range)?;
+                            }
+                        }
                     }
+                }
+                ParsedField::Err(e) => {
+                    _ = e.clone().emit(ctx, builder);
                 }
             }
         }
@@ -566,32 +594,40 @@ impl StructDefNode {
             let clone_map = ctx.plmod.types.clone();
             let mut is_atomic = true;
             for (i, field) in self.fields.iter().enumerate() {
-                if !field.has_semi {
-                    ctx.add_diag(field.id.range.new_err(ErrorCode::COMPLETION));
+                match field {
+                    ParsedField::Normal(field) => {
+                        if !field.has_semi {
+                            ctx.add_diag(field.id.range.new_err(ErrorCode::COMPLETION));
+                        }
+                        let id = field.id.id.clone();
+                        let f = Field {
+                            index: i as u32 + 1,
+                            typenode: field.id.typenode.clone(),
+                            name: id.name,
+                            range: field.id.id.range,
+                            modifier: field.modifier,
+                        };
+                        let tpre =
+                            field
+                                .id
+                                .typenode
+                                .get_type(ctx, builder, self.generics.is_none());
+                        if tpre.is_err() {
+                            continue;
+                        }
+                        let tp = tpre.unwrap();
+                        if !tp.borrow().is_atomic() {
+                            is_atomic = false;
+                        }
+                        field_pltps.push(tp.clone());
+                        ctx.set_field_refs(pltype.typ.clone(), &f, f.range);
+                        ctx.send_if_go_to_def(f.range, f.range, ctx.plmod.path);
+                        fields.insert(id.name.to_string().into(), f.clone());
+                    }
+                    ParsedField::Err(_) => {
+                        // 对于错误节点，跳过字段处理
+                    }
                 }
-                let id = field.id.id.clone();
-                let f = Field {
-                    index: i as u32 + 1,
-                    typenode: field.id.typenode.clone(),
-                    name: id.name,
-                    range: field.id.id.range,
-                    modifier: field.modifier,
-                };
-                let tpre = field
-                    .id
-                    .typenode
-                    .get_type(ctx, builder, self.generics.is_none());
-                if tpre.is_err() {
-                    continue;
-                }
-                let tp = tpre.unwrap();
-                if !tp.borrow().is_atomic() {
-                    is_atomic = false;
-                }
-                field_pltps.push(tp.clone());
-                ctx.set_field_refs(pltype.typ.clone(), &f, f.range);
-                ctx.send_if_go_to_def(f.range, f.range, ctx.plmod.path);
-                fields.insert(id.name.to_string().into(), f.clone());
             }
             ctx.plmod.types = clone_map;
             if let PLType::Struct(st) = &mut *pltype.borrow_mut() {
