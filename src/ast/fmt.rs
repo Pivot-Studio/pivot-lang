@@ -26,8 +26,8 @@ use super::{
         tuple::{TupleInitNode, TupleTypeNode},
         types::{
             ArrayInitNode, ArrayTypeNameNode, ClosureTypeNode, GenericDefNode, GenericParamNode,
-            PointerTypeNode, StructDefNode, StructInitFieldNode, StructInitNode, TypeNameNode,
-            TypedIdentifierNode,
+            ParsedField, PointerTypeNode, StructDefNode, StructInitFieldNode, StructInitNode,
+            TypeNameNode, TypedIdentifierNode,
         },
         union::UnionDefNode,
         FmtTrait, NodeEnum, TypeNodeEnum,
@@ -213,17 +213,27 @@ impl FmtBuilder {
         for field in &node.fields {
             self.enter();
             self.prefix();
-            if let Some((modi, _)) = field.modifier {
-                self.token(modi.get_str());
-                self.space();
-            }
-            self.token(field.id.id.name.as_str());
-            self.colon();
-            self.space();
-            field.id.typenode.format(self);
-            self.semicolon();
-            if let Some(doc) = &field.id.doc {
-                doc.format(self);
+            match field {
+                ParsedField::Normal(field) => {
+                    if let Some((modi, _)) = field.modifier {
+                        self.token(modi.get_str());
+                        self.space();
+                    }
+                    self.token(field.id.id.name.as_str());
+                    self.colon();
+                    self.space();
+                    field.id.typenode.format(self);
+                    self.semicolon();
+                    if let Some(doc) = &field.id.doc {
+                        doc.format(self);
+                    }
+                }
+                ParsedField::Err(err_node) => {
+                    if let NodeEnum::Err(err) = &**err_node {
+                        self.token(&err.src);
+                    }
+                    self.semicolon();
+                }
             }
         }
         self.enter();

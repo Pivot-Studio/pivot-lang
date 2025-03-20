@@ -77,6 +77,7 @@ define_diag!(
     ASSIGN_CONST = "try assigning to a const value",
     REF_CONST = "try referencing to a const value",
     INVALID_STRUCT_DEF = "invalid struct definition",
+    INVALID_STRUCT_FIELD = "invalid struct field definition",
     UNDEFINED_TYPE = "undefined type",
     UNKNOWN_TYPE = "unknown type",
     TYPE_CANNOT_BE_FULLY_INFERRED = "type cannot be fully inferred",

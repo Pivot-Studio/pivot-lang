@@ -112,6 +112,28 @@
     PLDiag {
         raw: PLDiagRaw {
             code: Err(
+                INVALID_STRUCT_FIELD,
+            ),
+            help: None,
+            labels: [],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 186,
+                    column: 5,
+                    offset: 2083,
+                },
+                end: Pos {
+                    line: 187,
+                    column: 1,
+                    offset: 2085,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
                 TYPE_CANNOT_BE_FULLY_INFERRED,
             ),
             help: None,

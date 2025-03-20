@@ -181,3 +181,7 @@ fn test_if_let_diag() void {
     let b = d impl TestTrait;
     return;
 }
+
+struct test_invalid_field {
+    f
+}
