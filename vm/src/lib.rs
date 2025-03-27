@@ -42,6 +42,17 @@ fn pl_panic() {
 }
 
 #[is_runtime]
+fn pl_index_out_of_bounds(index: i64, len: i64) {
+    println!(
+        "index out of bounds occured! index: {}, len: {}",
+        index, len
+    );
+    let bt = Backtrace::new();
+    println!("{:?}", bt);
+    exit(1);
+}
+
+#[is_runtime]
 fn __cast_panic() {
     println!("invalid cast occured!");
     let bt = Backtrace::new();

@@ -39,6 +39,7 @@ pub trait IRBuilder<'a, 'ctx> {
     fn get_global_var_handle(&self, name: &str) -> Option<ValueHandle>;
     fn new_subscope(&self, start: Pos);
     fn get_sp_handle(&self) -> ValueHandle;
+    fn is_debug(&self) -> bool;
     fn add_global(
         &self,
         name: &str,
@@ -329,6 +330,8 @@ pub trait IRBuilder<'a, 'ctx> {
     fn is_main(&self, f: ValueHandle) -> bool;
     fn await_task(&self, ctx: &mut Ctx<'a>, task: ValueHandle) -> ValueHandle;
     fn await_ret(&self, ctx: &mut Ctx<'a>, ret: ValueHandle);
+    fn build_global_string_ptr(&self, s: &str, name: &str) -> ValueHandle;
+    fn build_unreachable(&self);
 }
 
 /// ValueHandle is an index used to separate the low level generatted code inside [BuilderEnum] from the respective high level ast node

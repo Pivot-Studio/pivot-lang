@@ -1751,6 +1751,20 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         let f = self.get_llvm_value(f).unwrap().into_function_value();
         f.get_name().to_str().unwrap() == "main"
     }
+
+    fn build_global_string_ptr(&self, s: &str, name: &str) -> ValueHandle {
+        let s = self.builder.build_global_string_ptr(s, name).unwrap();
+        self.get_llvm_value_handle(&s.as_any_value_enum())
+    }
+
+    fn build_unreachable(&self) {
+        _ = self.builder.build_unreachable();
+    }
+
+    fn is_debug(&self) -> bool {
+        self.debug
+    }
+
     fn tag_generator_ctx_as_root(&self, f: ValueHandle, ctx: &mut Ctx<'a>) {
         let f = self.get_llvm_value(f).unwrap().into_function_value();
         let allocab = f.get_first_basic_block().unwrap();
@@ -2371,7 +2385,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         if *self.optimized.borrow() {
             return;
         }
-        if !self.debug {
+        if !self.debug && self.optlevel as u32 >= 1 {
             self.module.strip_debug_info();
         }
         self.module.verify().unwrap_or_else(|e| {
