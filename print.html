@@ -1400,104 +1400,23 @@ pub trait RangeTrait {
         let merge_block = builder.append_basic_block(ctx.function.unwrap(), &quot;if.after&quot;);
         builder.build_unconditional_branch(cond_block);
         ctx.position_at_end(cond_block, builder);
-        let mut gen_def = None;
-        let mut skip_body = false;
         let cond_range = self.cond.range();
 
-        if let NodeEnum::Def(def) = &amp;*self.cond {
-            // check if it is a `let ... = ... as ...`
-            if let Some(e) = &amp;def.value_expression {
-                if let NodeEnum::AsNode(a) = &amp;**e {
-                    if let Some((_, r)) = &amp;a.tail {
-                        // tail not allowed in `if let .. as ..`
-                        ctx.add_diag(
-                            r.new_err(ErrorCode::IF_LET_DOES_NOT_EXPECT_TAIL)
-                                .add_help(&quot;remove the tailling symbol&quot;)
-                                .clone(),
-                        );
-                    }
-                    let mut transformed_is = NodeEnum::IsNode(IsNode {
-                        expr: a.expr.clone(),
-                        target_type: a.target_type.clone(),
-                        range: a.range(),
-                    });
-                    _ = build_cond(
-                        &amp;mut transformed_is,
-                        ctx,
-                        builder,
-                        cond_range,
-                        then_block,
-                        else_block,
-                    );
-                    ctx.position_at_end(then_block, builder);
-                    let transformed_as = NodeEnum::AsNode(AsNode {
-                        expr: a.expr.clone(),
-                        target_type: a.target_type.clone(),
-                        range: a.range(),
-                        tail: Some((TokenType::NOT, Default::default())),
-                    });
-                    let mut def = def.clone();
-                    def.value_expression = Some(Box::new(transformed_as));
-                    gen_def = Some(def);
-                } else if let NodeEnum::ImplCastNode(a) = &amp;**e {
-                    if let Some((_, r)) = &amp;a.tail {
-                        // tail not allowed in `if let .. impl ..`
-                        ctx.add_diag(
-                            r.new_err(ErrorCode::IF_LET_DOES_NOT_EXPECT_TAIL)
-                                .add_help(&quot;remove the tailling symbol&quot;)
-                                .clone(),
-                        );
-                    }
-                    let mut transformed_is = NodeEnum::ImplCastNode(ImplCastNode {
-                        expr: a.expr.clone(),
-                        target_type: a.target_type.clone(),
-                        range: a.range(),
-                        tail: Some((TokenType::QUESTION, Default::default())),
-                    });
-                    let re = build_cond(
-                        &amp;mut transformed_is,
-                        ctx,
-                        builder,
-                        cond_range,
-                        then_block,
-                        else_block,
-                    );
-                    if let Ok(NodeOutput {
-                        compile_time_result: CompileTimeResult::ConstBool(false),
-                        ..
-                    }) = re
-                    {
-                        skip_body = true;
-                    }
-                    ctx.position_at_end(then_block, builder);
-                    let transformed_as = NodeEnum::ImplCastNode(ImplCastNode {
-                        expr: a.expr.clone(),
-                        target_type: a.target_type.clone(),
-                        range: a.range(),
-                        tail: Some((TokenType::NOT, Default::default())),
-                    });
-                    let mut def = def.clone();
-                    def.value_expression = Some(Box::new(transformed_as));
-                    gen_def = Some(def);
-                }
-            }
-            if gen_def.is_none() {
-                def.range()
-                    .new_err(ErrorCode::EXPECT_IF_LET_AS)
-                    .add_help(&quot;adding as expression might be a solution&quot;)
-                    .add_to_ctx(ctx);
-            }
-        } else {
-            let cond = &amp;mut *self.cond;
-            _ = build_cond(cond, ctx, builder, cond_range, then_block, else_block);
-        }
+        let (gen_def, skip_body) = cond_pre_process(
+            &amp;mut self.cond,
+            ctx,
+            builder,
+            then_block,
+            else_block,
+            cond_range,
+        );
 
         // emit the else logic into the then block
         ctx.position_at_end(then_block, builder);
         let mut then_terminator = TerminatorEnum::None;
         // emit the code inside a child context because it belongs to a sub-block
         let mut child = ctx.new_child(self.then.range().start, builder);
-        if !skip_body {
+        if !skip_body || matches!(builder, BuilderEnum::NoOp(_)) {
             if let Some(mut def) = gen_def {
                 def.emit(&amp;mut child, builder)?;
             }
