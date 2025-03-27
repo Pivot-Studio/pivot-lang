@@ -1,0 +1,4 @@
+entry = "main.pi"
+project = "arr_bounds"
+
+assert_index_out_of_bounds = true

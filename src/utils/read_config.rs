@@ -84,6 +84,10 @@ pub struct Config {
     /// and it's decided by the position of kagari.toml file
     #[serde(skip)]
     pub root: String,
+
+    /// Assert Index Out Of Bounds, default is false
+    #[serde(default)]
+    pub assert_index_out_of_bounds: bool,
 }
 
 /// ConfigWrapper wraps a config, which represents all configuration of an entry node of a program.
