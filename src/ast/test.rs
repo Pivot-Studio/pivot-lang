@@ -653,6 +653,58 @@ fn test_tail_call_opt() {
     drop(l);
 }
 
+#[test]
+fn test_assert_index_out_of_bounds() {
+    let l = crate::utils::plc_new::tests::TEST_COMPILE_MUTEX
+        .lock()
+        .unwrap();
+    set_test_asset();
+    let out = "testout3";
+    let exe = PathBuf::from(out);
+    #[cfg(target_os = "windows")]
+    let exe = exe.with_extension("exe");
+    _ = remove_file(&exe);
+    use std::{path::PathBuf, process::Command};
+
+    use crate::ast::compiler::{compile, Options};
+
+    let docs = MemDocs::default();
+    let db = Database::default();
+    let input = MemDocsInput::new(
+        &db,
+        Arc::new(Mutex::new(docs)),
+        "test/arr_bounds/main.pi".to_string(),
+        Default::default(),
+        ActionType::Compile,
+        None,
+        None,
+    );
+    compile(
+        &db,
+        input,
+        out.to_string(),
+        Options {
+            optimization: crate::ast::compiler::HashOptimizationLevel::Less,
+            genir: true,
+            printast: false,
+            flow: false,
+            fmt: false,
+            jit: false,
+            debug: false,
+            ..Default::default()
+        },
+    );
+    let exe = crate::utils::canonicalize(&exe)
+        .unwrap_or_else(|_| panic!("static compiled file not found {:?}", exe));
+    eprintln!("exec: {:?}", exe);
+    let o = Command::new(exe.to_str().unwrap())
+        .output()
+        .expect("failed to execute compiled program");
+    // should trigger index out of bounds, so status should be non-zero
+    assert!(!o.status.success(), "should trigger index out of bounds");
+    drop(l);
+}
+
 #[cfg(test)]
 pub(crate) fn set_test_asset() {
     use std::time::SystemTime;

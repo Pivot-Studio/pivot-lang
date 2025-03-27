@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::sync::Arc;
 
 use super::node_result::NodeResultBuilder;
@@ -5,6 +6,7 @@ use super::*;
 
 use crate::ast::builder::BuilderEnum;
 use crate::ast::builder::IRBuilder;
+use crate::ast::builder::IntPredicate;
 use crate::ast::builder::ValueHandle;
 use crate::ast::ctx::Ctx;
 use crate::ast::ctx::MacroReplaceNode;
@@ -366,6 +368,69 @@ impl Node for ArrayElementNode {
 
             let elemptr: ValueHandle = {
                 let index: &[ValueHandle; 1] = &[index_val];
+
+                // 在debug模式下添加越界检查
+                if ctx.config.assert_index_out_of_bounds {
+                    // 获取数组大小
+                    let size_ptr = builder
+                        .build_struct_gep(arr, 2, "size_ptr", &pltype.borrow(), ctx)
+                        .unwrap();
+                    let size = builder.build_load(
+                        size_ptr,
+                        "arr_size",
+                        &PLType::Primitive(PriType::I64),
+                        ctx,
+                    );
+
+                    // 创建比较：index >= size 或 index < 0
+                    let cmp_ge = builder.build_int_compare(
+                        IntPredicate::SGE,
+                        index_val,
+                        size,
+                        "index_ge_size",
+                    );
+                    let cmp_lt = builder.build_int_compare(
+                        IntPredicate::SLT,
+                        index_val,
+                        builder.int_value(&PriType::I64, 0, true),
+                        "index_lt_zero",
+                    );
+                    let out_of_bounds = builder.build_or(cmp_ge, cmp_lt, "out_of_bounds");
+
+                    // 获取当前函数
+                    let current_func = ctx.function.unwrap();
+                    let error_block = builder.append_basic_block(current_func, "arr_index_error");
+                    let continue_block =
+                        builder.append_basic_block(current_func, "arr_index_continue");
+
+                    builder.build_conditional_branch(out_of_bounds, error_block, continue_block);
+
+                    // 错误处理块
+                    builder.position_at_end_block(error_block);
+
+                    // 获取printf函数
+                    let printf_fn = builder
+                        .get_function("pl_index_out_of_bounds")
+                        .unwrap_or_else(|| {
+                            let ret_type = PLType::Void;
+                            let param_type = PLType::Primitive(PriType::I64);
+                            builder.add_function(
+                                "pl_index_out_of_bounds",
+                                &[param_type.clone(), param_type],
+                                ret_type,
+                                ctx,
+                            )
+                        });
+
+                    // 调用printf输出错误信息
+                    builder.build_call(printf_fn, &[index_val, size], &PLType::Void, ctx, None);
+
+                    builder.build_unreachable();
+
+                    // 继续执行块
+                    builder.position_at_end_block(continue_block);
+                }
+
                 let real_arr: ValueHandle = builder
                     .build_struct_gep(arr, 1, "real_arr", &pltype.borrow(), ctx)
                     .unwrap();

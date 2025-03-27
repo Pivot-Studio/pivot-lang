@@ -631,4 +631,16 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder<'a, 'ctx> {
         0
     }
     fn await_ret(&self, _ctx: &mut Ctx<'a>, _ret: ValueHandle) {}
+
+    fn is_debug(&self) -> bool {
+        false
+    }
+
+    fn build_global_string_ptr(&self, _s: &str, _name: &str) -> ValueHandle {
+        0
+    }
+
+    fn build_unreachable(&self) {
+        // 什么都不做
+    }
 }

@@ -1,6 +1,7 @@
 project = "project1"
 entry = "main.pi"
 
+assert_index_out_of_bounds = true
 
 [deps]
 project2 = { path = "project2" }
