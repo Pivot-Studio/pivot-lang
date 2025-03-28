@@ -95,7 +95,7 @@
             "name": "(lldb) Attach",
             "type": "cppdbg",
             "request": "attach",
-            "program": "out",
+            "program": "/Users/bobli/src/pivot-lang/out",
             "MIMode": "lldb"
         },
         {

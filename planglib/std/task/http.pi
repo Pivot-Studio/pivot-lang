@@ -31,7 +31,14 @@ impl HttpClient {
             data: [u8*1024;],
             len: 0,
         };
+        let u2 = url;
+        u2.append("\n");
+        io::print_s(u2);
         let domain = url.split("://")[1].split("/")[0];
+
+        let s = domain;
+        s.append("\n");
+        io::print_s(s);
 
         sb.add_str("GET / HTTP/1.1\r\n");
         sb.add_str("Host: ");
@@ -42,10 +49,16 @@ impl HttpClient {
         let request = sb.str();
         let bytes = request.bytes();
         let resolver = dns::new_dns_resolver();
+        io::printi64ln(333333);
         let ip = await resolver.resolve_async(domain);
+        io::printi64ln(444444);
         let status = await self.socket.connect_async(ip, 80 as i32);
+        io::printi64ln(11111);
+        io::printi64ln(status as i64);
         // 发送请求
         status = await self.socket.write_async(bytes);
+        io::printi64ln(22222);
+        io::printi64ln(status as i64);
         
         // 使用1k缓冲区读取header
         let response_buf = [u8*1024;];

@@ -100,6 +100,8 @@ fn close_cb(handle:*()) void {
 pub fn uv_buf_init(base:*u8, len:u32) libuv::uv_buf_t;
 
 fn conn_cb(server:*libuv::uv_stream_t, _status:u32) void {
+    io::printi64ln(999999);
+    io::printi64ln(_status as i64);
     let client = libuv::new_uv_tcp_t();
     libuv::uv_tcp_init(GLOBAL_REACTOR.loop, unsafe_cast<libuv::uv_tcp_t>(client));
     libuv::uv_accept(server, unsafe_cast<libuv::uv_stream_t>(client));
@@ -229,6 +231,7 @@ fn async_cb(async_t:*libuv::uv_async_t) void {
                 libuv::uv_tcp_connect(req, ev.handle, &ev.addr, cb);
             }
             DNSResolveEV(ev) => {
+                io::printi64ln(666666);
                 let req = libuv::new_uv_getaddrinfo_t();
                 gc::keep_alive_pinned(req);
                 libuv::set_data_for_handle(req, &ev);
@@ -236,6 +239,8 @@ fn async_cb(async_t:*libuv::uv_async_t) void {
                 let null = gc::int_to_ptr(0);
 
                 let _re = libuv::uv_getaddrinfo(reactor.loop, req, cb, ev.hostname.cstr(), null, unsafe_cast<libuv::addrinfo>(null));
+                io::printi64ln(777777);
+                io::printi64ln(_re as i64);
             }
             _ => {
             }
@@ -469,6 +474,8 @@ fn connect_cb(req:*libuv::uv_connect_t, status:i32) void {
 use std::libc;
 
 fn getaddrinfo_cb(req:*libuv::uv_getaddrinfo_t, status:i32, res:*libuv::addrinfo) void {
+    io::printi64ln(5678);
+    io::printi64ln(status as i64);
     let ev = libuv::get_data_for_handle<libuv::uv_getaddrinfo_t|DNSResolveEV>(req);
     if status < 0 {
         ev.resolve_cb("");

@@ -113,8 +113,9 @@ pub fn test_std() void {
 pub async fn test_nested_async_closure() Task<()> {
     let a = 1;
     let f =async || => {
+        println!("start test 2");
         let f =async || => {
-            
+            println!("start test 3");
             panic::assert(a == 1);
             a = 101110;
             return ();
@@ -128,6 +129,7 @@ pub async fn test_nested_async_closure() Task<()> {
         a = 101111;
         return ();
     };
+    println!("start test 1");
     panic::assert(a == 1);
     await f();
     panic::assert(a == 101111);

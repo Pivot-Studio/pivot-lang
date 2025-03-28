@@ -145,6 +145,8 @@ impl Task<i64> for ReadTask {
                 }
                 if nread<0 {
                     // error
+                    io::printi64ln(1234);
+                    io::printi64ln(nread as i64);
                     self.ready = true;
                     wk();
                     return;

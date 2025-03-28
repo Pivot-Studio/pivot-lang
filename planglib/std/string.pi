@@ -113,7 +113,7 @@ impl StringExt for string {
         }
 
         if byte_len == 0 && len != 0 {
-            pl_panic();
+            // pl_panic();
             return string {
                 _len: 0,
                 _byte_len: 0,
