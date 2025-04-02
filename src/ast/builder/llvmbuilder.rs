@@ -594,7 +594,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 self.builder
                     .build_memset(
                         casted_result1,
-                        8,
+                        1,
                         self.context.i8_type().const_zero(),
                         arr_size,
                     )
@@ -3553,7 +3553,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         } else {
             to
         };
-        self.builder.build_memcpy(to, 8, from, 8, arg_len).unwrap();
+        self.builder.build_memcpy(to, 1, from, 1, arg_len).unwrap();
     }
     fn build_bit_not(&self, v: ValueHandle) -> ValueHandle {
         let v = self.get_llvm_value(v).unwrap();
