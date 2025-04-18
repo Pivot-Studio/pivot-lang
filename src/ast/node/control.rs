@@ -327,25 +327,22 @@ impl Node for WhileNode {
         // builder.place_safepoint(ctx);
         // let terminator = self.body.emit_child(ctx, builder)?.get_term();
 
-        let mut terminator = TerminatorEnum::None;
         // emit the code inside a child context because it belongs to a sub-block
         let mut child = ctx.new_child(self.body.range().start, builder);
         if !skip_body || matches!(builder, BuilderEnum::NoOp(_)) {
             if let Some(mut def) = gen_def {
                 def.emit(&mut child, builder)?;
             }
-            terminator = self.body.emit(&mut child, builder)?.get_term();
+            let terminator = self.body.emit(&mut child, builder)?.get_term();
+            if !terminator.is_return() {
+                builder.build_unconditional_branch(cond_block);
+            }
         }
         builder.build_dbg_location(start);
-        builder.build_unconditional_branch(cond_block);
         ctx.position_at_end(after_block, builder);
         ctx.emit_comment_highlight(&self.comments[0]);
         NodeOutput::default()
-            .with_term(if terminator.is_return() {
-                terminator
-            } else {
-                TerminatorEnum::None
-            })
+            .with_term(TerminatorEnum::None)
             .to_result()
     }
 }
@@ -434,16 +431,12 @@ impl Node for ForNode {
         builder.build_unconditional_branch(cond_block);
         ctx.position_at_end(body_block, builder);
         builder.place_safepoint(ctx);
-        let terminator = self.body.emit_child(ctx, builder)?.get_term();
+        _ = self.body.emit_child(ctx, builder);
         builder.build_unconditional_branch(opt_block);
         ctx.position_at_end(after_block, builder);
         ctx.emit_comment_highlight(&self.comments[0]);
         NodeOutput::default()
-            .with_term(if terminator == TerminatorEnum::Return {
-                terminator
-            } else {
-                TerminatorEnum::None
-            })
+            .with_term(TerminatorEnum::None)
             .to_result()
     }
 }

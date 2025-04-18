@@ -1012,7 +1012,7 @@ impl FuncDefNode {
                         .emit(child, builder)?
                         .get_term())
                 })?;
-                if !terminator.is_return() && self.generator_ty.is_none() {
+                if !terminator.is_return() && !self.generator_ty.is_iter() {
                     return Err(child.add_diag(
                         self.range
                             .end

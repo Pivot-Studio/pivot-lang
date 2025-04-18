@@ -185,3 +185,7 @@ fn test_if_let_diag() void {
 struct test_invalid_field {
     f
 }
+
+async fn test_no_return() Task<()> {
+    return 1;
+}

@@ -260,6 +260,13 @@ pub async fn test_dns() Task<()> {
 }
 
 
+pub async fn test_async_loop() Task<()> {
+    while true {
+        return ();
+    }
+    return ();
+}
+
 pub async fn test_udp() Task<()> {
     let udp_t = udp::new_udp_socket();
     udp_t.bind("127.0.0.1", 8080 as i32);

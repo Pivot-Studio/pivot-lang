@@ -80,6 +80,7 @@ async fn main() Task<()> {
     await std_test::test_nested_async_closure_in_normal_f2();
     await std_test::test_delay();
     await std_test::test_http();
+    await std_test::test_async_loop();
     // await std_test::test_dns();
 
     return ();

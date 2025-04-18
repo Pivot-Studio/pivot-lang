@@ -323,6 +323,75 @@
                         (
                             u!("expected type {}"),
                             [
+                                u!("()"),
+                            ],
+                        ),
+                    ),
+                    range: Range {
+                        start: Pos {
+                            line: 190,
+                            column: 5,
+                            offset: 2129,
+                        },
+                        end: Pos {
+                            line: 190,
+                            column: 5,
+                            offset: 2129,
+                        },
+                    },
+                },
+                PLLabel {
+                    file: u!(""),
+                    txt: Some(
+                        (
+                            u!("found type {}"),
+                            [
+                                u!("i64"),
+                            ],
+                        ),
+                    ),
+                    range: Range {
+                        start: Pos {
+                            line: 190,
+                            column: 12,
+                            offset: 2136,
+                        },
+                        end: Pos {
+                            line: 190,
+                            column: 12,
+                            offset: 2136,
+                        },
+                    },
+                },
+            ],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 190,
+                    column: 5,
+                    offset: 2129,
+                },
+                end: Pos {
+                    line: 190,
+                    column: 14,
+                    offset: 2138,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
+                RETURN_TYPE_MISMATCH,
+            ),
+            help: None,
+            labels: [
+                PLLabel {
+                    file: u!(""),
+                    txt: Some(
+                        (
+                            u!("expected type {}"),
+                            [
                                 u!("i64"),
                             ],
                         ),
@@ -397,6 +466,50 @@
                     line: 68,
                     column: 2,
                     offset: 723,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
+                FUNCTION_MUST_HAVE_RETURN,
+            ),
+            help: None,
+            labels: [],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 150,
+                    column: 2,
+                    offset: 1597,
+                },
+                end: Pos {
+                    line: 150,
+                    column: 2,
+                    offset: 1597,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
+                FUNCTION_MUST_HAVE_RETURN,
+            ),
+            help: None,
+            labels: [],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 191,
+                    column: 2,
+                    offset: 2140,
+                },
+                end: Pos {
+                    line: 191,
+                    column: 2,
+                    offset: 2140,
                 },
             },
         },
