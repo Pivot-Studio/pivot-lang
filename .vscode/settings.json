@@ -9,6 +9,7 @@
         "**/.hg/store/**": true,
         "**/target/**": true,
         "**/book/book/**": true,
+        "**/target": true
     },
     "lldb.displayFormat": "auto",
     "lldb.showDisassembly": "auto",

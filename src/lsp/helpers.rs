@@ -1,8 +1,17 @@
 use crossbeam_channel::Sender;
 use lsp_server::{Message, RequestId};
-use lsp_types::{Diagnostic, DocumentSymbol, InlayHint, SemanticTokens, SemanticTokensDelta, Url};
+use lsp_types::{CodeAction, Diagnostic, DocumentSymbol, InlayHint, SemanticTokens, SemanticTokensDelta, Url};
 
 use crate::utils::url_from_path;
+
+pub fn send_code_action(sender: &Sender<Message>, id: RequestId, action: &[CodeAction]) {
+    sender
+        .send(Message::Response(lsp_server::Response::new_ok(
+            id,
+            Some(serde_json::to_value(action).unwrap()),
+        )))
+        .unwrap();
+}
 
 pub fn send_diagnostics(sender: &Sender<Message>, uri: String, diagnostics: Vec<Diagnostic>) {
     sender

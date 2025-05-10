@@ -1,18 +1,19 @@
 use lsp_types::Position;
+use serde::{Deserialize, Serialize};
 
 use super::diag::{ErrorCode, PLDiag, WarnCode};
 use crate::nomparser::Span;
 
 /// # Pos
 /// source code position in file
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Default, Hash, PartialOrd)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Default, Hash, PartialOrd, Serialize, Deserialize)]
 pub struct Pos {
     pub line: usize,   // 1based
     pub column: usize, // 1based
     pub offset: usize, // 0based
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Default, PartialOrd, Hash)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Default, PartialOrd, Hash, Serialize, Deserialize)]
 pub struct Range {
     pub start: Pos,
     pub end: Pos,

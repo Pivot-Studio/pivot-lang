@@ -8,15 +8,9 @@ use std::{
 
 use log::debug;
 use lsp_types::{
-    notification::{DidChangeTextDocument, DidCloseTextDocument, DidOpenTextDocument},
-    request::{
-        CodeLensRequest, Completion, DocumentSymbolRequest, Formatting, GotoDefinition,
-        HoverRequest, InlayHintRequest, References, Rename, SemanticTokensFullDeltaRequest,
-        SemanticTokensFullRequest, SignatureHelpRequest,
-    },
-    CodeLensOptions, Diagnostic, Hover, HoverContents, InitializeParams, MarkedString, OneOf,
-    SemanticTokens, SemanticTokensDelta, SemanticTokensOptions, ServerCapabilities, SignatureHelp,
-    TextDocumentSyncKind, TextDocumentSyncOptions,
+    notification::{DidChangeTextDocument, DidCloseTextDocument, DidOpenTextDocument}, request::{
+        CodeActionRequest, CodeLensRequest, Completion, DocumentSymbolRequest, Formatting, GotoDefinition, HoverRequest, InlayHintRequest, References, Rename, SemanticTokensFullDeltaRequest, SemanticTokensFullRequest, SignatureHelpRequest
+    }, CodeAction, CodeActionKind, CodeActionOptions, CodeLensOptions, Diagnostic, Hover, HoverContents, InitializeParams, MarkedString, OneOf, SemanticTokens, SemanticTokensDelta, SemanticTokensOptions, ServerCapabilities, SignatureHelp, TextDocumentSyncKind, TextDocumentSyncOptions, TextEdit, WorkspaceEdit
 };
 
 use lsp_server::{Connection, Message, RequestId};
@@ -42,9 +36,7 @@ use crate::{
         config::SEMANTIC_LEGEND,
         dispatcher::Dispatcher,
         helpers::{
-            send_code_lens, send_completions, send_diagnostics, send_doc_symbols, send_format,
-            send_goto_def, send_hints, send_hover, send_references, send_rename,
-            send_semantic_tokens, send_semantic_tokens_edit, send_signature_help, url_to_path,
+            send_code_action, send_code_lens, send_completions, send_diagnostics, send_doc_symbols, send_format, send_goto_def, send_hints, send_hover, send_references, send_rename, send_semantic_tokens, send_semantic_tokens_edit, send_signature_help, url_to_path
         },
         mem_docs::MemDocsInput,
         semantic_tokens::diff_tokens,
@@ -102,6 +94,13 @@ pub fn start_lsp() -> Result<(), Box<dyn Error + Sync + Send>> {
         code_lens_provider: Some(CodeLensOptions {
             resolve_provider: None,
         }),
+        code_action_provider: Some(lsp_types::CodeActionProviderCapability::Options(
+            CodeActionOptions {
+                code_action_kinds: Some(vec![CodeActionKind::QUICKFIX]),
+                work_done_progress_options: Default::default(),
+                resolve_provider: None,
+            },
+        )),
         ..Default::default()
     })
     .unwrap();
@@ -368,6 +367,40 @@ fn main_loop(
             pool.execute(move || {
                 send_rename(&sender, id, rf);
             });
+        })
+        .on::<CodeActionRequest, _>(|id, params| {
+            let diags = params.context.diagnostics;
+            if !diags.is_empty() {
+                let mut data = vec![];
+                for d in diags {
+                    data.push((d.data.clone(), d.clone())); // they are all Vec<(Range, String)>
+                }
+                let mut edits = vec![];
+                for (d,diag) in data {
+                    if let Some(d) = d {
+                        // deserialize the data
+                        let d: Vec<(crate::ast::range::Range, String)> = serde_json::from_value(d).unwrap();
+                        for (r, s) in d {
+                            edits.push((r, s, diag.clone()));
+                        }
+                    }
+                }
+                let actions = edits.iter().map(|(r,t,d)| {
+                    let mut wd = WorkspaceEdit{ changes: Some(HashMap::new()), document_changes: None, change_annotations: None };
+                    wd.changes.as_mut().unwrap().insert(params.text_document.uri.clone(), vec![TextEdit::new(r.to_diag_range(), t.to_owned())]);
+                    CodeAction {
+                        title: "quick fix".to_string(),
+                        kind: Some(CodeActionKind::QUICKFIX),
+                        edit: Some(wd),
+                        diagnostics: Some(vec![d.clone()]),
+                        is_preferred: Some(true),
+                        ..Default::default()
+                    }
+                }).collect::<Vec<_>>();
+                let sender = connection.sender.clone();
+                send_code_action(&sender, id, &actions);
+
+            }
         })
         .on::<SignatureHelpRequest, _>(|id, params| {
             let doc = params.text_document_position_params;

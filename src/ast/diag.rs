@@ -170,10 +170,8 @@ define_diag!(
     THE_TARGET_TRAIT_CANNOT_BE_INSTANTIATED = "the target trait type cannot be instantiated",
     MACRO_EXPAND_DEPTH_TOO_DEEP = "macro expand depth too deep",
     ILLEGAL_GENERIC_PARAM = "illegal generic parameter",
-    ILLEGAL_MATCH_VALUE =
-        "illegal match value, match vale can only be of type `Union` or `Struct` or `Primitive`",
-    ILLEGAL_MATCH_ARM_CONDITION =
-        "illegal match arm condition: this match condition will never be met",
+    ILLEGAL_MATCH_VALUE = "illegal match value, match vale can only be of type `Union` or `Struct` or `Primitive`",
+    ILLEGAL_MATCH_ARM_CONDITION = "illegal match arm condition: this match condition will never be met",
     SYNTAX_ERROR_REDUNDENT_SYMBOL = "syntax error: redundant symbol",
     SYNTAX_ERROR_IF_CONDITION = "syntax error: if condition",
     SYNTAX_ERROR_WHILE_CONDITION = "syntax error: while condition",
@@ -187,6 +185,7 @@ define_diag!(
     EXPECT_IF_LET_AS = "`if/while let .. as ...` is expected here",
     EXPECT_GENERIC_TYPE = "expect generic type",
     EXPECT_TAILING_SYMBOL = "expect tailing symbol `!` or `?`",
+    NON_EXHAUSTIVE_PATTERNS = "Non-exhaustive match pattern",
 );
 
 define_diag! {
@@ -217,7 +216,7 @@ impl Display for DiagCode {
     }
 }
 
-use lsp_types::{Diagnostic, DiagnosticSeverity, DiagnosticTag};
+use lsp_types::{Diagnostic, DiagnosticSeverity, DiagnosticTag, TextEdit};
 
 use crate::{lsp::mem_docs::MemDocsInput, utils::url_from_path, Db};
 
@@ -241,6 +240,7 @@ pub struct PLDiagRaw {
     help: Option<String>,
     pub labels: Vec<PLLabel>,
     pub source: Option<String>,
+    edits: Vec<(Range, String)>,
 }
 /// # PLDiag
 /// Diagnostic for pivot-lang
@@ -364,22 +364,26 @@ impl PLDiag {
     }
     pub fn get_diagnostic(&self, p: &str, diags: &mut FxHashMap<String, Vec<Diagnostic>>) {
         let mut d = match self.raw.code {
-            DiagCode::Err(code) => Diagnostic::new_with_code_number(
-                self.raw.range.to_diag_range(),
-                DiagnosticSeverity::ERROR,
-                code as i32,
-                Some(PL_DIAG_SOURCE.to_string()),
-                format!(
-                    "{} {}",
-                    ERROR_MSG[&code],
-                    &self
-                        .raw
-                        .help
-                        .clone()
-                        .map(|h| format!("({})", h))
-                        .unwrap_or_default()
-                ),
-            ),
+            DiagCode::Err(code) => {
+                let mut d = Diagnostic::new_with_code_number(
+                    self.raw.range.to_diag_range(),
+                    DiagnosticSeverity::ERROR,
+                    code as i32,
+                    Some(PL_DIAG_SOURCE.to_string()),
+                    format!(
+                        "{} {}",
+                        ERROR_MSG[&code],
+                        &self
+                            .raw
+                            .help
+                            .clone()
+                            .map(|h| format!("({})", h))
+                            .unwrap_or_default()
+                    ),
+                );
+                d.data = Some(serde_json::json!(self.raw.edits.clone()));
+                d
+            },
             DiagCode::Warn(code) => {
                 let mut warn = Diagnostic::new_with_code_number(
                     self.raw.range.to_diag_range(),
@@ -450,6 +454,10 @@ impl PLDiag {
     }
     pub fn add_help(&mut self, help: &str) -> &mut Self {
         self.raw.help = Some(help.to_string());
+        self
+    }
+    pub fn add_edit(&mut self, range: Range, text: String) -> &mut Self {
+        self.raw.edits.push((range, text));
         self
     }
     pub fn add_to_ctx(&self, ctx: &Ctx) -> PLDiag {
@@ -585,4 +593,8 @@ pub(crate) fn print_diags(
             }
         }
     }
+}
+
+impl ErrorCode {
+    // 删除之前添加的方法，保持原有的宏实现
 }

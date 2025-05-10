@@ -191,6 +191,16 @@ pub enum Num {
     Char(char),
 }
 
+impl ToString for Num {
+    fn to_string(&self) -> String {
+        match self {
+            Num::Int(i) => i.to_string(),
+            Num::Float(i) => i.to_string(),
+            Num::Char(i) => i.to_string(),
+        }
+    }
+}
+
 impl Eq for Num {
     // FIXME: NaN https://stackoverflow.com/questions/39638363/how-can-i-use-a-hashmap-with-f64-as-key-in-rust
 }
