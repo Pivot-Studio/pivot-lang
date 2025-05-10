@@ -1594,7 +1594,7 @@ impl MatchNode {
         
         // 如果没有元组模式但有通配符，则可能是穷尽的
         if tuple_patterns.is_empty() {
-            if !self.has_wildcard_pattern() {
+            if !self.has_wildcard_pattern() && !self.has_variable_binding() {
                 self.range
                     .new_err(ErrorCode::NON_EXHAUSTIVE_PATTERNS)
                     .add_label(
@@ -1617,13 +1617,13 @@ impl MatchNode {
             let mut all_fields_matched = true;
             
             for fields in &tuple_patterns {
-                if field_idx >= fields.len() || !self.is_wildcard_pattern(&fields[field_idx]) {
+                if field_idx >= fields.len() || (!self.is_wildcard_pattern(&fields[field_idx]) && !self.is_variable_binding(&fields[field_idx]))  {
                     all_fields_matched = false;
                     break;
                 }
             }
             
-            if !all_fields_matched && !self.has_wildcard_pattern() {
+            if !all_fields_matched && !self.has_wildcard_pattern() && !self.has_variable_binding() {
                 self.range
                     .new_err(ErrorCode::NON_EXHAUSTIVE_PATTERNS)
                     .add_label(
@@ -1891,8 +1891,19 @@ impl MatchNode {
                                         
                                         // 替换目标字段的占位符
                                         let field_pattern = if unmatched_type.contains("(") {
-                                            // 已经是嵌套格式，如 "A1(i64)"
-                                            format!("{}:{}", field_name, unmatched_type)
+                                            // 修复嵌套格式，如 "A1(i64)" 变为 "A1(i64(_))"
+                                            if unmatched_type.ends_with(")") && !unmatched_type.contains("(x)") && !unmatched_type.contains("(_)") {
+                                                // 查找最后一个左括号
+                                                if let Some(last_open_index) = unmatched_type.rfind('(') {
+                                                    let (prefix, inner_type) = unmatched_type.split_at(last_open_index + 1);
+                                                    let inner_type = inner_type.trim_end_matches(')');
+                                                    format!("{}:{}(_))", field_name, prefix.to_string() + inner_type)
+                                                } else {
+                                                    format!("{}:{}(_)", field_name, unmatched_type)
+                                                }
+                                            } else {
+                                                format!("{}:{}", field_name, unmatched_type)
+                                            }
                                         } else {
                                             // 需要添加变量绑定，如 "A1(x)"
                                             format!("{}:{}(x)", field_name, unmatched_type)
@@ -1903,8 +1914,19 @@ impl MatchNode {
                                     } else {
                                         // 如果没有模板，使用简单格式
                                         let field_pattern = if unmatched_type.contains("(") {
-                                            // 已经是嵌套格式
-                                            format!("{}:{}", field_name, unmatched_type)
+                                            // 修复嵌套格式
+                                            if unmatched_type.ends_with(")") && !unmatched_type.contains("(x)") && !unmatched_type.contains("(_)") {
+                                                // 查找最后一个左括号
+                                                if let Some(last_open_index) = unmatched_type.rfind('(') {
+                                                    let (prefix, inner_type) = unmatched_type.split_at(last_open_index + 1);
+                                                    let inner_type = inner_type.trim_end_matches(')');
+                                                    format!("{}:{}(_))", field_name, prefix.to_string() + inner_type)
+                                                } else {
+                                                    format!("{}:{}(_)", field_name, unmatched_type)
+                                                }
+                                            } else {
+                                                format!("{}:{}", field_name, unmatched_type)
+                                            }
                                         } else {
                                             format!("{}:{}(x)", field_name, unmatched_type)
                                         };
@@ -1917,8 +1939,19 @@ impl MatchNode {
                                 let suggestions = unmatched_types.iter()
                                     .map(|t| {
                                         if t.contains("(") {
-                                            // 对于嵌套联合类型，给出更具体的示例
-                                            format!("{}: {}", field_name, t)
+                                            // 修复嵌套联合类型的建议文本
+                                            if t.ends_with(")") && !t.contains("(x)") && !t.contains("(_)") {
+                                                // 查找最后一个左括号
+                                                if let Some(last_open_index) = t.rfind('(') {
+                                                    let (prefix, inner_type) = t.split_at(last_open_index + 1);
+                                                    let inner_type = inner_type.trim_end_matches(')');
+                                                    format!("{}: {}(_))", field_name, prefix.to_string() + inner_type)
+                                                } else {
+                                                    format!("{}: {}(_)", field_name, t)
+                                                }
+                                            } else {
+                                                format!("{}: {}", field_name, t)
+                                            }
                                         } else {
                                             format!("{}: {}(x)", field_name, t)
                                         }

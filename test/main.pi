@@ -83,9 +83,62 @@ async fn main() Task<()> {
     await std_test::test_async_loop();
     // await std_test::test_dns();
 
+    let a:A2 = 1 as A1;
+    match a {
+        A1(d) => {
+        }
+        f64(a) => {
+        }
+    }
+    match a {
+        A1(i32(a)) => {
+        }
+        A1(i64(b)) => {
+        }
+        f64(a) => {
+        }
+    }
+
+    match a {
+        A1(i32(a)) => {
+        }
+        f64(a) => {
+        }
+        A1(i64(_)) => {}
+    }
+
+
+    let d = A3{a:1,b:1.0,c:true};
+    match d {
+        {a:a,b:A1(i32(b)),c:true} => {
+        }
+        {a:a,b:f64(b),c:false} => {
+        }
+        {a:a,b:A1(i64(_)),c:true} => {}
+    }
+
+    // match (1,) {
+    //     (1) => {
+    //     }
+    //     (2) => {
+    //     }
+    //     (bbb) => {}
+    // }
+    
+
     return ();
 }
 
+
+type A1 = i32|i64;
+
+type A2 = A1|f64;
+
+struct A3 {
+    a:i64;
+    b:A2;
+    c:bool;
+}
 
 
 
