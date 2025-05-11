@@ -36,7 +36,7 @@ fn match_cond(input: Span) -> IResult<Span, MatchArmCondition> {
         // map(tuple((basic_type, st_body_match)), |(bt, b)| {
         //     MatchArmCondition::TypedDeconstruct(*bt, b)
         // }), // TODO: mabye one day we need to match trait
-        map(st_body_match, MatchArmCondition::Deconstruct),
+        map(st_body_match, |(a,b)|MatchArmCondition::Deconstruct(a,b)),
         map(
             tuple((
                 tag_token_symbol_ex(TokenType::LPAREN),
@@ -49,7 +49,7 @@ fn match_cond(input: Span) -> IResult<Span, MatchArmCondition> {
     ))(input)
 }
 
-fn st_body_match(input: Span) -> IResult<Span, Vec<STMatchField>> {
+fn st_body_match(input: Span) -> IResult<Span, (Vec<STMatchField>,Range)> {
     map(
         tuple((
             tag_token_symbol_ex(TokenType::LBRACE),
@@ -57,7 +57,7 @@ fn st_body_match(input: Span) -> IResult<Span, Vec<STMatchField>> {
             opt(tag_token_symbol_ex(TokenType::COMMA)),
             tag_token_symbol_ex(TokenType::RBRACE),
         )),
-        |(_, mut c, _, _)| c.drain(..).map(|(v, _, c)| (*v, c)).collect::<Vec<_>>(),
+        |((_,start_r), mut c, _, (_,end_r))| (c.drain(..).map(|(v, _, c)| (*v, c)).collect::<Vec<_>>(), start_r.start.to(end_r.end)),
     )(input)
 }
 

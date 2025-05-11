@@ -350,6 +350,13 @@ pub enum PriType {
     BOOL,
     CHAR,
 }
+
+
+impl ToString for PriType {
+    fn to_string(&self) -> String {
+        self.get_name().to_string()
+    }
+}
 impl PriType {
     pub fn get_name(&self) -> Ustr {
         match self {

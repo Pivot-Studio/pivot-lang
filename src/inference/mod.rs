@@ -1217,7 +1217,7 @@ impl<'ctx> InferenceCtx<'ctx> {
                 self.inference_match_arm(c, SymbolType::PLType(vty), ctx, builder);
             }
             MatchArmCondition::TypedDeconstruct(_, _) => todo!(),
-            MatchArmCondition::Deconstruct(fields) => match &vty {
+            MatchArmCondition::Deconstruct(fields,_) => match &vty {
                 SymbolType::Var(v) => {
                     let k = self.unify_table.borrow_mut().probe_value(*v);
                     match k {

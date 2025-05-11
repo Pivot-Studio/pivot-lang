@@ -924,7 +924,7 @@ impl FmtBuilder {
                 }
                 self.r_paren();
             }
-            super::node::control::MatchArmCondition::Deconstruct(s) => {
+            super::node::control::MatchArmCondition::Deconstruct(s,_) => {
                 self.token("{");
                 for (i, (k, v)) in s.iter().enumerate() {
                     if i > 0 {

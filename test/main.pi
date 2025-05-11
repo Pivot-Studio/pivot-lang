@@ -87,16 +87,15 @@ async fn main() Task<()> {
     match a {
         A1(d) => {
         }
-        f64(a) => {
-        }
+        f64(_) => {}
+
     }
     match a {
         A1(i32(a)) => {
         }
         A1(i64(b)) => {
         }
-        f64(a) => {
-        }
+        f64(_) => {}
     }
 
     match a {
@@ -110,20 +109,21 @@ async fn main() Task<()> {
 
     let d = A3{a:1,b:1.0,c:true};
     match d {
-        {a:a,b:A1(i32(b)),c:true} => {
+        {a:1,b:A1(i32(b)),c:true} => {
         }
-        {a:a,b:f64(b),c:false} => {
+        {a:2,b:f64(b),c:false} => {
         }
-        {a:a,b:A1(i64(_)),c:true} => {}
+        {a:_,b:A1(i64(_)),c:_} => {}
+
     }
 
-    // match (1,) {
-    //     (1) => {
-    //     }
-    //     (2) => {
-    //     }
-    //     (bbb) => {}
-    // }
+    match (1,) {
+        (1) => {
+        }
+        (2) => {
+        }
+        (_) => {}
+    }
     
 
     return ();
